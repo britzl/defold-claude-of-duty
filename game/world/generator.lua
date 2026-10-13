@@ -5,41 +5,40 @@ local interior = require "game.world.interior"
 local M = {}
 
 local function metadata(layout)
-    local base = layout.street.walk_height
-    local shop
-    for _, building in ipairs(layout.buildings) do
-        if building.room then shop = building; break end
+    local s, base = layout.street, layout.street.walk_height
+    local nav = { nodes = {}, edges = {}, surfaces = {
+        { id="street",layer=0,y=0,x0=-s.half_width,x1=s.half_width,z0=s.z_min,z1=s.z_max },
+        { id="west_walk",layer=0,y=base,x0=-s.kerb,x1=-s.half_width,z0=s.z_min,z1=s.z_max },
+        { id="east_walk",layer=0,y=base,x0=s.half_width,x1=s.kerb,z0=s.z_min,z1=s.z_max },
+    } }
+    local function node(id,x,y,z)
+        local n={id=id,x=x,y=y,z=z,layer=0}
+        nav.nodes[#nav.nodes+1]=n
+        return n
     end
-    assert(shop, "The first block requires one enterable shop")
-    local door_x = shop.x + shop.w / 2
-    local door_z = shop.door.z
-    local nodes = {
-        { id = "street_north", x = 0, y = 0, z = 8, layer = 0 },
-        { id = "street", x = 0, y = 0, z = door_z, layer = 0 },
-        { id = "street_south", x = 0, y = 0, z = -12, layer = 0 },
-        { id = "west_walk", x = -5.5, y = base, z = door_z, layer = 0 },
-        { id = "door", x = door_x, y = base, z = door_z, layer = 0 },
-        { id = "room", x = door_x - 3, y = base, z = door_z, layer = 0 },
-    }
-    local edges = {
-        { from = "street_north", to = "street", kind = "walk" },
-        { from = "street", to = "street_south", kind = "walk" },
-        { from = "street", to = "west_walk", kind = "step", rise = base },
-        { from = "west_walk", to = "door", kind = "doorway", width = shop.door.width, height = shop.door.height },
-        { from = "door", to = "room", kind = "walk" },
-    }
-    local s = layout.street
-    local nav = {
-        nodes = nodes, edges = edges,
-        surfaces = {
-            { id = "street", layer = 0, y = 0, x0 = -s.half_width, x1 = s.half_width, z0 = s.z_min, z1 = s.z_max },
-            { id = "west_walk", layer = 0, y = base, x0 = -s.kerb, x1 = -s.half_width, z0 = s.z_min, z1 = s.z_max },
-            { id = "east_walk", layer = 0, y = base, x0 = s.half_width, x1 = s.kerb, z0 = s.z_min, z1 = s.z_max },
-            { id = "room", layer = 0, y = base, x0 = shop.x - shop.w / 2 + layout.wall,
-                x1 = door_x - layout.wall, z0 = shop.z - shop.d / 2 + layout.wall, z1 = shop.z + shop.d / 2 - layout.wall },
-        },
-    }
-    interior.navigation(layout, shop, nav)
+    local hubs={node("street_north",0,0,s.z_max-4),node("street_south",0,0,s.z_min+4)}
+    for _,b in ipairs(layout.buildings) do
+        if b.room then
+            local front=b.x+b.side*b.w/2
+            local prefix=b.id.."/"
+            hubs[#hubs+1]=node(prefix.."street",0,0,b.door.z)
+            node(prefix.."walk",-b.side*(s.half_width+s.kerb)/2,base,b.door.z)
+            node(prefix.."door",front,base,b.door.z)
+            node(prefix.."room",front-b.side*3,base,b.door.z)
+            nav.edges[#nav.edges+1]={from=prefix.."street",to=prefix.."walk",kind="step",rise=base}
+            nav.edges[#nav.edges+1]={from=prefix.."walk",to=prefix.."door",kind="doorway",width=b.door.width,height=b.door.height}
+            nav.edges[#nav.edges+1]={from=prefix.."door",to=prefix.."room",kind="walk"}
+            nav.surfaces[#nav.surfaces+1]={id=prefix.."room",layer=0,y=base,
+                x0=b.x-b.w/2+layout.wall,x1=b.x+b.w/2-layout.wall,
+                z0=b.z-b.d/2+layout.wall,z1=b.z+b.d/2-layout.wall}
+            interior.navigation(layout,b,nav,prefix.."room")
+        end
+    end
+    -- One street spine connects entrances at their authored Z positions.
+    table.sort(hubs,function(a,b) return a.z==b.z and a.id<b.id or a.z<b.z end)
+    for i=2,#hubs do
+        nav.edges[#nav.edges+1]={from=hubs[i-1].id,to=hubs[i].id,kind="walk"}
+    end
     return nav
 end
 

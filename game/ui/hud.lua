@@ -1,6 +1,6 @@
 -- Engine-independent presentation state. Notifications never apply damage.
 local events = require "game.events"
-local M = { feed_limit = 4, feed_seconds = 6, map_limit = 128, map_range = 22 }
+local M = { feed_limit = 4, feed_seconds = 6, map_limit = 256, map_range = 22 }
 local function name(id)
     if id == "player" then return "YOU" end
     if id and id:match("^enemy") then return "HOSTILE" end

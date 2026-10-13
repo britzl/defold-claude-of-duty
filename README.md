@@ -6,7 +6,8 @@ The first plan step is implemented: a gameplay controller, six subsystem modules
 120 Hz fixed simulation, metre-based 3D physics with gravity -20.6 m/s², buffered
 input, gameplay notifications, centralized damage, and separate camera/HUD
 presentation. The first world slice is also generated at runtime: a 28-metre
-market street, pavements, a two-storey W2 shop/apartment, and the opposing E2 facade.
+market street, pavements, a two-storey W2 shop/apartment, and an enterable
+three-storey E2 shop with two upper apartments.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
@@ -103,7 +104,7 @@ The compass uses north = world -Z and east = +X. The north-up minimap follows th
 player over a 44-metre square, drawing the generated world's collision footprints
 and a rotated player marker. Rectangles are clipped to the map and the player's
 floor height, so the shop's roof does not fill its accessible interior. The
-current slice supplies 73 rectangles; the GUI bounds this to 128 for larger maps.
+current slice supplies 154 rectangles; the GUI bounds this to 256 for larger maps.
 It shows geometry, not enemy positions. Renderer diagnostic views hide the combat
 HUD while leaving the settings menu available.
 
@@ -392,8 +393,8 @@ Each system must release its generated Defold resources in `final`.
 `game/world/layout.lua` is the authored description. It retains the reference's
 9-metre road, 6.5-metre building line, 0.145-metre pavement and W2/E2 footprints.
 This is an unrotated excerpt. W2 now has an open ground-floor shop and a furnished
-upper apartment; E2 remains a closed facade. It is not the full map or the complete
-original building recipe set.
+upper apartment; E2 has a shop and two furnished upper apartments. It is not the
+full map or the complete original building recipe set.
 
 Enter W2 through the shopfront, cross to the back-left of the shop, and climb
 the straight staircase along the west wall. The upper landing leads through
@@ -402,25 +403,34 @@ is 3.2 metres above the shop, with sixteen 20-centimetre steps, a 1.8-metre-wide
 flight and standing headroom throughout. Three solid guards protect the stair
 opening. The roof is closed; doorways are open passages, with no moving doors.
 
-`interior.lua` derives treads, four floor slabs around the opening, upper walls,
+Enter E2 through its west-facing shopfront farther along the street. Its staircase
+runs toward +Z along the east wall, opposite W2's -Z ascent. The middle landing
+opens onto a hallway that also leads back to the next flight. Both upper floors
+have a living/work room and bedroom. Thin treads on the second flight preserve
+standing headroom on the flight below; the middle-floor entrance remains open,
+while the top-floor stair opening has an end guard.
+
+`interior.lua` derives treads, four floor slabs around each opening, upper walls,
 partitions, furniture, bounded lights and layered navigation from the layout.
 The opening follows the reference W2 stair-hole bounds; interior furnishing and
 partition recipes are simplified. Exterior belt trim stays outside the building
 so it cannot visually seal the stairwell. Furniture and structural solids share
-their mesh/collision dimensions. Three room lights supply lighting and audio room
-bounds on the two floors.
+their mesh/collision dimensions. The shared recipe accepts either entrance side,
+either stair direction, multiple storeys and optional per-floor `uppers` layouts.
+Eleven bounded room lights also define audio room zones on all five floors.
 
 `recipes.lua` emits boxes from that description. Each structural box produces
 both visual triangles and a collision descriptor with a surface identifier.
 The shop front consists of separate side walls and a lintel, leaving a genuine
-2.8 × 2.65-metre opening. Small window trim, shelves, canopy fabric and produce
-are visual detail; tables, crates, walls and floors have simple solid proxies.
+2.8 × 2.65-metre opening in W2 and a 2.4 × 2.65-metre opening in E2. Small window
+trim, shelves, canopy fabric and produce are visual detail; tables, crates,
+walls and floors have simple solid proxies.
 
 `generator.lua` merges geometry by material and 16-metre spatial bucket, capped
 at 64 boxes per mesh upload. Every batch carries explicit AABB buffer metadata
 for Defold's frustum culling. There are no game objects per decorative piece.
-The slice generates 276 boxes, 44 mesh batches, 9,936 vertices and 73
-collision objects. Vertex streams occupy 397,440 bytes (CPU/GPU resource overhead
+The slice generates 374 boxes, 50 mesh batches, 13,464 vertices and 154
+collision objects. Vertex streams occupy 538,560 bytes (CPU/GPU resource overhead
 is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
@@ -430,6 +440,8 @@ collision creation at most eight; uploads at most one bounded batch. A soft
 is indivisible. `world.snapshot` reports total CPU work and the peak loading
 update; it excludes shader compilation and other engine work outside these calls.
 Factory objects and generated buffer resource references are released on teardown.
+The physics component pool is explicitly set to 512 to accommodate the expanded
+world, temporary actor replacement and optional traversal/firing fixtures.
 
 Seeded decoration, spawn and weapon streams are independent. The current spawn
 points are authored. Changing loading budgets or decorative detail cannot move
@@ -440,19 +452,25 @@ bidirectional connections (including the kerb step and doorway), cover candidate
 lights, spawn points and minimap rectangles with vertical bounds. Native
 validation checks floor support and clear connection centrelines. These are
 navigation inputs, not a finished navmesh or proof of every route's clearance.
-The graph has 30 nodes and 29 edges, including each tread and the upper doorways.
+The graph has 82 nodes and 81 edges, including every tread, upper doorway and a
+street spine joining the two entrances. Ground-floor nodes are namespaced by
+building (`W2/room`, `E2/room`, plus `/walk`, `/door` and `/street`). E2's second
+upper floor uses `E2/floor2/` node IDs.
 Actors outside a stair flight attach through its landings; actors already on the
 flight can replan through intermediate treads. This prevents the raised clearance
 probe from admitting an unwalkable shortcut onto the side of the stairs.
 
-`tests/building_smoke.py` checks continuous player movement from the street to
-the bedroom and back, guards, floor collision, enemy ascent/descent and alerted
-pursuit upstairs. `--ai-only` runs just its navigation/combat checks. It uses the
-Automation Bridge's `ui.focus` callback simulation and explicit resume when the
+`tests/building_smoke.py` checks continuous player movement between buildings and
+all five floors, guards, floor collision, enemy ascent/descent and W2 alerted
+pursuit upstairs. It also patrols an enemy from W2 to E2's second-floor bedroom
+and back. `--ai-only` runs navigation/combat checks; `--e2-only` limits the run to
+the cross-building/E2 increment, and `--w2-only` runs the original W2 checks.
+It uses the Automation Bridge's `ui.focus` callback simulation and explicit resume when the
 desktop loses focus, allowing long tests to run in the background. Normal game
 focus behavior is unchanged. Review captures are written to
 `build/building-validation`. `world.navigation` exposes the generated graph;
-`world.view` accepts `stairs` and `upstairs` in addition to the original views.
+`world.view` accepts `stairs`, `upstairs`, `e2_shop`, `e2_stairs`, `e2_upstairs`
+and `e2_top` in addition to the original views.
 The world Lua tests also verify standing headroom, connected floors, the minimap's
 stair opening and its bounded rectangle count. This building increment targets
 native macOS/Metal validation; browser/mobile validation remains outstanding.
@@ -474,8 +492,11 @@ The GPU bakes never advance gameplay random streams and do not repeat on resize
 or encounter restart. Context restoration schedules the nine jobs again.
 
 World geometry, the soldier and weapons share GGX direct lighting, ambient light,
-approximate sky reflections and up to four authored point lights. The current
-room lights have warm radiance, finite attenuation and interior bounds to prevent
+approximate sky reflections and up to four authored point lights. The nearest
+room bounds to the displayed camera select those four lights from the eleven
+interior lights, with stable ties; uploads occur when that selection changes.
+This also follows inspection cameras and retains the shader's four-light budget.
+The room lights have warm radiance, finite attenuation and interior bounds to prevent
 lighting across exterior walls/floors. Props do not occlude these local lights. The soldier
 retains procedural camouflage; weapon vertex colours now carry metalness.
 
@@ -519,7 +540,7 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 90 Lua checks and the
+with review images in `build/renderer-validation`. All 96 Lua checks and the
 native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
 HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no

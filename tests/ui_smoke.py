@@ -51,7 +51,13 @@ def main():
         assert abs(ui()["hud"]["heading"] - 90) < .01
         assert game.element(name_exact="heading", visible=True).text == "090"
         capture("hud_room_east")
-        print("PASS world minimap, player marker and compass", flush=True)
+        # Confirm all generated map rectangles were installed, including E2.
+        count = ui()["map_rectangles"]
+        assert game.element(name_exact=f"map_{count}")
+        cmd("movement.reset", {"x": 10, "y": 6.55, "z": -7, "yaw": 0})
+        game.wait_frames(5)
+        capture("hud_e2_top")
+        print("PASS world minimap, E2 top floor, player marker and compass", flush=True)
 
         cmd("gameplay.restart")
         # Let the real AI run, then freeze it together with the clock and rounds.
@@ -117,7 +123,7 @@ def main():
             assert abs(ui()["audio"]["master"] - .5) <= .02, (width, height, ui())
             # Every map rectangle must stay inside the map after anchoring.
             border = game.element(name_exact="map_background").bounds
-            for index in range(1, 37):
+            for index in range(1, ui()["map_rectangles"] + 1):
                 node = game.maybe_element(name_exact=f"map_{index}", visible=True)
                 if node:
                     b = node.bounds

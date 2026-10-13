@@ -1,5 +1,5 @@
 -- Small, unrotated excerpt of the reference src/world/layout.js.
--- Preserve STREET and W2/E2 footprints. W2 has a shop and an upstairs apartment.
+-- Preserve STREET and W2/E2 footprints; both buildings have shops and upper rooms.
 -- Bounds are metres in level space, +Y up, street towards -Z.
 return {
     seed = 1337,
@@ -23,7 +23,20 @@ return {
             counter = { x = 0.72, z = 0.83, w = 3.5, d = 0.8 },
             shelves = { x = 0.035, z = 0.46, w = 0.7, d = 4 } },
         { id = "E2", x = 13.5, z = -5, w = 14, d = 14, floors = 3,
-            material = "plaster_blue", side = -1 },
+            material = "plaster_blue", side = -1, room = true,
+            door = { z = -6.5, width = 2.4, height = 2.65 },
+            -- Mirrored entrance and a +Z flight repeated between all three floors.
+            stairs = { x = 18.1, z = -9, direction = 1, width = 1.8,
+                run = 6.4, steps = 16, hole_width = 2.4, landing = .75 },
+            upper = { partition_x = 13.5, door_z = -1.85, door_width = 1.6,
+                bedroom_z = -6, bedroom_side = -1, bedroom_door_x = 10,
+                bedroom_door_width = 1.6, door_height = 2.4,
+                bed = { x = 10.5, z = -9.6, w = 2, d = 2.5 },
+                desk = { x = 7.8, z = -.3, w = 1.2, d = 1.6 },
+                cabinet = { x = 7.5, z = -9, w = .8, d = 2 },
+                rug = { x = 10, z = -3.5, w = 3, d = 2 } },
+            counter = { x = .16, z = .83, w = 3.5, d = .8 },
+            shelves = { x = .96, z = .55, w = .7, d = 4 } },
     },
     wall = 0.3,
     storey = 3.2,
@@ -37,6 +50,10 @@ return {
         shop = { position = { x = -2.8, y = 1.805, z = 4.8 }, yaw = 0.68, pitch = 0, title = "THE SHOPFRONT" },
         room = { position = { x = -14.5, y = 1.805, z = -3.2 }, yaw = -2.05, pitch = 0, title = "INSIDE W2" },
         stairs = { position = { x = -17, y = 1.805, z = 3.2 }, yaw = 0.36, pitch = 0.24, title = "W2 STAIRCASE" },
+        e2_shop = { position = { x = 9.5, y = 1.805, z = -6.5 }, yaw = -1.25, pitch = 0, title = "INSIDE E2" },
+        e2_stairs = { position = { x = 15.7, y = 1.805, z = -10 }, yaw = -2.82, pitch = .22, title = "E2 STAIRCASE" },
+        e2_upstairs = { position = { x = 11.5, y = 5.005, z = -.5 }, yaw = .2, pitch = -.05, title = "E2 FIRST FLOOR" },
+        e2_top = { position = { x = 11.5, y = 8.205, z = -.5 }, yaw = .2, pitch = -.05, title = "E2 SECOND FLOOR" },
         upstairs = { position = { x = -12.5, y = 5.005, z = -6.4 }, yaw = -2.85, pitch = -0.1, title = "W2 UPSTAIRS" },
     },
 }

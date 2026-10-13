@@ -116,18 +116,6 @@ function init(self)
         audio = audio_adapter.new("#audio_voice","#audio_loop") })
     self.renderer_settings = renderer_settings.defaults()
     self.renderer_stats = { ready = false }
-    local lights = {}
-    for _,light in ipairs(self.ctx.world.lights) do
-        if light.kind ~= "sun" and #lights < renderer_settings.max_lights then
-            local lo,hi=light.minimum,light.maximum
-            local colour=light.colour or {1,.76,.48}
-            local power=light.intensity or 16
-            lights[#lights+1]={position=vmath.vector4(light.x,light.y,light.z,light.radius),
-                colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,0),
-                minimum=vmath.vector4(lo.x,lo.y,lo.z,0),maximum=vmath.vector4(hi.x,hi.y,hi.z,0)}
-        end
-    end
-    msg.post("@render:","renderer_lights",{lights=lights})
     self.weapon_visuals = weapon_adapter.new(self.ctx, "#weapon_mesh", "#weapon_effect")
     self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
@@ -330,7 +318,7 @@ function init(self)
             ["world.navigation"] = "Read generated layered nodes, stair/doorway edges and floor surfaces.",
             ["world.validate"] = "Compare all installed collision dimensions and positions; ray-check navigation support and connections.",
             ["world.raycast"] = "Cast from/to {x,y,z} through generated collision; returns the hit surface identifier and position.",
-            ["world.view"] = "Select street, shop, room, stairs or upstairs inspection camera and disable player input.",
+            ["world.view"] = "Select street, shop, room, stairs, upstairs, e2_shop, e2_stairs, e2_upstairs or e2_top inspection camera.",
         }) do
             automation_bridge.describe("command", name, { description = description,
                 input_schema = { type = "object" }, output_schema = { type = "object" } })
@@ -379,12 +367,32 @@ function update(self, dt)
     end
 end
 
+local function update_lights(self,camera)
+    local selected=renderer_settings.select_lights(self.ctx.world.lights,camera)
+    local changed=not self.active_lights or #self.active_lights~=#selected
+    for i,light in ipairs(selected) do
+        if not self.active_lights or self.active_lights[i]~=light then changed=true end
+    end
+    if not changed then return end
+    self.active_lights=selected
+    local lights={}
+    for _,light in ipairs(selected) do
+        local lo,hi=light.minimum,light.maximum
+        local colour,power=light.colour or {1,.76,.48},light.intensity or 16
+        lights[#lights+1]={position=vmath.vector4(light.x,light.y,light.z,light.radius),
+            colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,0),
+            minimum=vmath.vector4(lo.x,lo.y,lo.z,0),maximum=vmath.vector4(hi.x,hi.y,hi.z,0)}
+    end
+    msg.post("@render:","renderer_lights",{lights=lights})
+end
+
 function late_update(self, dt)
     -- Camera and GUI see interpolated presentation, never drive simulation.
     local out = self.ctx.presentation
     ai_system.present(self.ctx)
     local view = self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
+    update_lights(self,camera)
     audio_system.present(self.ctx,dt,camera,view and view.yaw or out.yaw)
     self.camera_position.x, self.camera_position.y, self.camera_position.z = camera.x, camera.y, camera.z
     go.set_position(self.camera_position, "/camera")

@@ -18,6 +18,20 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(settings.target_bytes(1920,1280)==52969472)
 end)
 
+test("camera light selection covers both buildings and every floor within four slots",function()
+    local world=require("game.world.generator").new(require "game.world.layout")
+    assert(#world.lights>settings.max_lights)
+    for _,light in ipairs(world.lights) do
+        if light.kind=="room" then
+            local selected=settings.select_lights(world.lights,light)
+            assert(#selected==settings.max_lights)
+            assert(selected[1]==light,"Containing room light was omitted: "..light.id)
+            local again=settings.select_lights(world.lights,light)
+            for i,l in ipairs(selected) do assert(l==again[i]) end
+        end
+    end
+end)
+
 -- The stub records resource ownership and pass inputs; matrix maths is tested
 -- by the native screenshots, rather than reimplementing vmath here.
 graphics=setmetatable({},{__index=function(t,k) rawset(t,k,k);return k end})

@@ -47,7 +47,7 @@ def main():
         command("world.view", {"name": "street"})
         initial = command("renderer.snapshot")
         assert initial["bake_jobs"] == initial["bake_draws"] == 9
-        assert initial["environment_faces"] == 6 and initial["local_light_count"] == 1
+        assert initial["environment_faces"] == 6 and initial["local_light_count"] == 4
         assert initial["target_count"] == 9 and initial["shadow_size"] == 1024
         assert initial["atlas_width"] == 1280 and initial["atlas_height"] == 256
         assert initial["shadow_frames"] > 0
@@ -98,6 +98,18 @@ def main():
         assert sum(ImageStat.Stat(region(high)).mean) > sum(ImageStat.Stat(region(low)).mean) + 30
         configure(exposure=1)
         print("PASS room light and shared exposure", delta, flush=True)
+
+        for name in ("e2_shop", "e2_upstairs", "e2_top"):
+            command("world.view", {"name": name})
+            game.wait_frames(4)
+            lit = capture(name)
+            configure(local_lights=False)
+            dark = capture(name + "_without_light")
+            delta = difference(lit, dark)
+            assert delta > 1, (name, delta)
+            configure(local_lights=True)
+            assert command("renderer.snapshot")["local_light_count"] == 4
+            print("PASS camera selects visible room light on", name, delta, flush=True)
 
         # Frozen soldier remains animated; collapse must also deform the shadow.
         command("ai.reset", {"position": {"x": 3, "y": .004, "z": 3}, "yaw": 0})

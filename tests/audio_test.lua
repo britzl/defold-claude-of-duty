@@ -110,6 +110,9 @@ test("listener yaw, distance and room height determine attenuation and stereo di
     assert(spatial.room(ctx.world,{x=-12,y=5,z=0}))
     assert(not spatial.room(ctx.world,{x=-12,y=3.25,z=0})) -- inside the floor slab
     assert(not spatial.room(ctx.world,{x=-12,y=8,z=0})) -- above the roof
+    for _,y in ipairs({1.8,5,8.2}) do assert(spatial.room(ctx.world,{x=10,y=y,z=-7})) end
+    for _,y in ipairs({3.25,6.45,10}) do assert(not spatial.room(ctx.world,{x=10,y=y,z=-7})) end
+    assert(not spatial.room(ctx.world,{x=5.5,y=1.8,z=-6.5})) -- pavement outside E2
     runtime.final(ctx)
 end)
 test("player and enemy fire use the same bank with copied positions, occlusion and room variants",function()

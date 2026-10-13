@@ -20,13 +20,14 @@ local function window(b, floor, z, base, storey)
     box(prefix .. "/lintel", "trim", front + b.side * 0.08, y + 0.9, z, 0.18, 0.16, 1.55)
 end
 
-local function awning(id, x, y, z, width, depth)
+local function awning(id, x, y, z, width, depth, side)
+    side = side or 1
     local strips = math.ceil(depth / 0.3)
     for i = 1, strips do
         local key = i % 2 == 0 and "awning_red" or "awning_cream"
         local sz = z - depth / 2 + (i - 0.5) * depth / strips
         box(id .. "/stripe/" .. i, key, x, y, sz, width, 0.07, depth / strips)
-        box(id .. "/valance/" .. i, key, x + width / 2 - 0.04, y - 0.17, sz, 0.08, 0.34, depth / strips)
+        box(id .. "/valance/" .. i, key, x + side * (width / 2 - 0.04), y - 0.17, sz, 0.08, 0.34, depth / strips)
     end
 end
 
@@ -35,18 +36,19 @@ local function building(layout, b)
     local x0, x1, z0, z1 = b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2
     local height = b.floors * storey
     if b.room then
-        assert(b.side == 1, "The first room recipe opens on the east side")
-        -- Floor top coincides with the pavement. Walls are separate solids;
-        -- splitting the east wall leaves the doorway open all the way through.
+        assert(b.side == 1 or b.side == -1)
+        local front = b.x+b.side*(b.w/2-wall/2)
+        local facade = b.x+b.side*b.w/2
+        -- Split the street-facing wall around a true doorway on either side.
         box(b.id .. "/floor", "concrete", b.x, base - slab / 2, b.z, b.w, slab, b.d, "concrete")
-        box(b.id .. "/west", "plaster_inside", x0 + wall / 2, base + storey / 2, b.z, wall, storey, b.d, "plaster")
+        box(b.id .. (b.side == 1 and "/west" or "/east"), "plaster_inside", b.x-b.side*(b.w/2-wall/2), base + storey / 2, b.z, wall, storey, b.d, "plaster")
         box(b.id .. "/north", b.material, b.x, base + storey / 2, z1 - wall / 2, b.w, storey, wall, "plaster")
         box(b.id .. "/south", b.material, b.x, base + storey / 2, z0 + wall / 2, b.w, storey, wall, "plaster")
         local door = b.door
         local lo, hi = door.z - door.width / 2, door.z + door.width / 2
-        box(b.id .. "/front_left", b.material, x1 - wall / 2, base + storey / 2, (z0 + lo) / 2, wall, storey, lo - z0, "plaster")
-        box(b.id .. "/front_right", b.material, x1 - wall / 2, base + storey / 2, (hi + z1) / 2, wall, storey, z1 - hi, "plaster")
-        box(b.id .. "/door_lintel", b.material, x1 - wall / 2, base + (storey + door.height) / 2,
+        box(b.id .. "/front_left", b.material, front, base + storey / 2, (z0 + lo) / 2, wall, storey, lo - z0, "plaster")
+        box(b.id .. "/front_right", b.material, front, base + storey / 2, (hi + z1) / 2, wall, storey, z1 - hi, "plaster")
+        box(b.id .. "/door_lintel", b.material, front, base + (storey + door.height) / 2,
             door.z, wall, storey - door.height, door.width, "plaster")
         interior.geometry(layout, b, box)
         local counter, shelves = b.counter, b.shelves
@@ -56,9 +58,9 @@ local function building(layout, b)
         for i = 1, 3 do
             box(b.id .. "/shelf/" .. i, "wood", x0 + shelves.x * b.w, base + i * 0.6, z0 + shelves.z * b.d, shelves.w, 0.09, shelves.d)
         end
-        awning(b.id .. "/awning", x1 + 0.85, base + 2.95, door.z, 1.7, 4.4)
+        awning(b.id .. "/awning", facade + b.side * 0.85, base + 2.95, door.z, 1.7, 4.4, b.side)
         for _, sign in ipairs({ -1, 1 }) do
-            box(b.id .. "/door_frame/" .. sign, "wood", x1 + 0.015, base + door.height / 2,
+            box(b.id .. "/door_frame/" .. sign, "wood", facade + b.side * 0.015, base + door.height / 2,
                 door.z + sign * (door.width / 2 + 0.07), 0.16, door.height, 0.14)
         end
     else

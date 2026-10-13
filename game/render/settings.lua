@@ -19,6 +19,29 @@ function M.configure(current, changes)
     end
     return result
 end
+-- Prioritize room bounds near the displayed camera, including inspection views.
+-- Stable ties retain authored order and the shader's four-light budget.
+function M.select_lights(lights,camera)
+    local candidates={}
+    for i,light in ipairs(lights) do
+        if light.kind ~= "sun" then
+            local lo,hi=light.minimum,light.maximum
+            local distance=0
+            for _,axis in ipairs({"x","y","z"}) do
+                local d=math.max(lo[axis]-camera[axis],0,camera[axis]-hi[axis])
+                distance=distance+d*d
+            end
+            candidates[#candidates+1]={light=light,distance=distance,index=i}
+        end
+    end
+    table.sort(candidates,function(a,b)
+        if a.distance == b.distance then return a.index<b.index end
+        return a.distance<b.distance
+    end)
+    local selected={}
+    for i=1,math.min(M.max_lights,#candidates) do selected[i]=candidates[i].light end
+    return selected
+end
 function M.dimensions(w,h)
     if w<=0 or h<=0 then return nil end
     return { width=w, height=h, bloom_width=math.max(1,math.floor(w/4)), bloom_height=math.max(1,math.floor(h/4)) }
