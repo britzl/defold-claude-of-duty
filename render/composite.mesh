@@ -1,0 +1,4 @@
+material: "/render/composite.material"
+vertices: "/render/quad.buffer"
+primitive_type: PRIMITIVE_TRIANGLES
+position_stream: "position"

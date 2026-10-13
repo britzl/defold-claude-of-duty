@@ -9,8 +9,9 @@ presentation. The first world slice is also generated at runtime: a 28-metre
 market street, pavements, W2 with one open shop room, and the opposing E2 facade.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
-Weapons, soldiers and synthesized audio remain
-subsequent work.
+The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
+reloads and generated viewmodels in an isolated render pass. Soldiers and
+synthesized audio remain subsequent work.
 
 ## Run and validate
 
@@ -22,6 +23,7 @@ Run the engine-independent regression suite from the repository root:
 lua tests/runtime_test.lua
 lua tests/world_test.lua
 lua tests/movement_test.lua
+lua tests/weapons_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks
@@ -32,12 +34,13 @@ views, timing, input, damage and HUD updates, then closes the engine it launched
 PYTHONPATH=automation-bridge-python python3 tests/smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
 jumps, **Ctrl** holds crouch, and **Z** holds prone. Click to capture the mouse
-for looking; **Esc** releases it. Holding right mouse applies the ADS movement
-speed reduction; weapon aiming is still future work.
+for looking; **Esc** releases it. Holding right mouse aims down the weapon sight
+and reduces movement speed.
 
 Double-tap **Shift** within 0.32 seconds and hold it while moving forward for
 tactical sprint (8.38 m/s, at most six seconds, then 1.6 seconds recovery).
@@ -60,8 +63,12 @@ a low ceiling and narrow/wide doorways. The course is separate from the street.
 Its second row, farther ahead at z=-15, adds 1.2/1.8-metre ledges, an unreachable
 wall, blocked/crouch-only headroom, a narrow top and an obstructed climb approach.
 
-Left mouse, R and F still buffer fire, reload and inspect intent for future
-weapon implementations.
+**Left mouse** fires, **R** reloads, and **F** inspects. **6/7/8** selects the
+rifle/SMG/pistol; **Tab** cycles weapons, and **B** cycles the equipped weapon's
+fire mode. The first click captures the mouse; subsequent clicks fire. **5**
+creates an optional firing range and moves you to its bare-target lane.
+The other lanes, to the right, have thin wood and thick concrete in front of
+their targets. Targets have 1,000 health and use the normal damage owner.
 Gamepad/touch adapters can feed the same `game.input` API later.
 
 ## Capsule movement
@@ -119,6 +126,80 @@ jump exits, valid/invalid mantle routes, crouch-only landings, lean clearance
 and cancellation on death. Native validation currently targets macOS/Metal;
 browser/mobile validation remains a later milestone.
 
+## Weapons and viewmodel rendering
+
+`game/systems/weapons.lua` owns each inventory, fire control and animation clock.
+`game/weapons/defs.lua` ports the reference weapon tuning: M4A1 at 800 rpm with
+auto/burst/semi modes, MPX-9 at 950 rpm with auto/semi, and P-19 at 460 rpm with
+semi only. Bursts finish their three shots after trigger release and need a new
+press to start again. Fractional cooldowns preserve fire rates on the 120 Hz
+clock. Semi-auto requires a new press. Loading, death, inspection cameras,
+sprinting and mantling suppress firing; draw/holster and reload clips also gate
+shots. Firing interrupts inspection. Switching cancels any remaining burst.
+
+Magazine and chamber are separate. The initial loads are 30+1, 32+1 and 17+1;
+the HUD displays their total. Tactical reloads keep the chambered round, giving
+capacity+1, while empty reloads chamber one from the new magazine. Reserve ammo
+moves only at the mag-in beat (81% tactical, 71% empty); an empty reload chambers
+at the 91.7% bolt-release beat. Switching before transfer leaves ammo unchanged,
+and switching afterwards preserves transferred ammo. An interrupted empty
+reload can finish chambering even when reserve ammo is exhausted. Holding fire
+on an empty weapon does not continuously reload; a new dry trigger press starts
+a reload when ammunition is available.
+
+ADS blends the sight pose, spread and world/viewmodel FOV. Stance, movement,
+airborne state and sustained fire affect spread. Seeded recoil patterns and
+underdamped springs drive the camera and weapon kick separately. Input, fire,
+recoil, ADS and clip events advance only on fixed ticks; camera/weapon spring
+presentation interpolates between those ticks. `clips.lua` contains normalized
+reload, draw, holster and inspection timelines; magazine, bolt/slide, charging
+handle and hand transforms follow the same clock as ammo changes.
+
+`ballistics.lua` advances bounded projectiles with source muzzle velocities,
+linear drag, 9.81 m/s² gravity and range-based damage falloff. Every tick queries
+the complete travelled segment through Bullet, capped at remaining range.
+Shots start at the collision-limited eye, so a viewmodel muzzle intersecting a
+wall cannot shoot through it; muzzle flash remains attached to the rendered gun.
+This deliberately differs from the reference's muzzle-origin simulation.
+
+`trace.lua` measures entry/exit thickness against the exact authored Bullet box
+(including its rotation). Containing boxes are included when a ray starts inside
+a solid. Material penetration costs accumulate over actual travel, including
+across ticks and through overlapping solids. Damage decays with material travel;
+unknown collider geometry stops the round rather than guessing an exit. The
+source surface depths/energy losses are preserved; energy attenuation is
+continuous here, and random penetration deflection is not implemented. Entry
+and exit notifications carry surface, effect and audio routing keys. Each actor
+receives at most one damage request per round, even if multiple hit volumes
+intersect. The pool is limited to 128 live rounds, six penetrated layers and a
+five-second lifetime. Future actor colliders can join the query registry with
+`actor` and optional `headshot` metadata; the firing-range targets exercise it.
+
+`geometry.lua` generates all three models during loading using merged primitive
+recipes and source-scale attachment points. These are simplified models, not
+full copies of every reference mesh detail. The three weapons contain 11,568
+vertices across 24 independently transformable parts, including hands, reticles
+and muzzle flashes (462,720 bytes of vertex streams before resource overhead).
+Twenty-four pooled effect meshes provide short-lived impact particles, cases and
+tracers; they have no debris physics. All generated buffers and game objects are
+released on teardown. Surface audio routing is ready for synthesized playback
+in step 7; there is no weapon sound playback yet.
+
+`render/game.render_script` explicitly selects the world camera, then draws the
+viewmodel with its own camera into an RGBA target with a separate depth
+attachment. The transparent weapon target is composited before GUI. It resizes
+with the window and is released on shutdown. Weapon materials use the same sun
+and ambient colours as the world, with camera-relative sunlight, and receive no
+world fog. The reticle appears only in ADS. Future world post effects can run
+before weapon compositing. PBR and temporal effects remain renderer milestones.
+
+The 18 weapon Lua tests cover timing, inputs, reload interruptions, deterministic
+spread/recoil, geometry bounds/winding and continuous collision/penetration.
+The native weapon suite uses real input bindings, fixed ticks and Bullet targets,
+checks damage through wood versus concrete and at a muzzle-obstructing wall,
+and captures hip/ADS/reload/inspection views. Native validation targets
+macOS/Metal; browser/mobile runtime validation remains outstanding.
+
 ## Framework contract
 
 `main/controller.script` owns one session from `game/runtime.lua`. Every session
@@ -151,8 +232,9 @@ subscriptions in `final`. In this port **damage events report already-applied
 damage**; listeners must never apply it again. Damage payloads contain `target`,
 `source`, `amount` (actual damage), `health`, `killed`, `headshot` and optional
 `point`. Death contains `actor`, `source`, optional `point` and `impulse`.
-FX ignores player damage for hitmarkers. Other event producers arrive with their
-respective gameplay systems; these declarations do not simulate firing or sound.
+FX ignores player damage for hitmarkers. Weapons produce fire, reload, shell,
+impact and tracer notifications; surface audio keys do not synthesize or play
+sound. Future systems supply their remaining event producers.
 
 Actor, camera, generated mesh batches and structural collision objects are wired.
 World batches and collision objects belong to the world module; future enemy game objects belong to AI.
@@ -199,9 +281,9 @@ The movement suite additionally checks capsule traversal from the street over
 the kerb and through the doorway into W2.
 
 The initial material uses procedural grain, directional/ambient lighting and
-distance fog with the built-in 3D render pass. Local lights are metadata for the
+distance fog in the custom renderer's world pass. Local lights are metadata for the
 later renderer; PBR, shadow maps, generated material textures and the full render
-pipeline remain in step 6.
+pipeline remain in step 6. Separate weapon rendering is already implemented.
 
 ## Automation
 
@@ -222,7 +304,15 @@ also supply explicit first-tick edges. Look values are per-tick pixel deltas. Ea
 limited to 2,400 ticks. `movement.result` returns completion and immutable final
 metrics, including slide/tactical ticks, mantle completion/abort counts, peak
 speed and lean, so polling latency does not change the measured endpoint.
-Discover them with `game.application_catalog(kind="command")`. For example:
+`weapons.snapshot` exposes ammo, chamber, mode, clip progress, ADS, spread, recoil
+and projectile counters. `weapons.drive` replays up to 64 input segments (at most
+2,400 ticks) through ordinary buffered inputs before each fixed tick; booleans
+include fire, aim, reload, inspect, fire_mode, next_weapon and weapon_rifle/smg/
+pistol. `weapons.result` returns its frozen final snapshot. `weapons.range`
+creates optional fixtures at z=23..47 and reports target health; reset the player
+to x=-5/0/5, y=0.01, z=40, yaw=0 for bare/wood/concrete lanes.
+
+Discover commands with `game.application_catalog(kind="command")`. For example:
 
 ```python
 from automation_bridge import editor

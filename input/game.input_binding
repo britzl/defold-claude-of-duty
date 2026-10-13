@@ -69,3 +69,9 @@ key_trigger {
 key_trigger { input: KEY_0 action: "play" }
 key_trigger { input: KEY_ESC action: "release_mouse" }
 key_trigger { input: KEY_4 action: "course" }
+key_trigger { input: KEY_6 action: "weapon_rifle" }
+key_trigger { input: KEY_7 action: "weapon_smg" }
+key_trigger { input: KEY_8 action: "weapon_pistol" }
+key_trigger { input: KEY_TAB action: "next_weapon" }
+key_trigger { input: KEY_B action: "fire_mode" }
+key_trigger { input: KEY_5 action: "firing_range" }

@@ -96,6 +96,17 @@ The original [world assembler](/Users/bjornritzl/Downloads/Claude-of-Duty-main/s
 
 **4. Preserve weapon behavior and give the viewmodel its own rendering pass.**
 
+Implemented: source-tuned M4A1/MPX-9/P-19 definitions, independent magazine and
+chamber state, auto/burst/semi fire control, deterministic recoil springs,
+stance/movement spread, ADS, reload/inspect and weapon switching. Projectiles
+retain travel, drop and full-segment Bullet checks, with measured box thickness,
+material penetration and single-owner actor damage. Runtime-generated weapons,
+magazines, bolts/slides and hands animate in a separate camera/colour/depth pass.
+Surface particles, cases, tracers, an ammo/mode HUD and an optional native firing
+range are included. Lua and macOS/Metal smoke suites pass. Geometry is simplified;
+synthesized audio, full presentation effects and browser/mobile runtime validation
+remain later work. See `README.md` for contracts and deliberate source differences.
+
 Port the rifle, SMG and pistol definitions, ammunition, fire modes, recoil springs, spread, ADS, reload and inspection timelines.
 
 Retain simulated projectile travel and drop. Each simulation step should query the entire travelled segment so fast projectiles do not skip thin surfaces. Surface metadata should control penetration, impact effects and audio.

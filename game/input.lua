@@ -3,6 +3,7 @@ local M = {}
 M.actions = {
     "forward", "back", "left", "right", "sprint", "crouch", "prone",
     "jump", "fire", "aim", "reload", "inspect", "lean_left", "lean_right",
+    "weapon_rifle", "weapon_smg", "weapon_pistol", "next_weapon", "fire_mode",
 }
 
 function M.new()

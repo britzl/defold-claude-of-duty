@@ -10,3 +10,5 @@ components {
   id: "world_collision"
   component: "/world/box.factory"
 }
+components { id: "weapon_mesh" component: "/weapons/part.factory" }
+components { id: "weapon_effect" component: "/weapons/effect.factory" }

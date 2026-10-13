@@ -1,0 +1,151 @@
+local geometry = require "game.weapons.geometry"
+local pose = require "game.weapons.viewmodel"
+local trace = require "game.weapons.trace"
+local V = require "game.weapons.math"
+local events = require "game.events"
+local M = {}
+local POSITION,NORMAL,COLOR=hash("position"),hash("normal"),hash("color")
+local GROUPS={hash("world"),hash("enemy")}
+local function vector(p) return vmath.vector3(p[1],p[2],p[3]) end
+local function rotation(r) return vmath.quat_rotation_y(r[2])*vmath.quat_rotation_x(r[1])*vmath.quat_rotation_z(r[3]) end
+local function upload(adapter,batch,factory_url)
+    local data=buffer.create(batch.vertex_count,{
+        {name=POSITION,type=buffer.VALUE_TYPE_FLOAT32,count=3},
+        {name=NORMAL,type=buffer.VALUE_TYPE_FLOAT32,count=3},
+        {name=COLOR,type=buffer.VALUE_TYPE_FLOAT32,count=4}})
+    local p,n,c=buffer.get_stream(data,POSITION),buffer.get_stream(data,NORMAL),buffer.get_stream(data,COLOR)
+    for i=1,#batch.positions do p[i]=batch.positions[i];n[i]=batch.normals[i] end
+    for i=1,#batch.colors do c[i]=batch.colors[i] end
+    buffer.set_metadata(data,"AABB",batch.bounds,buffer.VALUE_TYPE_FLOAT32)
+    local id=factory.create(factory_url)
+    local path=resource.create_buffer("/generated/weapon_"..hash_to_hex(id)..".bufferc",{buffer=data})
+    go.set(msg.url(nil,id,"mesh"),"vertices",path)
+    adapter.objects[#adapter.objects+1]=id;adapter.buffers[#adapter.buffers+1]=path
+    adapter.vertices=adapter.vertices+batch.vertex_count
+    return {id=id,url=msg.url(nil,id,"mesh"),visible=true}
+end
+local function visible(part,enabled)
+    if part.visible~=enabled then msg.post(part.url,enabled and "enable" or "disable");part.visible=enabled end
+end
+function M.new(ctx,mesh_factory,effect_factory)
+    local a={models={},objects={},buffers={},effects={},effect_cursor=0,vertices=0}
+    for _,id in ipairs({"rifle","smg","pistol"}) do
+        local model=geometry.weapon(id)
+        a.models[id]=model
+        for _,name in ipairs({"body","magazine","bolt","charge","left_hand","right_hand","reticle","flash"}) do
+            model.parts[name]=upload(a,model.parts[name],mesh_factory)
+            visible(model.parts[name],false)
+        end
+        go.set(model.parts.flash.url,"tint",vmath.vector4(1,1,1,1))
+        go.set(model.parts.reticle.url,"tint",vmath.vector4(1,1,1,1))
+    end
+    -- Fixed resource budget for short-lived surface particles, tracers and cases.
+    local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,1})
+    for _=1,24 do
+        local part=upload(a,cube,effect_factory);part.life=0
+        visible(part,false);a.effects[#a.effects+1]=part
+    end
+    local function effect(position,velocity,color,size,life)
+        a.effect_cursor=a.effect_cursor%#a.effects+1
+        local e=a.effects[a.effect_cursor]
+        e.position=V.copy(position);e.velocity=velocity;e.life=life;e.duration=life;e.size=size
+        e.tracer=false;e.shell=false
+        go.set(e.url,"tint",vmath.vector4(color[1],color[2],color[3],0))
+        go.set_rotation(vmath.quat(),e.id)
+        visible(e,true)
+        return e
+    end
+    events.on(ctx.events,events.BULLET_IMPACT,a,function(_,hit)
+        local colors={sparks={1,.66,.15},splinters={.46,.28,.11},dust={.76,.68,.50},flesh={.45,.10,.07}}
+        local color=colors[hit.effect] or {.57,.57,.52}
+        for i=1,3 do
+            local n=hit.normal
+            effect(hit.point,{x=n.x*(.7+i*.3)+(i-2)*.4,y=n.y+1+i*.2,z=n.z*(.7+i*.3)},color,
+                hit.effect=="sparks" and .018 or .035, .25+i*.04)
+        end
+    end)
+    events.on(ctx.events,events.WEAPON_SHELL,a,function(_,shell)
+        local e=effect(shell.position,shell.velocity,{.58,.42,.16},.014,.65)
+        e.shell=true
+    end)
+    events.on(ctx.events,events.BULLET_TRACER,a,function(_,shot)
+        local delta={x=shot.to.x-shot.from.x,y=shot.to.y-shot.from.y,z=shot.to.z-shot.from.z}
+        local length=V.length(delta)
+        if length<.01 then return end
+        local e=effect(V.point(shot.from,delta,.5),{x=0,y=0,z=0},{.95,.78,.36},.008,.035)
+        e.tracer=true;e.length=length
+        go.set_rotation(vmath.quat_from_to(vmath.vector3(0,0,1),vmath.vector3(delta.x/length,delta.y/length,delta.z/length)),e.id)
+    end)
+    return a
+end
+function M.update(a,ctx,dt,shown)
+    local w=ctx.weapons
+    local active=a.models[w.equipped]
+    local sample=pose.pose(ctx,active)
+    local q=rotation(sample.rotation)
+    local root=vector(sample.position)
+    local camera_rotation=vmath.quat_rotation_y(ctx.presentation.yaw)*vmath.quat_rotation_x(ctx.presentation.pitch)
+        *vmath.quat_rotation_z(ctx.presentation.roll)
+    local light=vmath.rotate(vmath.conj(camera_rotation),vmath.normalize(vmath.vector3(-.6,.85,.4)))
+    for id,model in pairs(a.models) do
+        for name,part in pairs(model.parts) do
+            local part_pose=sample.parts[name]
+            local enabled=shown and id==w.equipped and part_pose.visible
+            visible(part,enabled)
+            if enabled then
+                go.set_position(root+vmath.rotate(q,vector(part_pose.position)),part.id)
+                go.set_rotation(q,part.id)
+                go.set(part.url,"light_dir",vmath.vector4(light.x,light.y,light.z,0))
+            end
+        end
+    end
+    for _,e in ipairs(a.effects) do
+        if e.life>0 then
+            e.life=math.max(0,e.life-dt)
+            if not e.tracer then
+                e.velocity.y=e.velocity.y-9.81*dt
+                e.position=V.point(e.position,e.velocity,dt)
+            end
+            go.set_position(vmath.vector3(e.position.x,e.position.y,e.position.z),e.id)
+            go.set_scale(vmath.vector3(e.size,e.size,e.tracer and e.length or e.size*(e.shell and 2.5 or 1)),e.id)
+            visible(e,e.life>0)
+        end
+    end
+    return sample
+end
+function M.query(registries)
+    return {segment=function(_,from,dir,length)
+        local destination=V.point(from,dir,length)
+        local hits=physics.raycast(vmath.vector3(from.x,from.y,from.z),
+            vmath.vector3(destination.x,destination.y,destination.z),GROUPS,{all=true}) or {}
+        local result,seen={},{}
+        for _,hit in ipairs(hits) do
+            local shape
+            for _,registry in ipairs(registries) do shape=registry[hit.id] or shape end
+            if shape then
+                local interval=trace.box(shape,from,dir,length)
+                if interval then result[#result+1]=interval;seen[hit.id]=true end
+            else
+                result[#result+1]={id=hash_to_hex(hit.id),surface="concrete",enter=hit.fraction*length,
+                    normal={x=hit.normal.x,y=hit.normal.y,z=hit.normal.z}}
+            end
+        end
+        -- Bullet rays starting inside a shape do not report its entry. Include
+        -- only containing boxes, using the very same collider descriptions.
+        for _,registry in ipairs(registries) do
+            for id,shape in pairs(registry) do
+                if not seen[id] then
+                    local interval=trace.box(shape,from,dir,length)
+                    if interval and interval.enter<=1e-7 then result[#result+1]=interval end
+                end
+            end
+        end
+        return result
+    end}
+end
+function M.final(a,ctx)
+    events.off_owner(ctx.events,a)
+    for _,id in ipairs(a.objects) do go.delete(id) end
+    for _,path in ipairs(a.buffers) do resource.release(path) end
+end
+return M

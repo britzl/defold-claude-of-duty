@@ -16,3 +16,5 @@ instances {
   prototype: "/main/player.go"
 }
 scale_along_z: 1
+instances { id: "viewmodel" prototype: "/main/viewmodel.go" }
+instances { id: "weapon_composite" prototype: "/main/composite.go" }

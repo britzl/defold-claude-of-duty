@@ -20,6 +20,11 @@ function M.update(ctx)
     -- Recheck the interpolated camera every frame as position/yaw may have
     -- changed since the fixed query. Collision may shorten a lean immediately.
     out.camera.x, out.camera.y, out.camera.z, out.roll = lean.apply(ctx.services.capsule, out.camera, out.yaw, amount)
+    local weapons = ctx.weapons
+    if weapons then
+        out.pitch = out.pitch + weapons.previous_recoil.pitch + (weapons.recoil.pitch.x-weapons.previous_recoil.pitch)*alpha
+        out.yaw = out.yaw + weapons.previous_recoil.yaw + (weapons.recoil.yaw.x-weapons.previous_recoil.yaw)*alpha
+    end
     out.health = ctx.player.actor.health
 end
 

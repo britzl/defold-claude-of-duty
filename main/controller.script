@@ -7,6 +7,10 @@ local capsule_queries = require "game.player.bullet"
 local player_system = require "game.systems.player"
 local driver = require "game.player.driver"
 local course = require "game.player.course"
+local weapon_system = require "game.systems.weapons"
+local weapon_adapter = require "game.weapons.defold"
+local weapon_driver = require "game.weapons.driver"
+local firing_range = require "game.weapons.range"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
@@ -19,6 +23,7 @@ local function select_view(self, name)
     self.view = name
     self.ctx.player.enabled = not name
     self.ctx.player.drive = nil
+    self.weapon_drive = nil
     input.reset(self.ctx.input)
     window.set_mouse_lock(false)
 end
@@ -26,6 +31,14 @@ end
 local function create_course(self)
     assert(self.ctx.world.ready, "World is still loading")
     if not self.course then self.course = course.create() end
+end
+
+local function create_range(self)
+    assert(self.ctx.world.ready, "World is still loading")
+    if not self.range then
+        self.range = firing_range.new(self.ctx)
+        self.bullet_registries[#self.bullet_registries+1] = self.range.adapter.by_id
+    end
 end
 
 local function world_snapshot(world)
@@ -77,6 +90,9 @@ function init(self)
         and sys.get_config_boolean("physics.use_fixed_timestep"),
         "Gameplay requires metre-based 3D physics with a fixed timestep")
     self.ctx = runtime.new({ world = world_adapter.new("#world_mesh", "#world_collision") })
+    self.weapon_visuals = weapon_adapter.new(self.ctx, "#weapon_mesh", "#weapon_effect")
+    self.bullet_registries = { self.ctx.world.adapter.by_id }
+    self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -84,6 +100,31 @@ function init(self)
     msg.post(".", "acquire_input_focus")
     window.set_listener(window_event)
     if automation_bridge then
+        automation_bridge.command("weapons.snapshot", function() return weapon_system.snapshot(self.ctx) end)
+        automation_bridge.command("weapons.drive", function(data)
+            assert(self.ctx.world.ready, "World is still loading")
+            local drive = weapon_driver.new(data.segments)
+            select_view(self, nil)
+            self.weapon_drive = drive
+            return { accepted = true }
+        end)
+        automation_bridge.command("weapons.result", function()
+            return { complete = self.weapon_drive and self.weapon_drive.complete or false,
+                result = self.weapon_drive and self.weapon_drive.result }
+        end)
+        automation_bridge.command("weapons.range", function()
+            create_range(self)
+            return firing_range.snapshot(self.ctx, self.range)
+        end)
+        for name, description in pairs({
+            ["weapons.snapshot"] = "Read weapon, mode, magazine/chamber/reserve, clip, ADS, recoil and projectile counts.",
+            ["weapons.drive"] = "Replay 1-64 {ticks, fire, aim, reload, inspect, fire_mode, next_weapon, weapon_rifle, weapon_smg, weapon_pistol, sprint, forward, crouch} input segments, at most 2400 ticks.",
+            ["weapons.result"] = "Read completion and the frozen final weapon snapshot of the latest drive.",
+            ["weapons.range"] = "Create optional Bullet firing fixtures at z=23..47 and read target health. Lanes x=-5/0/5 are bare/wood/concrete.",
+        }) do
+            automation_bridge.describe("command", name, { description=description,
+                input_schema={type="object"}, output_schema={type="object"} })
+        end
         automation_bridge.publish("world", world_snapshot(self.ctx.world))
         automation_bridge.describe("state", "world", {
             description = "Generation phase and counts. ready becomes true after meshes and collision objects are installed.",
@@ -184,7 +225,9 @@ function fixed_update(self, dt)
         self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id)
         self.ctx.services.capsule:sync(self.ctx.player.position, self.ctx.player.motion.height)
     end
+    if self.weapon_drive then weapon_driver.before(self.ctx, self.weapon_drive) end
     runtime.fixed_update(self.ctx, dt)
+    if self.weapon_drive then weapon_driver.after(self.ctx, self.weapon_drive) end
     -- Keep the GO and kinematic Bullet transform at the authoritative feet.
     local p = self.ctx.player.position
     self.position.x, self.position.y, self.position.z = p.x, p.y, p.z
@@ -208,6 +251,16 @@ function late_update(self, dt)
     go.set_position(self.camera_position, "/camera")
     go.set_rotation(vmath.quat_rotation_y(view and view.yaw or out.yaw) * vmath.quat_rotation_x(view and view.pitch or out.pitch)
         * vmath.quat_rotation_z(view and 0 or out.roll), "/camera")
+    local visible = not view and self.ctx.world.ready and self.ctx.player.actor.alive
+    local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, dt, visible)
+    go.set("/camera#camera", "fov", view and math.rad(70) or weapon_pose.world_fov)
+    go.set("/viewmodel#camera", "fov", weapon_pose.view_fov)
+    local weapon = weapon_system.snapshot(self.ctx)
+    local ammo = string.format("%s  %s  %d / %d", weapon.label, string.upper(weapon.mode), weapon.ammo, weapon.reserve)
+    local clip_labels = { reloadTac="RELOADING", reloadEmpty="RELOADING", inspect="INSPECTING",
+        draw="EQUIPPING", holster="SWITCHING" }
+    local weapon_status = clip_labels[weapon.clip] or ""
+    local aiming = weapon.ads > 0.8
     local hit = self.ctx.fx.hitmarker > 0
     local hurt = self.ctx.fx.damage_flash > 0
     local loading = not self.ctx.world.ready
@@ -215,9 +268,11 @@ function late_update(self, dt)
     local title = view and view.title or (motion.mantle and "MANTLE" or motion.sliding and "SLIDE"
         or motion.tactical and "TACTICAL SPRINT" or string.upper(motion.stance))
     if self.hud.health ~= out.health or self.hud.hit ~= hit or self.hud.hurt ~= hurt
-        or self.hud.loading ~= loading or self.hud.title ~= title then
+        or self.hud.loading ~= loading or self.hud.title ~= title or self.hud.ammo ~= ammo
+        or self.hud.weapon_status ~= weapon_status or self.hud.aiming ~= aiming then
         self.hud.health, self.hud.hit, self.hud.hurt = out.health, hit, hurt
         self.hud.loading, self.hud.title = loading, title
+        self.hud.ammo, self.hud.weapon_status, self.hud.aiming = ammo, weapon_status, aiming
         msg.post("/hud#gui", HUD_STATE, self.hud)
     end
 end
@@ -225,6 +280,12 @@ end
 function on_input(self, action_id, action)
     if action.pressed and (action_id == PLAY or action_id == ESCAPE) then
         if action_id == PLAY then select_view(self, nil) else select_view(self, self.view) end
+        return true
+    end
+    if action_id == hash("firing_range") and action.pressed and self.ctx.world.ready then
+        create_range(self)
+        select_view(self, nil)
+        player_system.reset(self.ctx, { x = -5, y = 0.01, z = 40 }, 0)
         return true
     end
     if action_id == COURSE and action.pressed and self.ctx.world.ready then
@@ -260,6 +321,8 @@ function final(self)
     window.set_listener(nil)
     msg.post(".", "release_input_focus")
     -- Automation Bridge clears callbacks with the Lua application lifecycle.
+    weapon_adapter.final(self.weapon_visuals, self.ctx)
+    if self.range then firing_range.final(self.ctx, self.range) end
     runtime.final(self.ctx)
     if self.course then course.final(self.course) end
 end
