@@ -16,6 +16,9 @@ local soldier_adapter = require "game.ai.defold"
 local renderer_settings = require "game.render.settings"
 local audio_system = require "game.systems.audio"
 local audio_adapter = require "game.audio.defold"
+local ui = require "game.ui.controller"
+local ui_controls = require "game.ui.controls"
+local hud_model = require "game.ui.hud"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
@@ -56,6 +59,7 @@ local function restart_encounter(self)
     self.ctx.ai.enabled=true
     ai_system.reset(self.ctx)
     self.ctx.fx.hitmarker,self.ctx.fx.damage_flash=0,0
+    hud_model.reset(self.ctx)
 end
 
 local function world_snapshot(world)
@@ -83,6 +87,7 @@ local function snapshot(ctx)
         grounded = motion.grounded, stance = motion.stance, height = motion.height,
         yaw = motion.yaw, pitch = motion.pitch, recovery_failed = motion.recovery_failed,
         mouse_locked = window.get_mouse_lock(),
+        paused = ctx.paused,
         sliding = motion.sliding, tactical = motion.tactical, mantling = motion.mantle ~= false,
         lean = motion.lean, slide_cooldown = motion.slide_cooldown, tactical_cooldown = motion.tactical_cooldown,
         camera_x = ctx.presentation.camera.x, camera_y = ctx.presentation.camera.y, camera_z = ctx.presentation.camera.z,
@@ -92,11 +97,9 @@ end
 
 local function window_event(self, event)
     if event == window.WINDOW_EVENT_FOCUS_LOST then
-        input.reset(self.ctx.input)
-        window.set_mouse_lock(false)
-        audio_system.suspend(self.ctx,true)
+        ui.focus(self, false)
     elseif event == window.WINDOW_EVENT_FOCUS_GAINED then
-        audio_system.suspend(self.ctx,false)
+        ui.focus(self, true)
     end
 end
 
@@ -134,12 +137,16 @@ function init(self)
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
-    self.hud = {}
+    ui.init(self, restart_encounter)
     msg.post(".", "acquire_input_focus")
     window.set_listener(window_event)
     if automation_bridge then
         automation_bridge.command("audio.snapshot",function() return audio_system.snapshot(self.ctx) end)
-        automation_bridge.command("audio.configure",function(data) return audio_system.configure(self.ctx,data) end)
+        automation_bridge.command("audio.configure",function(data)
+            local result=audio_system.configure(self.ctx,data)
+            ui.publish(self)
+            return result
+        end)
         automation_bridge.command("audio.preview",function(data) return audio_system.preview(self.ctx,data) end)
         automation_bridge.describe("command","audio.snapshot",{description="Read generated sound bank, bounded voices, event counts, listener room and actual mixer peaks.",output_schema={type="object"}})
         automation_bridge.describe("command","audio.configure",{description="Set master/weapons/foley/ambience gains 0..1 or muted boolean.",input_schema={type="object"},output_schema={type="object"}})
@@ -148,6 +155,7 @@ function init(self)
         automation_bridge.command("renderer.configure",function(data)
             self.renderer_settings=renderer_settings.configure(self.renderer_settings,data)
             msg.post("@render:","renderer_configure",self.renderer_settings)
+            ui.publish(self)
             return self.renderer_settings
         end)
         automation_bridge.describe("command","renderer.snapshot",{
@@ -346,6 +354,7 @@ function init(self)
 end
 
 function fixed_update(self, dt)
+    if self.ctx.paused then return end
     -- Collision objects acquire their Bullet broadphase handles after init.
     if self.ctx.world.ready and not self.ctx.services.capsule then
         self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id)
@@ -380,7 +389,7 @@ function late_update(self, dt)
     go.set_rotation(vmath.quat_rotation_y(view and view.yaw or out.yaw) * vmath.quat_rotation_x(view and view.pitch or out.pitch)
         * vmath.quat_rotation_z(view and 0 or out.roll), "/camera")
     local visible = not view and self.ctx.world.ready and self.ctx.player.actor.alive
-    local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, dt, visible)
+    local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, self.ctx.paused and 0 or dt, visible)
     go.set("/camera#camera", "fov", view and math.rad(70) or weapon_pose.world_fov)
     go.set("/viewmodel#camera", "fov", weapon_pose.view_fov)
     local weapon = weapon_system.snapshot(self.ctx)
@@ -395,23 +404,39 @@ function late_update(self, dt)
     local motion = self.ctx.player.motion
     local title = view and view.title or (motion.mantle and "MANTLE" or motion.sliding and "SLIDE"
         or motion.tactical and "TACTICAL SPRINT" or string.upper(motion.stance))
-    if self.hud.health ~= out.health or self.hud.hit ~= hit or self.hud.hurt ~= hurt
-        or self.hud.loading ~= loading or self.hud.title ~= title or self.hud.ammo ~= ammo
-        or self.hud.weapon_status ~= weapon_status or self.hud.aiming ~= aiming then
-        self.hud.health, self.hud.hit, self.hud.hurt = out.health, hit, hurt
-        self.hud.loading, self.hud.title = loading, title
-        self.hud.ammo, self.hud.weapon_status, self.hud.aiming = ammo, weapon_status, aiming
-        msg.post("/hud#gui", HUD_STATE, self.hud)
+    local state = hud_model.snapshot(self.ctx)
+    state.health, state.hit, state.hurt = out.health, hit, hurt
+    state.loading, state.title = loading, title
+    state.ammo, state.weapon_status, state.aiming = ammo, weapon_status, aiming
+    state.paused, state.mouse_locked, state.inspecting = self.ctx.paused, window.get_mouse_lock(), view ~= nil
+    state.diagnostic = self.renderer_settings.view ~= "scene"
+    state.spread = weapon.spread or 0
+    msg.post("/hud#gui", HUD_STATE, state)
+    if self.ctx.world.ready and not self.map_sent then
+        -- Keep each message below Defold's message payload limit.
+        for i, shape in ipairs(self.ctx.world.minimap) do
+            if i > hud_model.map_limit then break end
+            msg.post("/hud#gui", "map_rect", shape)
+        end
+        self.map_sent = true
     end
 end
 
 function on_input(self, action_id, action)
+    local name = actions[action_id]
+    ui_controls.observe(self.ui, name, action)
+    if action_id == ESCAPE and action.pressed then
+        ui.pause(self, not self.ctx.paused)
+        return true
+    end
+    if ui.menu_input(self, action_id, action) then return true end
+    if name and not ui_controls.allowed(self.ui, name) then return true end
     if action_id==hash("restart_encounter") and action.pressed and self.ctx.world.ready then
         restart_encounter(self)
         return true
     end
-    if action.pressed and (action_id == PLAY or action_id == ESCAPE) then
-        if action_id == PLAY then select_view(self, nil) else select_view(self, self.view) end
+    if action.pressed and action_id == PLAY then
+        select_view(self, nil)
         return true
     end
     if action_id == hash("firing_range") and action.pressed and self.ctx.world.ready then
@@ -431,20 +456,24 @@ function on_input(self, action_id, action)
         return true
     end
     if not action_id then
-        if window.get_mouse_lock() and not self.view then input.look(self.ctx.input, action.dx or 0, action.dy or 0) end
+        if window.get_mouse_lock() and not self.view then
+            input.look(self.ctx.input, (action.dx or 0)*self.ui.sensitivity, (action.dy or 0)*self.ui.sensitivity)
+        end
         return false
     end
     if action_id == hash("fire") and action.pressed and not window.get_mouse_lock() then
         select_view(self, nil)
+        ui_controls.quarantine(self.ui)
         window.set_mouse_lock(true)
         return true
     end
-    local name = actions[action_id]
+    if (name == "fire" or name == "aim") and not window.get_mouse_lock() then return true end
     if name then return input.button(self.ctx.input, name, action) end
     return false
 end
 
 function on_message(self, message_id, message, sender)
+    if message_id == hash("ui_action") then ui.action(self, message) end
     if message_id == hash("renderer_stats") then self.renderer_stats = message end
     if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end
 end

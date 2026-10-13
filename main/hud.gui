@@ -4,4 +4,11 @@ fonts {
   font: "/builtins/fonts/default.font"
 }
 material: "/builtins/materials/gui.material"
-max_nodes: 16
+adjust_reference: ADJUST_REFERENCE_PARENT
+max_nodes: 384
+layers { name: "damage" }
+layers { name: "hud" }
+layers { name: "map" }
+layers { name: "markers" }
+layers { name: "overlay" }
+layers { name: "menu" }

@@ -76,3 +76,8 @@ key_trigger { input: KEY_TAB action: "next_weapon" }
 key_trigger { input: KEY_B action: "fire_mode" }
 key_trigger { input: KEY_5 action: "firing_range" }
 key_trigger { input: KEY_9 action: "restart_encounter" }
+key_trigger { input: KEY_UP action: "ui_up" }
+key_trigger { input: KEY_DOWN action: "ui_down" }
+key_trigger { input: KEY_LEFT action: "ui_left" }
+key_trigger { input: KEY_RIGHT action: "ui_right" }
+key_trigger { input: KEY_ENTER action: "ui_confirm" }

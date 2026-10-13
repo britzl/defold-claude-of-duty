@@ -192,8 +192,14 @@ cleanup are wired. Lua and native macOS playback/mixer checks pass, along with a
 focused HTML5 check of Web Audio output, movement/enemy combat, restart and room
 ambience. Full browser input and physical mobile validation, full source audio
 parity and advanced spatial DSP remain outstanding.
-The expanded HUD, settings GUI and gamepad/touch work below are still subsequent
-work. See `README.md` for resource budgets, controls and validation scope.
+The desktop HUD and pause/settings GUI are now implemented: spread/hit feedback,
+health and damage direction, compass, a height-filtered generated minimap,
+bounded killfeed, audio/display/sensitivity controls and encounter restart.
+Pause freezes combat and weapon timelines, suspends audio and isolates menu input;
+focus return requires explicit resume. GUI groups preserve layout across aspect
+ratios. Settings survive encounter restart within the running session.
+Gamepad/touch adapters, saved preferences and browser/mobile UI validation remain
+subsequent work. See `README.md` for controls, budgets and validation scope.
 
 Follow Kaigen's approach: synthesize reusable samples during loading, then play them through a bounded voice pool. Defold can create sound-data resources at runtime, so generated WAV data is a viable integration path. [Resource API](https://defold.com/ref/resource/#resource.create_sound_data)
 

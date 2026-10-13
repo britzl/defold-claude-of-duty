@@ -17,6 +17,9 @@ animated sun shadows, a procedural sky, height fog, tone mapping and bloom are
 implemented. A runtime-generated sound bank now supplies weapon fire, reloads,
 surface footsteps/impacts, movement foley and ambience through a bounded spatial
 audio mixer.
+The combat HUD now includes a compass, generated minimap, damage direction,
+health bar and killfeed. Escape opens a pause menu with audio, display and
+mouse controls; focus loss also pauses the encounter.
 
 ## Run and validate
 
@@ -32,6 +35,7 @@ lua tests/weapons_test.lua
 lua tests/ai_test.lua
 lua tests/renderer_test.lua
 lua tests/audio_test.lua
+lua tests/ui_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks
@@ -47,11 +51,13 @@ PYTHONPATH=automation-bridge-python python3 tests/ai_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/ui_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
 jumps, **Ctrl** holds crouch, and **Z** holds prone. Click to capture the mouse
-for looking; **Esc** releases it. Holding right mouse aims down the weapon sight
+for looking; **Esc** opens the pause/settings menu and releases it.
+Holding right mouse aims down the weapon sight
 and reduces movement speed.
 
 Double-tap **Shift** within 0.32 seconds and hold it while moving forward for
@@ -82,6 +88,60 @@ creates an optional firing range and moves you to its bare-target lane.
 The other lanes, to the right, have thin wood and thick concrete in front of
 their targets. Targets have 1,000 health and use the normal damage owner.
 Gamepad/touch adapters can feed the same `game.input` API later.
+
+## HUD and pause menu
+
+The HUD includes a spread-reactive crosshair, hitmarker (mint for a headshot),
+health bar, low-health edge tint, a brief damage flash and a directional hit
+indicator when the attacker is known. It shows the current weapon, fire mode,
+ammunition, reload/inspection status and movement stance. Elimination displays
+a restart prompt. A four-entry killfeed records confirmed deaths through combat
+notifications, expires after six active seconds and clears on encounter restart.
+
+The compass uses north = world -Z and east = +X. The north-up minimap follows the
+player over a 44-metre square, drawing the generated world's collision footprints
+and a rotated player marker. Rectangles are clipped to the map and the player's
+floor height, so the shop's roof does not fill its accessible interior. The
+current slice supplies 36 rectangles; the GUI bounds this to 128 for larger maps.
+It shows geometry, not enemy positions. Renderer diagnostic views hide the combat
+HUD while leaving the settings menu available.
+
+**Esc** toggles the menu. Use the mouse to select tabs, click/drag sliders and
+toggle options, or **Tab / Up / Down** to select a control, **Left / Right** to
+adjust it and **Enter** to activate it. The menu provides:
+
+- **Audio:** master, weapons, movement/impacts and ambience volumes, plus mute.
+- **Display:** sun shadows, surface detail, local lights, fog, bloom, exposure
+  and the renderer's diagnostic views.
+- **Controls:** mouse sensitivity (0.25–3× the existing tuning) and control help.
+- **Resume** and **Restart encounter**, also usable after player death.
+
+Settings apply immediately and survive encounter restarts; they are session
+settings and reset to defaults when the application is relaunched. Existing
+`audio.configure` and `renderer.configure` commands update the same live values.
+
+Pause freezes the gameplay clock, player/AI movement, rounds, reload/weapon
+timelines and HUD feedback timers. Queued damage waits until the next resumed
+fixed tick. Loading, rendering, GUI input and sound completion callbacks remain
+live; the mixer stops voices and drops stale cues. Focus loss pauses and releases
+the cursor. Returning focus leaves the game paused until explicitly resumed.
+Resume clears buffered input and quarantines held gameplay buttons until release.
+The cursor stays free: the next click captures it without firing, and a subsequent
+click fires. This also avoids requiring browser pointer lock from a menu message.
+
+HUD clusters anchor to screen edges and scale together; the menu fits inside the
+window while preserving its aspect ratio. The GUI uses only generated box/text
+nodes, capped at 384, with no new texture assets. Menu tabs delete their old nodes
+before rebuilding. Minimap metadata is sent once in bounded messages, and HUD
+presentation remains separate from simulation.
+
+`tests/ui_test.lua` covers pause timing, in-flight rounds and pending damage,
+loading while paused, focus transitions, input quarantine, compass/damage
+direction and minimap clipping. `tests/ui_smoke.py` exercises actual GUI controls,
+native AI/audio pause, held inputs, reload resume, cursor capture, killfeed,
+restart and window resizing, saving review images in `build/ui-validation`.
+Physical mobile and browser UI/input validation remain separate work; this
+increment does not add gamepad or touch adapters.
 
 One soldier patrols the far end of the street. Approach it to trigger detection
 and combat. **9** restarts the encounter with full player/enemy health, fresh
@@ -295,7 +355,7 @@ queued damage, runs simulation modules, then consumes input edges. Held buttons
 persist; presses, releases and mouse deltas survive frames with no fixed tick.
 Focus loss clears pending and held input. Defold owns physics stepping.
 Frame updates run presentation effects and interpolate previous/current actor
-positions. `late_update` applies the camera transform and sends changed HUD data
+positions. `late_update` applies the camera transform and sends HUD presentation data
 to the GUI; interpolation never overwrites the actor's collision transform.
 The interpolation clock assumes this bootstrap collection runs at normal time
 scale. Collection time scaling will require an explicit clock adaptation.
@@ -425,7 +485,7 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 82 Lua checks and the
+with review images in `build/renderer-validation`. All 90 Lua checks and the
 native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
 HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no
@@ -473,8 +533,8 @@ of sample peaks limits simultaneous output, with gradual gain recovery.
 Encounter restart stops current voices and clears queued cues while retaining the
 bank. Focus loss stops playback; focus return starts fresh ambience without
 replaying old combat sounds. Master, weapons, foley and ambience gains (0..1), plus
-mute, are available through `audio.configure`. These controls are not yet in a
-settings GUI. Browser playback starts after the first click on the game canvas.
+mute, are available through `audio.configure` and the pause menu's Audio tab.
+Browser playback starts after the first click on the game canvas.
 
 The ten Lua audio tests verify WAV format/amplitude, deterministic chunking,
 spectral muffling, spatial transforms, routing, cancellation, queue/voice limits,
@@ -521,6 +581,14 @@ creates optional fixtures at z=23..47 and reports target health; reset the playe
 to x=-5/0/5, y=0.01, z=40, yaw=0 for bare/wood/concrete lanes.
 
 Discover commands with `game.application_catalog(kind="command")`.
+
+`ui.snapshot` reports pause/focus, live audio/display/sensitivity settings,
+compass heading, damage feedback, killfeed and minimap rectangle count.
+`ui.pause` takes `{paused=true|false}`. It uses the normal pause transition,
+including sound suspension and input cleanup. `ui.configure` changes one live
+setting with `{kind="audio"|"renderer"|"input",key="master",value=0.5}`;
+the input kind accepts `key="sensitivity"`, in 0.25..3. Pause/resume does not
+advance automation drives; they continue with the simulation after resume.
 
 `audio.snapshot` reports loading progress, bank bytes, live/peak voices, event
 counts, settings, the latest cue, per-voice gain/pan and native mixer peaks.
