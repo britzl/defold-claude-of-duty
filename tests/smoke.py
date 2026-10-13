@@ -59,6 +59,7 @@ def main():
         assert abs(sim_delta - frame_delta) < 2 / 120
         print("PASS native fixed clock, Bullet configuration and initialization")
 
+        game.key("0", wait="released")
         receipt = game.key("W", hold=1, wait="started")
         game.wait_frames(2)
         assert snapshot()["move_z"] == -1

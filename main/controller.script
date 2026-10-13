@@ -3,12 +3,30 @@ local input = require "game.input"
 local combat = require "game.combat"
 local config = require "game.config"
 local world_adapter = require "game.world.defold"
+local capsule_queries = require "game.player.bullet"
+local player_system = require "game.systems.player"
+local driver = require "game.player.driver"
+local course = require "game.player.course"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
 local APPLY_DAMAGE = hash("apply_damage")
 local HUD_STATE = hash("hud_state")
 local VIEW_ACTIONS = { [hash("view_street")] = "street", [hash("view_shop")] = "shop", [hash("view_room")] = "room" }
+local PLAY, ESCAPE, COURSE = hash("play"), hash("release_mouse"), hash("course")
+
+local function select_view(self, name)
+    self.view = name
+    self.ctx.player.enabled = not name
+    self.ctx.player.drive = nil
+    input.reset(self.ctx.input)
+    window.set_mouse_lock(false)
+end
+
+local function create_course(self)
+    assert(self.ctx.world.ready, "World is still loading")
+    if not self.course then self.course = course.create() end
+end
 
 local function world_snapshot(world)
     return { ready = world.ready, phase = world.phase, seed = world.seed,
@@ -20,6 +38,7 @@ local function world_snapshot(world)
 end
 
 local function snapshot(ctx)
+    local motion = ctx.player.motion
     return {
         tick = ctx.time.tick, elapsed = ctx.time.elapsed,
         frame = ctx.time.frame, frame_elapsed = ctx.time.frame_elapsed,
@@ -29,11 +48,19 @@ local function snapshot(ctx)
         physics = sys.get_config_string("physics.type"),
         gravity = sys.get_config_number("physics.gravity_y"),
         physics_scale = sys.get_config_number("physics.scale"),
+        x = ctx.player.position.x, y = ctx.player.position.y, z = ctx.player.position.z,
+        vx = motion.velocity.x, vy = motion.velocity.y, vz = motion.velocity.z,
+        grounded = motion.grounded, stance = motion.stance, height = motion.height,
+        yaw = motion.yaw, pitch = motion.pitch, recovery_failed = motion.recovery_failed,
+        mouse_locked = window.get_mouse_lock(),
     }
 end
 
 local function window_event(self, event)
-    if event == window.WINDOW_EVENT_FOCUS_LOST then input.reset(self.ctx.input) end
+    if event == window.WINDOW_EVENT_FOCUS_LOST then
+        input.reset(self.ctx.input)
+        window.set_mouse_lock(false)
+    end
 end
 
 function init(self)
@@ -46,7 +73,7 @@ function init(self)
         and sys.get_config_boolean("physics.use_fixed_timestep"),
         "Gameplay requires metre-based 3D physics with a fixed timestep")
     self.ctx = runtime.new({ world = world_adapter.new("#world_mesh", "#world_collision") })
-    self.view = "street"
+    self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
     self.hud = {}
@@ -69,14 +96,60 @@ function init(self)
         end)
         automation_bridge.command("world.view", function(data)
             assert(self.ctx.world.views[data.name], "Unknown inspection view")
-            self.view = data.name
+            select_view(self, data.name)
             return { name = self.view }
         end)
+        automation_bridge.command("movement.course", function()
+            create_course(self)
+            return { ready = true }
+        end)
+        automation_bridge.command("movement.reset", function(data)
+            assert(self.ctx.world.ready, "World is still loading")
+            for _, key in ipairs({ "x", "y", "z" }) do
+                assert(type(data[key]) == "number" and data[key] == data[key] and math.abs(data[key]) < 10000, "Invalid "..key)
+            end
+            local yaw = data.yaw or 0
+            assert(type(yaw) == "number" and yaw == yaw and math.abs(yaw) < 10000, "Invalid yaw")
+            if data.velocity then
+                for _, key in ipairs({ "x", "y", "z" }) do
+                    local value = data.velocity[key] or 0
+                    assert(type(value) == "number" and value == value and math.abs(value) <= 200, "Invalid velocity")
+                end
+            end
+            select_view(self, nil)
+            player_system.reset(self.ctx, data, yaw)
+            if data.velocity then
+                for _, key in ipairs({ "x", "y", "z" }) do
+                    local value = data.velocity[key] or 0
+                    self.ctx.player.motion.velocity[key] = value
+                end
+            end
+            return snapshot(self.ctx)
+        end)
+        automation_bridge.command("movement.drive", function(data)
+            assert(self.ctx.world.ready, "World is still loading")
+            select_view(self, nil)
+            self.ctx.player.drive = driver.new(data.segments)
+            return { accepted = true }
+        end)
+        automation_bridge.command("movement.result", function()
+            local drive = self.ctx.player.drive
+            return { complete = drive and drive.complete or false, result = drive and drive.result }
+        end)
+        for name, description in pairs({
+            ["movement.course"] = "Create the optional native traversal course at x=50..102; does not move the player.",
+            ["movement.reset"] = "Reset feet to x/y/z and optional yaw/velocity for a repeatable traversal fixture.",
+            ["movement.drive"] = "Drive input segments {ticks, move_x, move_z, sprint, crouch, prone, jump} through real fixed ticks; jump is an edge on the segment's first tick.",
+            ["movement.result"] = "Read completion and immutable final metrics for the latest movement drive.",
+        }) do
+            automation_bridge.describe("command", name, { description = description,
+                input_schema = { type = "object" }, output_schema = { type = "object" } })
+        end
         for name, description in pairs({
             ["world.snapshot"] = "Read generated world counts, loading phase and CPU loading time.",
             ["world.validate"] = "Compare all installed collision dimensions and positions; ray-check navigation support and connections.",
             ["world.raycast"] = "Cast from/to {x,y,z} through generated collision; returns the hit surface identifier and position.",
-            ["world.view"] = "Select the street, shop or room inspection camera without changing player simulation state.",
+            ["world.view"] = "Select the street, shop or room inspection camera and disable player input.",
         }) do
             automation_bridge.describe("command", name, { description = description,
                 input_schema = { type = "object" }, output_schema = { type = "object" } })
@@ -102,8 +175,13 @@ function init(self)
 end
 
 function fixed_update(self, dt)
+    -- Collision objects acquire their Bullet broadphase handles after init.
+    if self.ctx.world.ready and not self.ctx.services.capsule then
+        self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id)
+        self.ctx.services.capsule:sync(self.ctx.player.position, self.ctx.player.motion.height)
+    end
     runtime.fixed_update(self.ctx, dt)
-    -- Authoritative actor transform for future collision components.
+    -- Keep the GO and kinematic Bullet transform at the authoritative feet.
     local p = self.ctx.player.position
     self.position.x, self.position.y, self.position.z = p.x, p.y, p.z
     go.set_position(self.position, "/player")
@@ -120,33 +198,46 @@ end
 function late_update(self, dt)
     -- Camera and GUI see interpolated presentation, never drive simulation.
     local out = self.ctx.presentation
-    local view = self.ctx.world.views[self.view]
+    local view = self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
     self.camera_position.x, self.camera_position.y, self.camera_position.z = camera.x, camera.y, camera.z
     go.set_position(self.camera_position, "/camera")
-    if self.last_view ~= self.view then
-        go.set_rotation(vmath.quat_rotation_y(view.yaw) * vmath.quat_rotation_x(view.pitch), "/camera")
-        self.last_view = self.view
-    end
+    go.set_rotation(vmath.quat_rotation_y(view and view.yaw or out.yaw) * vmath.quat_rotation_x(view and view.pitch or out.pitch), "/camera")
     local hit = self.ctx.fx.hitmarker > 0
     local hurt = self.ctx.fx.damage_flash > 0
     local loading = not self.ctx.world.ready
+    local title = view and view.title or string.upper(self.ctx.player.motion.stance)
     if self.hud.health ~= out.health or self.hud.hit ~= hit or self.hud.hurt ~= hurt
-        or self.hud.loading ~= loading or self.hud.title ~= view.title then
+        or self.hud.loading ~= loading or self.hud.title ~= title then
         self.hud.health, self.hud.hit, self.hud.hurt = out.health, hit, hurt
-        self.hud.loading, self.hud.title = loading, view.title
+        self.hud.loading, self.hud.title = loading, title
         msg.post("/hud#gui", HUD_STATE, self.hud)
     end
 end
 
 function on_input(self, action_id, action)
+    if action.pressed and (action_id == PLAY or action_id == ESCAPE) then
+        if action_id == PLAY then select_view(self, nil) else select_view(self, self.view) end
+        return true
+    end
+    if action_id == COURSE and action.pressed and self.ctx.world.ready then
+        create_course(self)
+        select_view(self, nil)
+        player_system.reset(self.ctx, { x = 56, y = 0.01, z = 0 }, 0)
+        return true
+    end
     if VIEW_ACTIONS[action_id] and action.pressed then
-        self.view = VIEW_ACTIONS[action_id]
+        select_view(self, VIEW_ACTIONS[action_id])
         return true
     end
     if not action_id then
-        input.look(self.ctx.input, action.dx or 0, action.dy or 0)
+        if window.get_mouse_lock() and not self.view then input.look(self.ctx.input, action.dx or 0, action.dy or 0) end
         return false
+    end
+    if action_id == hash("fire") and action.pressed and not window.get_mouse_lock() then
+        select_view(self, nil)
+        window.set_mouse_lock(true)
+        return true
     end
     local name = actions[action_id]
     if name then return input.button(self.ctx.input, name, action) end
@@ -158,8 +249,10 @@ function on_message(self, message_id, message, sender)
 end
 
 function final(self)
+    window.set_mouse_lock(false)
     window.set_listener(nil)
     msg.post(".", "release_input_focus")
     -- Automation Bridge clears callbacks with the Lua application lifecycle.
     runtime.final(self.ctx)
+    if self.course then course.final(self.course) end
 end

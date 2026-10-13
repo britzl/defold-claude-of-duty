@@ -49,6 +49,13 @@ end)
 
 test("every vertex fits its culling bounds; triangle winding agrees with normals", function()
     local world = generate(24)
+    local mesh = require "game.world.mesh"
+    local ramp = mesh.new("ramp", "concrete", 0, 0)
+    mesh.box(ramp, { x = 70, y = 1.5, z = -5, w = 4, h = 0.2, d = 6,
+        rotation_x = math.rad(30), material = "concrete" }, 1)
+    assert(math.abs(ramp.bounds[2] - (1.5-math.cos(math.rad(30))*0.1-1.5)) < 1e-7)
+    assert(math.abs(ramp.bounds[5] - (1.5+math.cos(math.rad(30))*0.1+1.5)) < 1e-7)
+    world.batches[#world.batches+1] = ramp
     for _, batch in ipairs(world.batches) do
         assert(batch.boxes <= 64 and batch.vertex_count == #batch.positions / 3)
         assert(#batch.normals == #batch.positions and #batch.colors == batch.vertex_count * 4)

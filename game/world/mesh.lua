@@ -22,16 +22,19 @@ function M.box(batch, box, shade)
     local p, n, c, bounds = batch.positions, batch.normals, batch.colors, batch.bounds
     local color = materials[box.material].color
     local center, half = { box.x, box.y, box.z }, { box.w / 2, box.h / 2, box.d / 2 }
-    for axis = 1, 3 do
-        bounds[axis] = math.min(bounds[axis], center[axis] - half[axis])
-        bounds[axis + 3] = math.max(bounds[axis + 3], center[axis] + half[axis])
-    end
+    local cosine, sine = math.cos(box.rotation_x or 0), math.sin(box.rotation_x or 0)
     for _, face in ipairs(faces) do
         for _, index in ipairs(indices) do
+            local corner = face[index]
+            local y, z = corner[2]*half[2], corner[3]*half[3]
+            local vertex = { center[1]+corner[1]*half[1], center[2]+y*cosine-z*sine, center[3]+y*sine+z*cosine }
+            local normal = { face.n[1], face.n[2]*cosine-face.n[3]*sine, face.n[2]*sine+face.n[3]*cosine }
             for axis = 1, 3 do
-                p[#p + 1] = center[axis] + face[index][axis] * half[axis]
-                n[#n + 1] = face.n[axis]
+                p[#p + 1] = vertex[axis]
+                n[#n + 1] = normal[axis]
                 c[#c + 1] = color[axis] * shade
+                bounds[axis] = math.min(bounds[axis], vertex[axis])
+                bounds[axis+3] = math.max(bounds[axis+3], vertex[axis])
             end
             c[#c + 1] = 1
         end

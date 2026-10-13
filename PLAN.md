@@ -53,8 +53,9 @@ Initial slice implemented: a 28-metre street using W2/E2 footprints, one enterab
 shop room, merged runtime meshes with culling bounds, matching static Bullet
 boxes, and navigation/cover/spawn/light/minimap metadata. Loading uses bounded
 jobs and separate random streams. Street, shopfront and room inspection cameras
-are available on keys 1–3. The full layout, additional building recipes and
-physics-validated capsule traversal remain subsequent work. See `README.md`.
+are available on keys 1–3. Capsule traversal now verifies the street-to-room
+route. The full layout and additional building recipes remain subsequent work.
+See `README.md`.
 
 Translate the original [layout](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/world/layout.js) into Lua data: buildings, floors, openings, stairs, alleys, furnishings and spawn points.
 
@@ -72,6 +73,14 @@ Begin with merged batches and reusable geometry recipes. Measure draw calls and 
 Generation should advance through budgeted loading jobs. Keep seeded random streams separate so changing decorative detail does not alter enemy placement or weapon spread.
 
 **3. Use Bullet queries beneath a purpose-built character controller.**
+
+Core capsule movement implemented: fixed-tick walking/sprinting, mouse look,
+jumping with buffering/coyote time, crouch/prone resizing with headroom checks,
+overlap recovery, swept wall sliding, step-up, slope limits and ground snapping.
+The optional traversal course (key 4) exercises stairs, ramps, corners, ceilings
+and doorway widths through native Bullet. Camera interpolation and movement
+events are wired. Tactical sprint, slide, mantle and lean remain follow-up work;
+browser/mobile validation is still required. See `README.md` for controls/tests.
 
 Port the movement behavior and tuning: acceleration, sprint, tactical sprint, crouch, prone, slide, jump buffering, mantle and lean. The original [movement tuning](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/player/tuning.js) is a better starting point than approximating the feel.
 
@@ -151,7 +160,7 @@ Recreate the crosshair, hitmarker, ammo, health feedback, compass, minimap, kill
 
 The first milestone should resolve the expensive uncertainties before translating thousands of lines of world detail.
 
-The existing Defold project is a suitable starting shell. Its [configuration](/Users/bjornritzl/projects/defold-claude-of-duty/game.project) still has the template physics scale and gravity; the port should explicitly establish 3D physics, metre-based units and the source game's movement gravity. The existing Automation Bridge setup can support traversal scripts, combat scenarios and screenshot capture.
+The [project configuration](/Users/bjornritzl/projects/defold-claude-of-duty/game.project) now establishes 3D physics, metre-based units and the source game's movement gravity. The Automation Bridge setup supports traversal scripts, combat scenarios and screenshot capture.
 
 For validation, carry over the original named camera shots and fixed seeds. Compare cross-engine images for composition and appearance; reserve exact image regression checks for controlled runs within a backend. Measure loading time, memory, draw calls and p95/p99 frame times during movement and firing.
 

@@ -32,7 +32,7 @@ function M.add_batch(adapter, batch)
 end
 
 function M.add_collision(adapter, shape)
-    local id = factory.create(adapter.collision_factory, vmath.vector3(shape.x, shape.y, shape.z))
+    local id = factory.create(adapter.collision_factory, vmath.vector3(shape.x, shape.y, shape.z), vmath.quat_rotation_x(shape.rotation_x or 0))
     adapter.objects[#adapter.objects + 1] = id
     local url = msg.url(nil, id, "collision")
     physics.set_shape(url, "box", { type = physics.SHAPE_TYPE_BOX, dimensions = vmath.vector3(shape.w, shape.h, shape.d) })

@@ -11,8 +11,8 @@ instances {
   id: "hud"
   prototype: "/main/hud.go"
 }
-embedded_instances {
+instances {
   id: "player"
-  data: ""
+  prototype: "/main/player.go"
 }
 scale_along_z: 1

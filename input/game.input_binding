@@ -66,3 +66,6 @@ key_trigger {
   input: KEY_3
   action: "view_room"
 }
+key_trigger { input: KEY_0 action: "play" }
+key_trigger { input: KEY_ESC action: "release_mouse" }
+key_trigger { input: KEY_4 action: "course" }

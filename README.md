@@ -7,7 +7,9 @@ The first plan step is implemented: a gameplay controller, six subsystem modules
 input, gameplay notifications, centralized damage, and separate camera/HUD
 presentation. The first world slice is also generated at runtime: a 28-metre
 market street, pavements, W2 with one open shop room, and the opposing E2 facade.
-Capsule movement, weapons, soldiers and synthesized audio remain subsequent work.
+A swept kinematic capsule now supports walking, sprinting, jumping, crouching,
+prone movement, stairs and slopes. Weapons, soldiers and synthesized audio remain
+subsequent work.
 
 ## Run and validate
 
@@ -18,6 +20,7 @@ Run the engine-independent regression suite from the repository root:
 ```sh
 lua tests/runtime_test.lua
 lua tests/world_test.lua
+lua tests/movement_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks
@@ -26,14 +29,55 @@ views, timing, input, damage and HUD updates, then closes the engine it launched
 
 ```sh
 PYTHONPATH=automation-bridge-python python3 tests/smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 ```
 
-Press **1**, **2** or **3** to inspect the street, shopfront or room. These cameras
-do not move the simulated player. Input bindings normalize W/A/S/D, mouse movement, left/right mouse, Space,
-Shift, Ctrl, Z, R, F and Q/E into movement, look, fire/aim, jump, sprint, crouch,
-prone, reload, inspect and lean intent. These are buffered commands for the
-future gameplay implementations; movement and firing are not yet implemented.
+The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
+jumps, **Ctrl** holds crouch, and **Z** holds prone. Click to capture the mouse
+for looking; **Esc** releases it. Holding right mouse applies the ADS movement
+speed reduction; weapon aiming is still future work.
+
+Press **1**, **2** or **3** to inspect the street, shopfront or room, and **0** to
+return to the player. Inspection disables movement input. **4** creates the
+optional traversal course and puts the player at its stairs. Course lanes from
+west to east contain a thin wall/corner, stairs, a high obstacle, 30°/60° ramps,
+a low ceiling and narrow/wide doorways. The course is separate from the street.
+
+Left mouse, R, F and Q/E still buffer fire, reload, inspect and lean intent for
+future gameplay implementations. Tactical sprint, slide, mantle and lean are
+not implemented yet.
 Gamepad/touch adapters can feed the same `game.input` API later.
+
+## Capsule movement
+
+`game/player/capsule.lua` owns movement rules; `game/player/bullet.lua` supplies
+native shape sweeps, penetration contacts and clearance tests. The player GO
+has a kinematic capsule, with its origin at the feet and radius 0.32 m. Stances
+resize its total height to 1.78/1.12/0.70 m. Growth requires clear headroom;
+shrinking preserves the feet. Every fixed tick synchronizes the collision body
+and GO to the authoritative position. Queries ignore the player itself and use
+its collision filters. Defold continues to own physics stepping.
+
+Movement waits for world loading. The controller resolves overlaps, sweeps the
+whole displacement, slides along walls, accepts slopes up to 45°, steps up to
+0.42 m while standing, and snaps down up to 0.34 m. A nearby walkable tread must
+be verified before treating a rounded capsule/stair-edge contact as a step.
+Unresolved overlaps stop integration and return to the last clear position.
+Falling off the unfinished map resets position without restoring health.
+
+`tuning.lua` keeps source-based acceleration, stance speeds, jump buffering,
+coyote time and camera heights together with controller tolerances. A jump
+reaches approximately 0.58 m at the 120 Hz timestep (the continuous target is
+0.6 m). The camera interpolates position, mouse look and stance height, with
+step smoothing. Footsteps, landings and stance/ADS state emit gameplay events;
+audio synthesis remains separate work.
+
+The Lua movement tests cover jump timing, clearance, look, loading and equivalent
+simulation at 30/60/144 presentation FPS. The native movement test builds an
+optional course and drives input through actual Defold fixed ticks to check
+speed, corners, thin-wall sweeps, stairs, slopes, ceilings, door widths and
+entry into W2. Native validation currently targets macOS/Metal; browser/mobile
+validation and advanced movement remain later milestones.
 
 ## Framework contract
 
@@ -110,8 +154,9 @@ Metadata includes floor rectangles with heights and layers, navigation nodes,
 bidirectional connections (including the kerb step and doorway), cover candidates,
 lights, spawn points and minimap rectangles with vertical bounds. Native
 validation checks floor support and clear connection centrelines. These are
-navigation inputs, not a finished navmesh or capsule-clearance proof. Step 3
-will add swept-capsule traversal tests and gate movement until the world is ready.
+navigation inputs, not a finished navmesh or proof of every route's clearance.
+The movement suite additionally checks capsule traversal from the street over
+the kerb and through the doorway into W2.
 
 The initial material uses procedural grain, directional/ambient lighting and
 distance fog with the built-in 3D render pass. Local lights are metadata for the
@@ -120,11 +165,19 @@ pipeline remain in step 6.
 
 ## Automation
 
-The debug bridge exposes `gameplay.snapshot` (timing, input intent, health and
-physics settings) and `gameplay.damage` (queue a hit through the combat owner).
+The debug bridge exposes `gameplay.snapshot` (timing, input intent, health,
+physics settings and capsule position/velocity/stance) and `gameplay.damage`
+(queue a hit through the combat owner).
 It also publishes the `world` state and exposes `world.snapshot`, `world.validate`,
 `world.raycast` and `world.view`. Ray hits include the authored collider id and
 surface. `world.view` takes `{name = "street" | "shop" | "room"}`.
+`movement.course` creates the optional fixtures; `movement.reset` resets feet
+with `{x, y, z, yaw}` and optional `{velocity = {x, y, z}}`. `movement.drive`
+accepts `{segments = {{ticks = 120, move_z = -1, sprint = true}, ...}}` with
+optional move_x, crouch, prone, aim, jump and look_x/look_y. Jump is a press on
+the segment's first tick; look values are per-tick pixel deltas. Each drive is
+limited to 2,400 ticks. `movement.result` returns completion and immutable final
+metrics, so polling latency does not change the measured endpoint.
 Discover them with `game.application_catalog(kind="command")`. For example:
 
 ```python
