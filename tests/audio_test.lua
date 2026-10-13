@@ -107,7 +107,9 @@ test("listener yaw, distance and room height determine attenuation and stereo di
     near(spatial.mix(listener,{x=101,y=1.66,z=0},8,100),0)
     local ctx=context()
     assert(spatial.room(ctx.world,{x=-12,y=1.8,z=0}))
-    assert(not spatial.room(ctx.world,{x=-12,y=5,z=0}))
+    assert(spatial.room(ctx.world,{x=-12,y=5,z=0}))
+    assert(not spatial.room(ctx.world,{x=-12,y=3.25,z=0})) -- inside the floor slab
+    assert(not spatial.room(ctx.world,{x=-12,y=8,z=0})) -- above the roof
     runtime.final(ctx)
 end)
 test("player and enemy fire use the same bank with copied positions, occlusion and room variants",function()

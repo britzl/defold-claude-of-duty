@@ -1,3 +1,4 @@
+local interior = require "game.world.interior"
 local M = {}
 
 local function box(id, material, x, y, z, w, h, d, surface)
@@ -47,8 +48,7 @@ local function building(layout, b)
         box(b.id .. "/front_right", b.material, x1 - wall / 2, base + storey / 2, (hi + z1) / 2, wall, storey, z1 - hi, "plaster")
         box(b.id .. "/door_lintel", b.material, x1 - wall / 2, base + (storey + door.height) / 2,
             door.z, wall, storey - door.height, door.width, "plaster")
-        box(b.id .. "/upper", b.material, b.x, base + storey + (height - storey) / 2,
-            b.z, b.w, height - storey, b.d, "plaster")
+        interior.geometry(layout, b, box)
         local counter, shelves = b.counter, b.shelves
         local counter_x, counter_z = x0 + counter.x * b.w, z0 + counter.z * b.d
         box(b.id .. "/counter", "wood", counter_x, base + 0.45, counter_z, counter.w, 0.9, counter.d, "wood")
@@ -73,7 +73,15 @@ local function building(layout, b)
         end
     end
     for floor = 1, b.floors - 1 do
-        box(b.id .. "/belt/" .. floor, "trim", b.x, base + floor * storey, b.z, b.w + 0.2, 0.18, b.d + 0.2)
+        if b.room then
+            -- Exterior trim must not span the open stairwell like the old solid facade.
+            for _, sign in ipairs({-1,1}) do
+                box(b.id.."/belt/"..floor.."/x/"..sign,"trim",b.x+sign*b.w/2,base+floor*storey,b.z,.2,.18,b.d+.2)
+                box(b.id.."/belt/"..floor.."/z/"..sign,"trim",b.x,base+floor*storey,b.z+sign*b.d/2,b.w,.18,.2)
+            end
+        else
+            box(b.id .. "/belt/" .. floor, "trim", b.x, base + floor * storey, b.z, b.w + 0.2, 0.18, b.d + 0.2)
+        end
         for i = 1, 4 do window(b, floor, z0 + (i - 0.5) * b.d / 4, base, storey) end
     end
     box(b.id .. "/coping", "trim", b.x, base + height + 0.07, b.z, b.w + 0.25, 0.14, b.d + 0.25)

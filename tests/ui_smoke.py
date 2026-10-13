@@ -42,7 +42,7 @@ def main():
         engine.wait_until(lambda: cmd("renderer.snapshot")["ready"], timeout=5)
         cmd("ai.configure", {"enabled": False})
         game.wait_frames(40)
-        assert ui()["map_rectangles"] == 36
+        assert ui()["map_rectangles"] == cmd("world.snapshot")["colliders"]
         assert game.element(name_exact="map_player", visible=True)
         assert game.element(name_exact="health", visible=True).text == "HEALTH 100"
         capture("hud_street")

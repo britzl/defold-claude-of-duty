@@ -54,7 +54,13 @@ shop room, merged runtime meshes with culling bounds, matching static Bullet
 boxes, and navigation/cover/spawn/light/minimap metadata. Loading uses bounded
 jobs and separate random streams. Street, shopfront and room inspection cameras
 are available on keys 1–3. Capsule traversal now verifies the street-to-room
-route. The full layout and additional building recipes remain subsequent work.
+route. W2 has since been expanded into a complete two-storey shop/apartment with
+sixteen steps, a true floor opening, guards, upper partitions/open doorways,
+furniture, floor-specific minimap geometry and room lighting/audio bounds. Its
+30-node layered graph shares dimensions with the stair/slab recipe; native checks
+cover player ascent/descent and enemy routes/pursuit between floors. This is the
+first building increment toward milestone 3. The full layout and additional
+building recipes remain subsequent work.
 See `README.md`.
 
 Translate the original [layout](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/world/layout.js) into Lua data: buildings, floors, openings, stairs, alleys, furnishings and spawn points.

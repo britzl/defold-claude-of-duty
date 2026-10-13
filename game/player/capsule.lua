@@ -61,7 +61,12 @@ local function recover(m, query)
 end
 
 local function ground(m, query, distance)
-    local hit = query:sweep(m.position, m.height, 0, -distance, 0)
+    -- Bullet can omit a rounded tread edge when the cast starts in contact,
+    -- returning the floor underneath it. Start just above the skin instead so
+    -- ground snapping cannot pull a slow-moving capsule through the stair.
+    local lift = T.skin*2
+    local origin = { x = m.position.x, y = m.position.y+lift, z = m.position.z }
+    local hit = query:sweep(origin, m.height, 0, -distance-lift, 0)
     local support = m.step_support
     -- A capsule touches the rounded edge before its centre reaches a tread.
     -- A nearby, verified walkable tread may support this short transition.
@@ -70,7 +75,7 @@ local function ground(m, query, distance)
         and m.position.y <= support.y+T.skin
         and m.position.y >= support.y-T.stances[m.stance].step-T.skin
     if hit and (hit.ny >= T.slope_cos or edge) then
-        m.position.y = m.position.y - math.max(0, hit.fraction*distance - T.skin)
+        m.position.y = origin.y - math.max(0, hit.fraction*(distance+lift) - T.skin)
         if edge then m.ground.x, m.ground.y, m.ground.z = 0, 1, 0
         else m.ground.x, m.ground.y, m.ground.z = hit.nx, hit.ny, hit.nz end
         m.surface = hit.surface or "concrete"

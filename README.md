@@ -6,7 +6,7 @@ The first plan step is implemented: a gameplay controller, six subsystem modules
 120 Hz fixed simulation, metre-based 3D physics with gravity -20.6 m/s², buffered
 input, gameplay notifications, centralized damage, and separate camera/HUD
 presentation. The first world slice is also generated at runtime: a 28-metre
-market street, pavements, W2 with one open shop room, and the opposing E2 facade.
+market street, pavements, a two-storey W2 shop/apartment, and the opposing E2 facade.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
@@ -44,6 +44,7 @@ views, timing, input, damage and HUD updates, then closes the engine it launched
 
 ```sh
 PYTHONPATH=automation-bridge-python python3 tests/smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/building_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
@@ -102,7 +103,7 @@ The compass uses north = world -Z and east = +X. The north-up minimap follows th
 player over a 44-metre square, drawing the generated world's collision footprints
 and a rotated player marker. Rectangles are clipped to the map and the player's
 floor height, so the shop's roof does not fill its accessible interior. The
-current slice supplies 36 rectangles; the GUI bounds this to 128 for larger maps.
+current slice supplies 73 rectangles; the GUI bounds this to 128 for larger maps.
 It shows geometry, not enemy positions. Renderer diagnostic views hide the combat
 HUD while leaving the settings menu available.
 
@@ -200,7 +201,7 @@ rotated local frame. Head hits retain the existing 2× multiplier; overlapping
 body volumes still submit at most one hit per actor per round. Limbs use simple
 proxies; arms, hands and equipment do not have separate damage volumes yet.
 
-The 12 soldier Lua tests check mesh winding and weights, bind/deformed poses,
+The 13 soldier Lua tests check mesh winding and weights, bind/deformed poses,
 animated bounds, rotated hit volumes, headshot/duplicate-damage rules, routing,
 perception, occlusion, death/reset and 30/60/144-FPS equivalence. Native Metal
 validation checks patrol, actual head/body shots, return fire, wall occlusion,
@@ -227,6 +228,9 @@ Movement waits for world loading. The controller resolves overlaps, sweeps the
 whole displacement, slides along walls, accepts slopes up to 45°, steps up to
 0.42 m while standing, and snaps down up to 0.34 m. A nearby walkable tread must
 be verified before treating a rounded capsule/stair-edge contact as a step.
+Ground probes start just above the collision skin, retaining verified tread
+support across rounded edges so slow player and enemy movement cannot snap
+through a stair to the floor below.
 Unresolved overlaps stop integration and return to the last clear position.
 Falling off the unfinished map resets position without restoring health.
 
@@ -387,8 +391,24 @@ Each system must release its generated Defold resources in `final`.
 
 `game/world/layout.lua` is the authored description. It retains the reference's
 9-metre road, 6.5-metre building line, 0.145-metre pavement and W2/E2 footprints.
-This is an unrotated excerpt, with a simplified W2 interior and closed upper
-floors. It is not the full map or the complete original building recipe set.
+This is an unrotated excerpt. W2 now has an open ground-floor shop and a furnished
+upper apartment; E2 remains a closed facade. It is not the full map or the complete
+original building recipe set.
+
+Enter W2 through the shopfront, cross to the back-left of the shop, and climb
+the straight staircase along the west wall. The upper landing leads through
+an open doorway into a living/work room and a separate bedroom. The upper floor
+is 3.2 metres above the shop, with sixteen 20-centimetre steps, a 1.8-metre-wide
+flight and standing headroom throughout. Three solid guards protect the stair
+opening. The roof is closed; doorways are open passages, with no moving doors.
+
+`interior.lua` derives treads, four floor slabs around the opening, upper walls,
+partitions, furniture, bounded lights and layered navigation from the layout.
+The opening follows the reference W2 stair-hole bounds; interior furnishing and
+partition recipes are simplified. Exterior belt trim stays outside the building
+so it cannot visually seal the stairwell. Furniture and structural solids share
+their mesh/collision dimensions. Three room lights supply lighting and audio room
+bounds on the two floors.
 
 `recipes.lua` emits boxes from that description. Each structural box produces
 both visual triangles and a collision descriptor with a surface identifier.
@@ -399,8 +419,8 @@ are visual detail; tables, crates, walls and floors have simple solid proxies.
 `generator.lua` merges geometry by material and 16-metre spatial bucket, capped
 at 64 boxes per mesh upload. Every batch carries explicit AABB buffer metadata
 for Defold's frustum culling. There are no game objects per decorative piece.
-The initial slice generates 232 boxes, 39 mesh batches, 8,352 vertices and 36
-collision objects. Vertex streams occupy 334,080 bytes (CPU/GPU resource overhead
+The slice generates 276 boxes, 44 mesh batches, 9,936 vertices and 73
+collision objects. Vertex streams occupy 397,440 bytes (CPU/GPU resource overhead
 is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
@@ -420,12 +440,26 @@ bidirectional connections (including the kerb step and doorway), cover candidate
 lights, spawn points and minimap rectangles with vertical bounds. Native
 validation checks floor support and clear connection centrelines. These are
 navigation inputs, not a finished navmesh or proof of every route's clearance.
-The movement suite additionally checks capsule traversal from the street over
-the kerb and through the doorway into W2.
+The graph has 30 nodes and 29 edges, including each tread and the upper doorways.
+Actors outside a stair flight attach through its landings; actors already on the
+flight can replan through intermediate treads. This prevents the raised clearance
+probe from admitting an unwalkable shortcut onto the side of the stairs.
+
+`tests/building_smoke.py` checks continuous player movement from the street to
+the bedroom and back, guards, floor collision, enemy ascent/descent and alerted
+pursuit upstairs. `--ai-only` runs just its navigation/combat checks. It uses the
+Automation Bridge's `ui.focus` callback simulation and explicit resume when the
+desktop loses focus, allowing long tests to run in the background. Normal game
+focus behavior is unchanged. Review captures are written to
+`build/building-validation`. `world.navigation` exposes the generated graph;
+`world.view` accepts `stairs` and `upstairs` in addition to the original views.
+The world Lua tests also verify standing headroom, connected floors, the minimap's
+stair opening and its bounded rectangle count. This building increment targets
+native macOS/Metal validation; browser/mobile validation remains outstanding.
 
 Generated world materials now sample runtime GPU atlases and receive the lighting,
-shadows and height fog described below. The room light is sourced from the same
-world metadata and clipped to its authored interior bounds.
+shadows and height fog described below. Room lights are sourced from the same
+world metadata and clipped to the interior bounds.
 
 ## Generated materials and rendering
 
@@ -441,8 +475,8 @@ or encounter restart. Context restoration schedules the nine jobs again.
 
 World geometry, the soldier and weapons share GGX direct lighting, ambient light,
 approximate sky reflections and up to four authored point lights. The current
-room light has warm radiance, finite attenuation and interior bounds to prevent
-lighting across exterior walls. Props do not occlude this local light. The soldier
+room lights have warm radiance, finite attenuation and interior bounds to prevent
+lighting across exterior walls/floors. Props do not occlude these local lights. The soldier
 retains procedural camouflage; weapon vertex colours now carry metalness.
 
 A 1024² shadow target covers a fixed 64-metre square around the initial street

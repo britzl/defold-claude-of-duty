@@ -174,6 +174,20 @@ test("patrol needs visible acquisition, pursues, fires physical rounds and damag
     runtime.final(ctx)
 end)
 
+test("routes enter a stair flight at its landing instead of a raised side shortcut",function()
+    local graph={nodes={{id="bottom",x=0,y=0,z=1},{id="step",x=0,y=.4,z=0,stair=1},
+        {id="top",x=0,y=1,z=-1}},edges={{from="bottom",to="step"},{from="step",to="top"}},
+        stairs={{x0=-.9,x1=.9,z0=-.5,z1=.5,bottom=0,top=1}}}
+    local q={walkable=function(_,a,b)
+        return (a.y<=.4 and b.y<=.4) or (a.x==0 and b.x==0 and math.abs(a.z-b.z)<=1.01)
+    end}
+    local route=assert(nav.route(graph,{x=2,y=0,z=0},{x=0,y=1,z=-2},q))
+    assert(route[1].z==1,"Outside actor must first reach the bottom landing")
+    table.remove(graph.edges,1)
+    assert(not nav.route(graph,{x=2,y=0,z=0},{x=0,y=1,z=-2},q),"Cannot bypass a blocked stair entry")
+    assert(nav.route(graph,{x=0,y=.4,z=0},{x=0,y=1,z=-2},q),"Actor on the flight can replan")
+end)
+
 test("walls, rear-facing patrols and inspection prevent target acquisition and shooting",function()
     local ctx,e=context()
     e.query.blocked=true;ticks(ctx,360)

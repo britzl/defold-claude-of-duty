@@ -265,6 +265,7 @@ function init(self)
             schema = { type = "object", properties = { ready = { type = "boolean" }, phase = { type = "string" } } },
         })
         automation_bridge.command("world.snapshot", function() return world_snapshot(self.ctx.world) end)
+        automation_bridge.command("world.navigation", function() return self.ctx.world.navigation end)
         automation_bridge.command("world.validate", function()
             assert(self.ctx.world.ready, "World is still loading")
             return world_adapter.validate(self.ctx.world.adapter, self.ctx.world)
@@ -326,9 +327,10 @@ function init(self)
         end
         for name, description in pairs({
             ["world.snapshot"] = "Read generated world counts, loading phase and CPU loading time.",
+            ["world.navigation"] = "Read generated layered nodes, stair/doorway edges and floor surfaces.",
             ["world.validate"] = "Compare all installed collision dimensions and positions; ray-check navigation support and connections.",
             ["world.raycast"] = "Cast from/to {x,y,z} through generated collision; returns the hit surface identifier and position.",
-            ["world.view"] = "Select the street, shop or room inspection camera and disable player input.",
+            ["world.view"] = "Select street, shop, room, stairs or upstairs inspection camera and disable player input.",
         }) do
             automation_bridge.describe("command", name, { description = description,
                 input_schema = { type = "object" }, output_schema = { type = "object" } })

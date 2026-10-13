@@ -124,6 +124,9 @@ def main():
         assert locked["mouse_locked"]
         game.key("ESCAPE", wait="released")
         assert not command("gameplay.snapshot")["mouse_locked"]
+        assert command("ui.snapshot")["paused"]
+        game.key("ESCAPE", wait="released")
+        assert not command("ui.snapshot")["paused"]
         # Bridge pointer drags send bound button actions; the camera consumes
         # Defold's separate, unbound mouse-motion action. Drive its normalized
         # deltas to verify look through the native simulation deterministically.

@@ -1,6 +1,7 @@
 local rng = require "game.rng"
 local mesh = require "game.world.mesh"
 local recipes = require "game.world.recipes"
+local interior = require "game.world.interior"
 local M = {}
 
 local function metadata(layout)
@@ -28,7 +29,7 @@ local function metadata(layout)
         { from = "door", to = "room", kind = "walk" },
     }
     local s = layout.street
-    return {
+    local nav = {
         nodes = nodes, edges = edges,
         surfaces = {
             { id = "street", layer = 0, y = 0, x0 = -s.half_width, x1 = s.half_width, z0 = s.z_min, z1 = s.z_max },
@@ -38,6 +39,8 @@ local function metadata(layout)
                 x1 = door_x - layout.wall, z0 = shop.z - shop.d / 2 + layout.wall, z1 = shop.z + shop.d / 2 - layout.wall },
         },
     }
+    interior.navigation(layout, shop, nav)
+    return nav
 end
 
 function M.new(layout, options)
@@ -47,18 +50,16 @@ function M.new(layout, options)
             { id = "enemy", position = { x = 0, y = 0, z = -12 } } },
         views = layout.views, layout = layout, seed = options.seed or layout.seed,
         batches = {}, colliders = {}, shapes = {}, navigation = metadata(layout),
-        lights = { { kind = "sun", direction = { x = -0.6, y = 0.85, z = 0.4 } },
-            { kind = "room", x = -12, y = 2.7, z = 0, radius = 6, intensity = 16,
-                colour = { 1, 0.76, 0.48 },
-                minimum = { x = layout.buildings[1].x-layout.buildings[1].w/2+layout.wall,
-                    y = layout.street.walk_height, z = layout.buildings[1].z-layout.buildings[1].d/2+layout.wall },
-                maximum = { x = layout.buildings[1].x+layout.buildings[1].w/2-layout.wall,
-                    y = layout.street.walk_height+layout.storey,
-                    z = layout.buildings[1].z+layout.buildings[1].d/2-layout.wall } } },
+        lights = { { kind = "sun", direction = { x = -0.6, y = 0.85, z = 0.4 } } },
         cover = {}, minimap = {}, ready = false, phase = "geometry", jobs_done = 0,
         stats = { boxes = 0, vertices = 0, mesh_bytes = 0, batches = 0, colliders = 0 },
         batch_lookup = {},
     }
+    for _, b in ipairs(layout.buildings) do
+        if b.room then
+            for _, light in ipairs(interior.lights(layout,b)) do world.lights[#world.lights+1]=light end
+        end
+    end
     world.decoration_rng = rng.new(world.seed, "decoration")
     world.spawn_rng = rng.new(world.seed, "spawns")
     world.weapon_rng = rng.new(world.seed, "weapons")

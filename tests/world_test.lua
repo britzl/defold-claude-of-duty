@@ -103,7 +103,11 @@ test("structural solids share visual dimensions while trim has no individual col
         assert(not shapes[shape.id], "Duplicate recipe id: " .. shape.id)
         shapes[shape.id] = shape
     end
-    for _, collider in ipairs(world.colliders) do assert(shapes[collider.id] == collider) end
+    local surfaces = require "game.weapons.surfaces"
+    for _, collider in ipairs(world.colliders) do
+        assert(shapes[collider.id] == collider)
+        assert(surfaces[collider.surface], "Unknown collision surface: "..collider.surface)
+    end
     assert(#world.colliders < #world.shapes / 2)
     assert(world.stats.mesh_bytes == world.stats.vertices * 40)
     assert(#world.batches < #world.shapes / 4)
@@ -167,7 +171,7 @@ test("room light bounds include the actual floor, walls and ceiling without reac
     local light=world.lights[2]
     local shapes={}
     for _,s in ipairs(world.colliders) do shapes[s.id]=s end
-    local floor,ceiling=shapes["W2/floor"],shapes["W2/upper"]
+    local floor,ceiling=shapes["W2/floor"],shapes["W2/upper/floor/east"]
     local west,south,north=shapes["W2/west"],shapes["W2/south"],shapes["W2/north"]
     local function near(a,b) assert(math.abs(a-b)<1e-6) end
     near(light.minimum.y,floor.y+floor.h/2)
@@ -176,6 +180,77 @@ test("room light bounds include the actual floor, walls and ceiling without reac
     near(light.minimum.z,south.z+south.d/2)
     near(light.maximum.z,north.z-north.d/2)
     assert(light.maximum.x < -layout.street.half_width)
+end)
+
+test("stair nodes have matching treads, standing headroom and an open upper landing", function()
+    local world = generate(24)
+    local nodes, shapes = {}, {}
+    for _, n in ipairs(world.navigation.nodes) do nodes[n.id] = n end
+    for _, s in ipairs(world.colliders) do shapes[s.id] = s end
+    for i = 1, layout.buildings[1].stairs.steps do
+        local node, tread = nodes["W2/stair/"..i], shapes["W2/stair/"..i]
+        assert(math.abs(node.y-tread.y-tread.h/2) < 1e-7)
+        assert(math.abs(node.z-tread.z) < 1e-7)
+        -- Check the upper part of a standing capsule; lower stair noses are
+        -- intentionally within its supported step-up range.
+        for _, s in ipairs(world.shapes) do
+            if math.abs(node.x-s.x) < s.w/2+.32 and math.abs(node.z-s.z) < s.d/2+.32 then
+                assert(s.y+s.h/2 <= node.y+.43 or s.y-s.h/2 >= node.y+1.78,
+                    "Blocked stair headroom: "..s.id.." above "..node.id)
+            end
+        end
+    end
+    assert(nodes["W2/stair_bottom"].layer == 0 and nodes["W2/stair_top"].layer == 1)
+    assert(not shapes["W2/upper"], "Upper floor must not be a solid facade")
+end)
+
+test("upper rooms connect only through stairs and have supported doorway centres", function()
+    local world = generate(24)
+    local function reachable(stairs)
+        local found = {street_north=true}
+        for _=1,#world.navigation.nodes do
+            for _,e in ipairs(world.navigation.edges) do
+                if stairs or e.kind ~= "stairs" then
+                    if found[e.from] then found[e.to]=true end
+                    if found[e.to] then found[e.from]=true end
+                end
+            end
+        end
+        return found
+    end
+    assert(reachable(true)["W2/bedroom"])
+    assert(not reachable(false)["W2/bedroom"])
+    for _,n in ipairs(world.navigation.nodes) do
+        local support = false
+        for _,s in ipairs(world.colliders) do
+            if math.abs(n.x-s.x) <= s.w/2+1e-7 and math.abs(n.z-s.z) <= s.d/2+1e-7 then
+                support = support or math.abs(s.y+s.h/2-n.y) < 1e-7
+                assert(s.y+s.h/2 <= n.y+.43 or s.y-s.h/2 >= n.y+1.78,
+                    "Blocked node: "..n.id.." by "..s.id)
+            end
+        end
+        assert(support,"Unsupported node: "..n.id)
+    end
+end)
+
+test("minimap selects each floor and preserves the stair opening within the GUI budget", function()
+    local world = generate(24)
+    local hud = require "game.ui.hud"
+    local base,upper = layout.street.walk_height,layout.street.walk_height+layout.storey
+    assert(#world.minimap <= hud.map_limit)
+    local shapes = {}
+    for _,s in ipairs(world.minimap) do shapes[s.id]=s end
+    assert(not hud.map_rect(shapes["W2/upper/floor/east"],-14,base,0,176))
+    assert(hud.map_rect(shapes["W2/upper/floor/east"],-14,upper,0,176).floor)
+    assert(not hud.map_rect(shapes["W2/floor"],-14,upper,0,176))
+    local bedroom = shapes["W2/upper/bedroom_door/left"]
+    assert(not hud.map_rect(bedroom,-14,base,0,176))
+    assert(not hud.map_rect(bedroom,-14,upper,0,176).floor)
+    for _,s in ipairs(world.minimap) do
+        local r=hud.map_rect(s,-19.2,upper,-1,176)
+        assert(not r or math.abs(r.x) >= r.w/2 or math.abs(r.y) >= r.h/2,
+            "Minimap fills upper stair opening: "..s.id)
+    end
 end)
 
 print(count .. " world tests passed")

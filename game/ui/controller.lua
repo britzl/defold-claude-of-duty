@@ -49,10 +49,16 @@ function M.init(self, restart)
             M.pause(self, data.paused)
             return M.snapshot(self)
         end)
+        automation_bridge.command("ui.focus", function(data)
+            assert(type(data.focused)=="boolean", "focused must be boolean")
+            M.focus(self, data.focused)
+            return M.snapshot(self)
+        end)
         automation_bridge.command("ui.configure", function(data) return M.configure(self, data) end)
         for name, description in pairs({
             ["ui.snapshot"]="Read pause/focus, live settings, compass, damage feedback, killfeed and minimap count.",
             ["ui.pause"]="Pause/resume simulation with {paused}; releases the cursor and clears held gameplay inputs.",
+            ["ui.focus"]="Simulate a window focus callback with {focused} for automation; returning focus still requires explicit resume.",
             ["ui.configure"]="Set one live {kind=audio|renderer|input,key,value}; input supports sensitivity 0.25..3.",
         }) do
             automation_bridge.describe("command", name, {description=description,

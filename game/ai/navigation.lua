@@ -16,7 +16,17 @@ function M.route(graph,from,to,query)
         end
     end
     for _,e in ipairs(graph.edges) do connect(names[e.from],names[e.to]) end
-    for i=3,#nodes do connect(1,i);connect(2,i) end
+    local function attach(endpoint,i)
+        local n,p=nodes[i],nodes[endpoint]
+        local flight=n.stair and graph.stairs and graph.stairs[n.stair]
+        -- A raised clearance probe can accept a diagonal step onto the side
+        -- of a flight that the movement capsule cannot climb. Join intermediate
+        -- treads only when already on that flight; otherwise use its landings.
+        if flight and not (p.x>=flight.x0 and p.x<=flight.x1 and p.z>=flight.z0
+            and p.z<=flight.z1 and p.y>=flight.bottom and p.y<=flight.top+.05) then return end
+        connect(endpoint,i)
+    end
+    for i=3,#nodes do attach(1,i);attach(2,i) end
     local dist,prev,closed={[1]=0},{},{}
     for _=1,#nodes do
         local best
