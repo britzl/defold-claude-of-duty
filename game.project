@@ -24,6 +24,15 @@ use_fixed_timestep = 1
 [html5]
 scale_mode = stretch
 
+[render]
+clear_color_red = 0.66
+clear_color_green = 0.74
+clear_color_blue = 0.77
+clear_color_alpha = 1.0
+
+[mesh]
+max_count = 128
+
 [project]
 title = Claude of Duty
 dependencies#0 = https://github.com/defold/extension-automation-bridge/archive/refs/tags/2.5.0.zip

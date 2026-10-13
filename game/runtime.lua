@@ -15,9 +15,9 @@ local systems = {
 }
 local M = {}
 
-function M.new()
+function M.new(services)
     local ctx = {
-        config = config, events = events.new(), input = input.new(),
+        config = config, services = services or {}, events = events.new(), input = input.new(),
         combat = combat.new(), presentation = presentation.new(),
         time = { tick = 0, elapsed = 0, frame = 0, frame_elapsed = 0,
             fixed_dt = 1 / config.fixed_frequency, remainder = 0, alpha = 0 },

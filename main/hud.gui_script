@@ -10,6 +10,15 @@ function init(self)
     self.crosshair = gui.new_text_node(vmath.vector3(480, 320, 0), "+")
     gui.set_font(self.crosshair, "default")
     gui.set_id(self.crosshair, "crosshair")
+    self.title = gui.new_text_node(vmath.vector3(32, 605, 0), "MARKET STREET")
+    gui.set_font(self.title, "default")
+    gui.set_pivot(self.title, gui.PIVOT_W)
+    self.views = gui.new_text_node(vmath.vector3(928, 32, 0), "1 STREET   2 SHOP   3 ROOM")
+    gui.set_font(self.views, "default")
+    gui.set_pivot(self.views, gui.PIVOT_E)
+    gui.set_color(self.views, WHITE)
+    self.loading = gui.new_text_node(vmath.vector3(480, 280, 0), "LOADING")
+    gui.set_font(self.loading, "default")
 end
 
 function on_message(self, message_id, message, sender)
@@ -17,5 +26,7 @@ function on_message(self, message_id, message, sender)
         gui.set_text(self.health, string.format("HEALTH %d", math.ceil(message.health)))
         gui.set_color(self.health, message.hurt and RED or WHITE)
         gui.set_text(self.crosshair, message.hit and "x" or "+")
+        gui.set_text(self.title, message.title)
+        gui.set_enabled(self.loading, message.loading)
     end
 end

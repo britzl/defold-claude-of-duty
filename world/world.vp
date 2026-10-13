@@ -1,0 +1,21 @@
+attribute highp vec3 position;
+attribute mediump vec3 normal;
+attribute lowp vec4 color;
+
+uniform highp mat4 view_proj;
+uniform highp mat4 world_view;
+
+varying highp vec3 var_world;
+varying mediump vec3 var_normal;
+varying lowp vec4 var_color;
+varying highp float var_depth;
+
+void main()
+{
+    // Static generated batches have identity GO transforms and world vertices.
+    var_world = position;
+    var_normal = normal;
+    var_color = color;
+    var_depth = -(world_view * vec4(position, 1.0)).z;
+    gl_Position = view_proj * vec4(position, 1.0);
+}

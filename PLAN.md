@@ -49,6 +49,13 @@ Start with the source projects' 120 Hz simulation rate through Defold's fixed-up
 
 **2. Generate the world from shared descriptions of geometry, collision and navigation.**
 
+Initial slice implemented: a 28-metre street using W2/E2 footprints, one enterable
+shop room, merged runtime meshes with culling bounds, matching static Bullet
+boxes, and navigation/cover/spawn/light/minimap metadata. Loading uses bounded
+jobs and separate random streams. Street, shopfront and room inspection cameras
+are available on keys 1–3. The full layout, additional building recipes and
+physics-validated capsule traversal remain subsequent work. See `README.md`.
+
 Translate the original [layout](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/world/layout.js) into Lua data: buildings, floors, openings, stairs, alleys, furnishings and spawn points.
 
 Give the generator outputs for:

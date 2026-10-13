@@ -4,7 +4,7 @@ Requires the project already open in Defold. Owns and closes the engine it build
 """
 from pathlib import Path
 
-from automation_bridge import editor
+from automation_bridge import editor, engine
 
 
 def main():
@@ -15,6 +15,37 @@ def main():
         return game.command("gameplay.snapshot", {})["result"]
 
     try:
+        # Poll the published state without a blocking native long-poll, so the
+        # bridge version bundled with this project can keep advancing loading.
+        engine.wait_until(lambda: game.state("world").value["ready"], timeout=20,
+                          message="generated world did not finish loading")
+        world = game.command("world.snapshot", {})["result"]
+        assert world["batches"] > 0 and world["colliders"] > 0
+        assert world["batches"] < world["boxes"] / 4
+        assert world["mesh_bytes"] == world["vertices"] * 40
+        validation = game.command("world.validate", {})["result"]
+        assert validation["max_error"] < 1e-5
+        assert validation["colliders"] == world["colliders"]
+        assert all(node["supported"] for node in validation["nodes"])
+        assert all(edge["clear"] for edge in validation["edges"])
+
+        def cast(y, z):
+            return game.command("world.raycast", {
+                "from": {"x": -5.5, "y": y, "z": z},
+                "to": {"x": -8, "y": y, "z": z},
+            })["result"]
+
+        assert not cast(0.2, 0)["hit"] and not cast(1.9, 0)["hit"]
+        assert cast(1.5, 3)["surface"] == "plaster"
+        assert cast(3, 0)["id"] == "W2/door_lintel"
+        print("PASS world batches, collision dimensions, doorway clearance and navigation")
+        print("WORLD", world)
+
+        for key, title in (("2", "THE SHOPFRONT"), ("3", "INSIDE W2"), ("1", "MARKET STREET")):
+            game.key(key, wait="released")
+            game.wait_for_element(type="gui_node_text", text_exact=title)
+        print("PASS three inspection views via native keyboard input")
+
         start = snapshot()
         assert start["physics"] == "3D" and start["physics_scale"] == 1
         assert abs(start["gravity"] + 20.6) < 1e-5

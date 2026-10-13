@@ -54,3 +54,15 @@ key_trigger {
   input: KEY_E
   action: "lean_right"
 }
+key_trigger {
+  input: KEY_1
+  action: "view_street"
+}
+key_trigger {
+  input: KEY_2
+  action: "view_shop"
+}
+key_trigger {
+  input: KEY_3
+  action: "view_room"
+}
