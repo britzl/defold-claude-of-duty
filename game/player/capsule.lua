@@ -1,6 +1,9 @@
 -- Engine-independent kinematic controller. Positions are at the capsule's feet.
--- Queries supply sweep(), contacts(), fits() and sync(); none step physics.
+-- Queries supply sweeps, contacts, clearance, rays and camera probes; none step physics.
 local T = require "game.player.tuning"
+local moves = require "game.player.moves"
+local mantle = require "game.player.mantle"
+local lean = require "game.player.lean"
 local M = {}
 local EPS = 0.000001
 
@@ -8,13 +11,17 @@ local function copy(out, p) out.x, out.y, out.z = p.x, p.y, p.z end
 local function length(x, y, z) return math.sqrt(x*x + y*y + z*z) end
 
 function M.new(position)
-    return { position = position, velocity = { x = 0, y = 0, z = 0 },
+    local m = { position = position, velocity = { x = 0, y = 0, z = 0 },
         safe = { x = position.x, y = position.y, z = position.z },
         stance = "stand", height = T.stances.stand.height, eye = T.stances.stand.eye,
         yaw = 0, pitch = 0, grounded = false, ground = { x = 0, y = 1, z = 0 },
         surface = "concrete", coyote = 0, jump_buffer = 0, jump_cooldown = 0,
         step_offset = 0, sprinting = false, jumped = false, landed = false,
-        impact_speed = 0, travel = 0, recovery_failed = false }
+        impact_speed = 0, travel = 0, recovery_failed = false, lean = 0,
+        mantle = false, mantle_cooldown = 0, mantle_probe = 0,
+        mantle_started = false, mantle_completed = false, mantle_aborted = false }
+    moves.init(m)
+    return m
 end
 
 function M.reset(m, point, yaw)
@@ -154,8 +161,9 @@ end
 
 local function accelerate(m, input, dt)
     local stance, v = T.stances[m.stance], m.velocity
-    m.sprinting = m.stance == "stand" and input.sprint and input.move_z < -0.55 and not input.aim or false
-    local speed = m.sprinting and T.sprint_speed or stance.speed
+    if m.sliding then moves.accelerate_slide(m, input, dt); return end
+    if m.slide_jump then return end
+    local speed = m.tactical and T.tactical.speed or (m.sprinting and T.sprint_speed or stance.speed)
     if input.aim then speed = speed * T.ads_scale end
     local x = input.move_x * T.strafe_scale
     local z = input.move_z * (input.move_z > 0 and T.back_scale or 1)
@@ -181,22 +189,43 @@ function M.update(m, input, dt, query)
     m.yaw = m.yaw - (input.look_x or 0)*T.mouse_sensitivity
     m.pitch = math.max(-T.pitch_limit, math.min(T.pitch_limit, m.pitch+(input.look_y or 0)*T.mouse_sensitivity))
     m.step_offset = m.step_offset * math.exp(-dt/0.08)
+    m.mantle_started, m.mantle_completed, m.mantle_aborted = false, false, false
+    m.mantle_cooldown = math.max(0, m.mantle_cooldown-dt)
+    m.mantle_probe = math.max(0, m.mantle_probe-dt)
+    moves.tick(m, input, dt)
+    if m.mantle then
+        mantle.update(m, input, dt, query)
+        m.eye = m.eye+(T.stances[m.stance].eye-m.eye)*(1-math.exp(-dt/0.072))
+        lean.update(m, input, dt, query)
+        query:sync(m.position, m.height)
+        return
+    end
     local requested = input.prone and "prone" or (input.crouch and "crouch" or "stand")
     local target = T.stances[requested]
     -- Shrinking can itself resolve a ceiling overlap; expansion needs clearance.
-    if target.height < m.height then m.stance, m.height = requested, target.height end
+    if target.height < m.height and not (m.sprinting and m.crouch_edge) then m.stance, m.height = requested, target.height end
     if not recover(m, query) then m.grounded = false; return end
-    if requested ~= m.stance and query:fits(m.position, target.height) then
-        m.stance, m.height = requested, target.height
-    end
-    m.eye = m.eye + (T.stances[m.stance].eye-m.eye)*(1-math.exp(-dt/0.072))
     local was_grounded = m.grounded
     m.grounded = m.velocity.y <= 0 and ground(m, query, T.ground_probe)
     m.coyote = m.grounded and T.coyote_time or math.max(0, m.coyote-dt)
     m.jump_buffer = input.jump and T.jump_buffer or math.max(0, m.jump_buffer-dt)
     m.jump_cooldown = math.max(0, m.jump_cooldown-dt)
+    moves.decide(m, input)
+    moves.sprint_time(m, dt)
+    if m.sliding then requested = "crouch" elseif m.slide_jump then requested = "stand" end
+    target = T.stances[requested]
+    if requested ~= m.stance and (target.height < m.height or query:fits(m.position, target.height)) then
+        m.stance, m.height = requested, target.height
+    end
+    m.eye = m.eye + (T.stances[m.stance].eye-m.eye)*(1-math.exp(-dt/0.072))
+    if mantle.try_begin(m, input, query) then
+        moves.cancel(m)
+        lean.update(m, input, dt, query)
+        query:sync(m.position, m.height)
+        return
+    end
     accelerate(m, input, dt)
-    if m.jump_buffer > 0 and m.coyote > 0 and m.jump_cooldown == 0 and m.stance ~= "prone" then
+    if not m.sliding and m.jump_buffer > 0 and m.coyote > 0 and m.jump_cooldown == 0 and m.stance ~= "prone" then
         m.velocity.y = T.jump_speed
         m.grounded, m.jumped = false, true
         m.step_support = nil
@@ -232,6 +261,7 @@ function M.update(m, input, dt, query)
     end
     m.travel = length(m.position.x-origin.x, 0, m.position.z-origin.z)
     if query:fits(m.position, m.height) then copy(m.safe, m.position) end
+    lean.update(m, input, dt, query)
     query:sync(m.position, m.height)
 end
 

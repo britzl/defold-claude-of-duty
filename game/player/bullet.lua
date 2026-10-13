@@ -12,6 +12,7 @@ function M.new(url, surfaces)
             mask_bits = bullet3d.collision_object.get_collision_filter_mask(object),
             include_triggers = false, ignore = object },
         definition = { type = bullet3d.shape.SHAPE_TYPE_CAPSULE, diameter = 2*T.radius },
+        sphere = { type = bullet3d.shape.SHAPE_TYPE_SPHERE },
     }, mt)
 end
 
@@ -42,6 +43,28 @@ function M:fits(feet, height)
         if contact.distance < -0.0001 then return false end
     end
     return true
+end
+
+function M:ray(origin, dx, dy, dz)
+    self.position.x, self.position.y, self.position.z = origin.x, origin.y, origin.z
+    self.translation.x, self.translation.y, self.translation.z = dx, dy, dz
+    local hit = bullet3d.world.cast_ray_closest(self.world, self.position, self.translation, self.filter)
+    if not hit then return nil end
+    local shape = self.surfaces[bullet3d.get_gameobject_id(hit.object)]
+    return { x = hit.point.x, y = hit.point.y, z = hit.point.z,
+        nx = hit.normal.x, ny = hit.normal.y, nz = hit.normal.z,
+        surface = shape and shape.surface or "concrete" }
+end
+
+function M:camera_fraction(origin, dx, dy, dz, radius)
+    local distance = math.sqrt(dx*dx+dy*dy+dz*dz)
+    if distance < 1e-6 then return 1 end
+    self.position.x, self.position.y, self.position.z = origin.x, origin.y, origin.z
+    self.sphere.position, self.sphere.diameter = self.position, radius*2
+    if #bullet3d.world.overlap_shape(self.world, self.sphere, self.filter, 1) > 0 then return 0 end
+    self.translation.x, self.translation.y, self.translation.z = dx, dy, dz
+    local hit = bullet3d.world.cast_shape_closest(self.world, self.sphere, self.translation, self.filter)
+    return hit and math.max(0, hit.fraction-T.skin/distance) or 1
 end
 
 function M:sweep(feet, height, dx, dy, dz)

@@ -7,8 +7,9 @@ The first plan step is implemented: a gameplay controller, six subsystem modules
 input, gameplay notifications, centralized damage, and separate camera/HUD
 presentation. The first world slice is also generated at runtime: a 28-metre
 market street, pavements, W2 with one open shop room, and the opposing E2 facade.
-A swept kinematic capsule now supports walking, sprinting, jumping, crouching,
-prone movement, stairs and slopes. Weapons, soldiers and synthesized audio remain
+A swept kinematic capsule now supports walking, sprinting, tactical sprint,
+sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
+Weapons, soldiers and synthesized audio remain
 subsequent work.
 
 ## Run and validate
@@ -30,6 +31,7 @@ views, timing, input, damage and HUD updates, then closes the engine it launched
 ```sh
 PYTHONPATH=automation-bridge-python python3 tests/smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
@@ -37,15 +39,29 @@ jumps, **Ctrl** holds crouch, and **Z** holds prone. Click to capture the mouse
 for looking; **Esc** releases it. Holding right mouse applies the ADS movement
 speed reduction; weapon aiming is still future work.
 
+Double-tap **Shift** within 0.32 seconds and hold it while moving forward for
+tactical sprint (8.38 m/s, at most six seconds, then 1.6 seconds recovery).
+Press **Ctrl** during a fast sprint to slide. A slide continues after Ctrl is
+released, lasts at most 0.9 seconds, and permits limited steering. Press Ctrl
+again to cancel, Space to jump out, or Z to go prone. A 0.55-second cooldown
+and a jump-exit speed cap prevent repeated bursts from adding unlimited speed.
+
+Hold forward and press/hold **Space** near a ledge to mantle. The controller
+needs a reachable face, a walkable top and room for the entire climb. It can
+finish crouched when standing clearance is unavailable. **Q/E** holds a left/
+right lean; release to centre. Lean is disabled during sprinting, slides,
+mantles, airborne movement and prone movement. Walls shorten the camera offset.
+
 Press **1**, **2** or **3** to inspect the street, shopfront or room, and **0** to
 return to the player. Inspection disables movement input. **4** creates the
 optional traversal course and puts the player at its stairs. Course lanes from
 west to east contain a thin wall/corner, stairs, a high obstacle, 30°/60° ramps,
 a low ceiling and narrow/wide doorways. The course is separate from the street.
+Its second row, farther ahead at z=-15, adds 1.2/1.8-metre ledges, an unreachable
+wall, blocked/crouch-only headroom, a narrow top and an obstructed climb approach.
 
-Left mouse, R, F and Q/E still buffer fire, reload, inspect and lean intent for
-future gameplay implementations. Tactical sprint, slide, mantle and lean are
-not implemented yet.
+Left mouse, R and F still buffer fire, reload and inspect intent for future
+weapon implementations.
 Gamepad/touch adapters can feed the same `game.input` API later.
 
 ## Capsule movement
@@ -72,12 +88,36 @@ reaches approximately 0.58 m at the 120 Hz timestep (the continuous target is
 step smoothing. Footsteps, landings and stance/ADS state emit gameplay events;
 audio synthesis remains separate work.
 
+`moves.lua` manages tactical sprint and slide transitions. Crouch/sprint presses
+are buffered edges, so render rate and a held key cannot retrigger a slide or
+double-tap. Slides use drag, braking, limited steering and slope assistance;
+all displacement still passes through the same swept capsule controller.
+Stopping tactical sprint also starts recovery, so releasing/repressing Shift
+cannot evade the time limit.
+
+`mantle.lua` probes only on a forward jump request (held requests may retry at
+20 Hz). Ledges must be higher than the current step limit and no more than
+1.85 m above the current feet. An airborne catch therefore has additional jump
+reach. A downward probe confirms enough landing depth; the full up/forward/
+settle path is checked with the standing capsule, then crouched if necessary.
+The 0.34–0.82-second climb is swept again every fixed tick. New obstructions,
+death or inspection cancel it at the current position, never at an unchecked
+destination. Thin railings without a supported landing are rejected; automatic
+vaulting is not part of this implementation.
+
+`lean.lua` smooths a 0.34 m camera offset and 13° roll without moving the capsule.
+A 0.17 m sphere sweep limits the offset, both in fixed updates and after camera
+interpolation. New obstructions retract it immediately. Stance eye interpolation
+is capped by the current capsule height when entering low headroom.
+
 The Lua movement tests cover jump timing, clearance, look, loading and equivalent
 simulation at 30/60/144 presentation FPS. The native movement test builds an
 optional course and drives input through actual Defold fixed ticks to check
 speed, corners, thin-wall sweeps, stairs, slopes, ceilings, door widths and
-entry into W2. Native validation currently targets macOS/Metal; browser/mobile
-validation and advanced movement remain later milestones.
+entry into W2. The feature suite covers tactical sprint, slide duration and
+jump exits, valid/invalid mantle routes, crouch-only landings, lean clearance
+and cancellation on death. Native validation currently targets macOS/Metal;
+browser/mobile validation remains a later milestone.
 
 ## Framework contract
 
@@ -174,10 +214,14 @@ surface. `world.view` takes `{name = "street" | "shop" | "room"}`.
 `movement.course` creates the optional fixtures; `movement.reset` resets feet
 with `{x, y, z, yaw}` and optional `{velocity = {x, y, z}}`. `movement.drive`
 accepts `{segments = {{ticks = 120, move_z = -1, sprint = true}, ...}}` with
-optional move_x, crouch, prone, aim, jump and look_x/look_y. Jump is a press on
-the segment's first tick; look values are per-tick pixel deltas. Each drive is
+optional move_x, crouch, prone, aim, jump, jump_held, lean and look_x/look_y.
+Lean is -1/0/1. Jump is a press on the segment's first tick and stays held for
+that segment; jump_held can continue a held request without another press.
+Sprint/crouch edges follow hold transitions; sprint_pressed/crouch_pressed can
+also supply explicit first-tick edges. Look values are per-tick pixel deltas. Each drive is
 limited to 2,400 ticks. `movement.result` returns completion and immutable final
-metrics, so polling latency does not change the measured endpoint.
+metrics, including slide/tactical ticks, mantle completion/abort counts, peak
+speed and lean, so polling latency does not change the measured endpoint.
 Discover them with `game.application_catalog(kind="command")`. For example:
 
 ```python

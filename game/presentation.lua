@@ -1,3 +1,4 @@
+local lean = require "game.player.lean"
 local M = {}
 
 function M.new()
@@ -11,10 +12,14 @@ function M.update(ctx)
     out.position.y = a.y + (b.y - a.y) * alpha
     out.position.z = a.z + (b.z - a.z) * alpha
     local player, motion = ctx.player, ctx.player.motion
-    local eye = player.previous_eye + (motion.eye-motion.step_offset-player.previous_eye)*alpha
+    local eye = math.min(motion.height-0.1, player.previous_eye + (lean.eye(motion)-player.previous_eye)*alpha)
     out.camera.x, out.camera.y, out.camera.z = out.position.x, out.position.y + eye, out.position.z
     out.yaw = player.previous_yaw + (motion.yaw-player.previous_yaw)*alpha
     out.pitch = player.previous_pitch + (motion.pitch-player.previous_pitch)*alpha
+    local amount = player.previous_lean+(motion.lean-player.previous_lean)*alpha
+    -- Recheck the interpolated camera every frame as position/yaw may have
+    -- changed since the fixed query. Collision may shorten a lean immediately.
+    out.camera.x, out.camera.y, out.camera.z, out.roll = lean.apply(ctx.services.capsule, out.camera, out.yaw, amount)
     out.health = ctx.player.actor.health
 end
 

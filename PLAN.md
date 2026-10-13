@@ -74,13 +74,17 @@ Generation should advance through budgeted loading jobs. Keep seeded random stre
 
 **3. Use Bullet queries beneath a purpose-built character controller.**
 
-Core capsule movement implemented: fixed-tick walking/sprinting, mouse look,
+Capsule movement implemented: fixed-tick walking/sprinting, mouse look,
 jumping with buffering/coyote time, crouch/prone resizing with headroom checks,
 overlap recovery, swept wall sliding, step-up, slope limits and ground snapping.
 The optional traversal course (key 4) exercises stairs, ramps, corners, ceilings
 and doorway widths through native Bullet. Camera interpolation and movement
-events are wired. Tactical sprint, slide, mantle and lean remain follow-up work;
-browser/mobile validation is still required. See `README.md` for controls/tests.
+events are wired. Tactical sprint, slides with steering and bounded jump exits,
+clearance-checked mantles and collision-limited camera lean are implemented.
+The expanded course covers mantle height, landing headroom, narrow tops and
+approach obstructions. Automatic vaulting and full source camera effects are
+outside this increment; browser/mobile validation is still required. See
+`README.md` for controls/tests.
 
 Port the movement behavior and tuning: acceleration, sprint, tactical sprint, crouch, prone, slide, jump buffering, mantle and lean. The original [movement tuning](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/player/tuning.js) is a better starting point than approximating the feel.
 

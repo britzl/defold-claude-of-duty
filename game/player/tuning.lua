@@ -11,6 +11,14 @@ return {
     -- Controller tolerances; slope limit and skin are port-specific.
     skin = 0.004, slope_cos = math.cos(math.rad(45)),
     ground_probe = 0.06, ground_snap = 0.34, iterations = 5,
+    tactical = { speed = 8.38, tap_window = 0.32, duration = 6, recovery = 1.6 },
+    slide = { entry_speed = 8.84, min_entry = 6.2, min_speed = 5.2, exit_speed = 2.95,
+        duration = 0.9, drag = 0.75, brake = 0.85, cooldown = 0.55,
+        steer = 2.6, slope_assist = 9, air_grace = 0.14, jump_speed_cap = 7.01*1.06 },
+    mantle = { min_height = 0.34, max_height = 1.85, reach = 0.62, land_depth = 0.46,
+        low_height = 0.72, low_time = 0.34, time = 0.62, high_time = 0.82,
+        cooldown = 0.2, probe_interval = 0.05, clearance = 0.03 },
+    lean = { offset = 0.34, roll = math.rad(13), drop = 0.035, tau = 0.085, radius = 0.17 },
     stances = {
         stand = { height = 1.78, eye = 1.66, speed = 4.57, step = 0.42, stride = 1.48 },
         crouch = { height = 1.12, eye = 1.02, speed = 2.44, step = 0.3, stride = 1.05 },

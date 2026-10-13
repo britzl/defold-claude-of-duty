@@ -23,6 +23,18 @@ function M.create()
     box("slope_30", 70, 1.5, -5, 4, 0.2, 6, math.rad(30))
     box("slope_60", 78, 3*math.sin(math.rad(60)), -5, 4, 0.2, 6, math.rad(60))
     box("low_ceiling", 86, 2.125, -4, 4, 1.75, 4)
+    -- A second row supplies high ledges, insufficient headroom, and narrow
+    -- tops. It stays clear of the original capsule regression lanes.
+    box("mantle", 56, 0.6, -15, 4, 1.2, 3)
+    box("mantle_high", 62, 0.9, -15, 4, 1.8, 3)
+    box("mantle_too_high", 70, 1.35, -15, 4, 2.7, 3)
+    box("mantle_roof_base", 78, 0.6, -15, 4, 1.2, 3)
+    box("mantle_roof", 78, 2.65, -15, 4, 1, 3)
+    box("mantle_crouch_base", 86, 0.6, -15, 4, 1.2, 3)
+    box("mantle_crouch_roof", 86, 2.725, -15, 4, 0.25, 3)
+    box("mantle_thin", 94, 0.6, -14, 4, 1.2, 0.15)
+    box("mantle_beam_base", 102, 0.6, -15, 4, 1.2, 3)
+    box("mantle_approach_beam", 102, 2.025, -12.9, 4, 0.25, 0.6)
     for _, spec in ipairs({ { x = 94, gap = 0.55 }, { x = 102, gap = 1.1 } }) do
         for _, side in ipairs({ -1, 1 }) do
             box("door/"..spec.x.."/"..side, spec.x+side*(spec.gap/2+1), 1.5, -4, 2, 3, 0.2)

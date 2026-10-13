@@ -16,6 +16,8 @@ local function near(a, b, tolerance) assert(math.abs(a-b) < (tolerance or 1e-7),
 local function planes()
     local q = { floor = true, ceiling = math.huge, calls = 0 }
     function q:sync() self.calls = self.calls+1 end
+    function q:ray() return nil end
+    function q:camera_fraction() return 1 end
     function q:contacts(p, height)
         self.calls = self.calls+1
         local out = {}
@@ -140,6 +142,175 @@ test("movement and notifications agree at 30, 60 and 144 rendered frames per sec
         else reference = { x = p.x, y = p.y, z = p.z } end
         assert(steps >= 5 and lands == 2 and aim_changes == 1)
         assert(ctx.player.motion.grounded and ctx.presentation.camera.y > 1.6)
+        runtime.final(ctx)
+    end
+end)
+
+test("double-tap sprint is bounded, requires forward input and cannot bypass recovery", function()
+    local m, q = new()
+    local sprint = idle({ sprint = true, move_z = -1 })
+    for _ = 1, 12 do capsule.update(m, sprint, h, q) end
+    assert(not m.tactical)
+    capsule.update(m, idle({ move_z = -1 }), h, q)
+    for _ = 1, 30 do capsule.update(m, sprint, h, q) end
+    assert(m.tactical); near(-m.velocity.z, 8.38)
+    for _ = 1, 720 do capsule.update(m, sprint, h, q) end
+    assert(not m.tactical and m.tactical_cooldown > 1)
+    capsule.update(m, idle(), h, q)
+    capsule.update(m, sprint, h, q)
+    assert(not m.tactical)
+    for _ = 1, 240 do capsule.update(m, idle(), h, q) end
+    capsule.update(m, sprint, h, q)
+    capsule.update(m, idle(), h, q)
+    capsule.update(m, sprint, h, q)
+    assert(m.tactical)
+    capsule.update(m, idle({ sprint = true, move_z = -1, aim = true }), h, q)
+    assert(not m.tactical and not m.sprinting and m.tactical_cooldown > 1.5)
+    for _ = 1, 240 do capsule.update(m, idle(), h, q) end
+    capsule.update(m, idle({ sprint = true, move_z = 1 }), h, q)
+    capsule.update(m, idle(), h, q)
+    capsule.update(m, idle({ sprint = true, move_z = 1 }), h, q)
+    assert(not m.tactical and not m.sprinting)
+end)
+
+local function begin_slide()
+    local m, q = new()
+    for _ = 1, 30 do capsule.update(m, idle({ move_z = -1, sprint = true }), h, q) end
+    capsule.update(m, idle({ move_z = -1, sprint = true, crouch = true }), h, q)
+    assert(m.sliding and m.slide_started and m.height == 1.12)
+    return m, q
+end
+
+test("slide bursts once, decays, steers without reversing and ends on time", function()
+    local m, q = begin_slide()
+    assert(-m.velocity.z > 8.7 and -m.velocity.z <= tuning.slide.entry_speed)
+    for _ = 1, 50 do capsule.update(m, idle({ move_z = 1, crouch = true }), h, q) end
+    assert(m.sliding and m.velocity.z < -4)
+    for _ = 1, 75 do
+        capsule.update(m, idle({ move_z = -1, sprint = true, crouch = true }), h, q)
+        assert(not m.slide_started)
+    end
+    assert(not m.sliding and m.stance == "crouch")
+end)
+
+test("slide jumps cap momentum; a held crouch cannot chain new bursts", function()
+    local m, q = begin_slide()
+    capsule.update(m, idle({ jump = true, move_z = -1 }), h, q)
+    assert(m.jumped and m.slide_ended and not m.sliding)
+    assert(math.sqrt(m.velocity.x^2+m.velocity.z^2) <= tuning.slide.jump_speed_cap+1e-7)
+    assert(m.slide_cooldown > 0)
+    for _ = 1, 180 do
+        capsule.update(m, idle({ move_z = -1, sprint = true, crouch = true }), h, q)
+        assert(not m.slide_started)
+    end
+end)
+
+test("slide requires sprint momentum and cancels when controls are disabled", function()
+    local m, q = new()
+    capsule.update(m, idle({ sprint = true, crouch = true, move_z = -1 }), h, q)
+    assert(not m.sliding)
+    m, q = begin_slide()
+    capsule.update(m, idle({ enabled = false }), h, q)
+    assert(not m.sliding and not m.tactical and not m.sprinting)
+end)
+
+test("gravity helps a downhill slide and slows an uphill slide", function()
+    local moves = require "game.player.moves"
+    local a, b = new(), new()
+    a.ground.y, a.ground.z = math.cos(math.rad(30)), math.sin(math.rad(30))
+    b.ground.y, b.ground.z = a.ground.y, a.ground.z
+    a.velocity.z, b.velocity.z = 7, -7
+    moves.accelerate_slide(a, idle(), h)
+    moves.accelerate_slide(b, idle(), h)
+    assert(a.velocity.z > -b.velocity.z)
+end)
+
+test("lean keeps the capsule fixed, retracts on obstruction and returns to centre", function()
+    local m, q = new()
+    for _ = 1, 120 do capsule.update(m, idle({ lean = 1 }), h, q) end
+    assert(m.lean > 0.999)
+    near(m.position.x, 0); near(m.position.z, 0)
+    function q:camera_fraction(origin, dx)
+        if dx <= 0 then return 1 end
+        return math.max(0, math.min(1, (0.25-origin.x-tuning.lean.radius-tuning.skin)/dx))
+    end
+    capsule.update(m, idle({ lean = 1 }), h, q)
+    assert(m.lean*tuning.lean.offset <= 0.25-tuning.lean.radius-tuning.skin+1e-7)
+    for _ = 1, 120 do capsule.update(m, idle(), h, q) end
+    near(m.lean, 0)
+    for _ = 1, 120 do capsule.update(m, idle({ lean = 1, sprint = true, move_z = -1 }), h, q) end
+    near(m.lean, 0)
+end)
+
+test("a blocked or disabled mantle stops at its last clear position", function()
+    local mantle = require "game.player.mantle"
+    for _, mode in ipairs({ "sweep", "overlap", "disabled" }) do
+        local m, q = new()
+        m.mantle = { start = { x = 0, y = 0, z = 0 }, up = { x = 0, y = 1.2, z = 0 },
+            over = { x = 0, y = 1.2, z = -1 }, target = { x = 0, y = 1.204, z = -1 },
+            time = 0, duration = 0.62, finish_stance = "stand", fx = 0, fz = -1 }
+        for _ = 1, 10 do mantle.update(m, idle(), h, q) end
+        local y, z = m.position.y, m.position.z
+        if mode == "sweep" then
+            function q:sweep() return { fraction = 0.2, nx = 0, ny = -1, nz = 0 } end
+        elseif mode == "overlap" then
+            function q:fits(p) return p ~= m.position end
+        end
+        mantle.update(m, idle({ enabled = mode ~= "disabled" }), h, q)
+        assert(not m.mantle and m.mantle_aborted and not m.grounded)
+        near(m.position.y, y); near(m.position.z, z)
+    end
+end)
+
+test("render interpolation rechecks leaned camera clearance without moving the actor", function()
+    local q = planes()
+    local ctx = runtime.new({ capsule = q })
+    ctx.player.position.x, ctx.player.previous.x = 0, -0.1
+    ctx.player.motion.lean, ctx.player.previous_lean, ctx.time.alpha = 1, 1, 0.5
+    local probes = 0
+    function q:camera_fraction(origin, dx)
+        probes = probes+1
+        return math.max(0, math.min(1, (0.25-origin.x-tuning.lean.radius-tuning.skin)/dx))
+    end
+    require("game.presentation").update(ctx)
+    near(ctx.player.position.x, 0)
+    assert(probes == 1 and ctx.presentation.camera.x <= 0.25-tuning.lean.radius-tuning.skin+1e-7)
+    assert(ctx.presentation.roll < 0)
+    runtime.final(ctx)
+end)
+
+test("tactical/slide edges and lean stay identical at 30, 60 and 144 presentation FPS", function()
+    local reference
+    for _, fps in ipairs({ 30, 60, 144 }) do
+        local ctx = runtime.new({ capsule = planes() })
+        ctx.world.ready = true
+        local states = {}
+        events.on(ctx.events, events.PLAYER_STATE, ctx, function(_, s)
+            if s.sliding then states.slide = true end
+            if s.tactical then states.tactical = true end
+        end)
+        local changes = {
+            [0] = { {"forward", true}, {"sprint", true} }, [12] = { {"sprint", false} },
+            [20] = { {"sprint", true} }, [60] = { {"crouch", true} }, [70] = { {"crouch", false} },
+            [80] = { {"jump", true} }, [81] = { {"jump", false} },
+            [200] = { {"forward", false}, {"sprint", false} }, [240] = { {"lean_left", true} },
+        }
+        local accumulated = 0
+        for _ = 1, fps*3 do
+            accumulated = accumulated+1/fps
+            while accumulated+1e-10 >= h do
+                for _, change in ipairs(changes[ctx.time.tick] or {}) do
+                    input.button(ctx.input, change[1], { pressed = change[2], released = not change[2] })
+                end
+                runtime.fixed_update(ctx, h)
+                accumulated = accumulated-h
+            end
+            runtime.update(ctx, 1/fps)
+        end
+        local m = ctx.player.motion
+        assert(states.slide and states.tactical and m.lean < -0.999 and m.grounded)
+        if reference then near(m.position.z, reference.z); near(m.lean, reference.lean)
+        else reference = { z = m.position.z, lean = m.lean } end
         runtime.final(ctx)
     end
 end)
