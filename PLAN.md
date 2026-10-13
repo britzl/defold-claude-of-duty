@@ -104,8 +104,9 @@ material penetration and single-owner actor damage. Runtime-generated weapons,
 magazines, bolts/slides and hands animate in a separate camera/colour/depth pass.
 Surface particles, cases, tracers, an ammo/mode HUD and an optional native firing
 range are included. Lua and macOS/Metal smoke suites pass. Geometry is simplified;
-synthesized audio, full presentation effects and full browser/mobile weapon validation
-remain later work. See `README.md` for contracts and deliberate source differences.
+full presentation effects and full browser/mobile weapon validation remain later
+work. Synthesized playback is implemented in step 7. See `README.md` for contracts
+and deliberate source differences.
 
 Port the rifle, SMG and pistol definitions, ammunition, fire modes, recoil springs, spread, ADS, reload and inspection timelines.
 
@@ -182,6 +183,17 @@ Add ambient occlusion and better shadows next. Treat TAA, motion vectors, SSR, v
 Establish consistent world and weapon lighting early. The Three.js README's reported viewmodel exposure problems are a useful warning against accumulating compensating material adjustments.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
+
+Initial audio implemented: 76 runtime-generated PCM samples cover three weapons,
+reload beats, twelve surface families, movement/damage foley and wind/city ambience.
+Budgeted loading, a 24-voice pool, independent audio randomness, distance/panning,
+Bullet occlusion, muffled/room gunshot variants, mix headroom and restart/focus
+cleanup are wired. Lua and native macOS playback/mixer checks pass, along with a
+focused HTML5 check of Web Audio output, movement/enemy combat, restart and room
+ambience. Full browser input and physical mobile validation, full source audio
+parity and advanced spatial DSP remain outstanding.
+The expanded HUD, settings GUI and gamepad/touch work below are still subsequent
+work. See `README.md` for resource budgets, controls and validation scope.
 
 Follow Kaigen's approach: synthesize reusable samples during loading, then play them through a bounded voice pool. Defold can create sound-data resources at runtime, so generated WAV data is a viable integration path. [Resource API](https://defold.com/ref/resource/#resource.create_sound_data)
 

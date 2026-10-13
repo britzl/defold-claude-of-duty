@@ -34,6 +34,11 @@ clear_color_alpha = 1.0
 [mesh]
 max_count = 256
 
+[sound]
+max_component_count = 24
+max_sound_instances = 32
+max_sound_data = 96
+
 [project]
 title = Claude of Duty
 dependencies#0 = https://github.com/defold/extension-automation-bridge/archive/refs/tags/2.5.0.zip

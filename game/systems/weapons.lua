@@ -88,7 +88,11 @@ local function fire(ctx)
     local w=ctx.weapons
     local s,d=w.inventory[w.equipped],defs[w.equipped]
     if w.cooldown>1e-9 or (w.clip and w.clip~="inspect") then return false end
-    if not s.chambered then w.cooldown=.25;w.dry=w.dry+1;return false end
+    if not s.chambered then
+        w.cooldown=.25;w.dry=w.dry+1
+        events.emit(ctx.events,events.WEAPON_DRY,{weapon=w.equipped})
+        return false
+    end
     w.clip=nil;w.clip_time=0
     s.chambered=s.mag>0
     if s.chambered then s.mag=s.mag-1 end

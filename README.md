@@ -14,7 +14,9 @@ reloads and generated viewmodels in an isolated render pass. One runtime-generat
 25-bone soldier now patrols the street, detects and pursues the player, fires
 physical rounds and dies. GPU-generated surface maps, shared material lighting,
 animated sun shadows, a procedural sky, height fog, tone mapping and bloom are
-implemented. Synthesized audio remains subsequent work.
+implemented. A runtime-generated sound bank now supplies weapon fire, reloads,
+surface footsteps/impacts, movement foley and ambience through a bounded spatial
+audio mixer.
 
 ## Run and validate
 
@@ -29,6 +31,7 @@ lua tests/movement_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
 lua tests/renderer_test.lua
+lua tests/audio_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks
@@ -43,6 +46,7 @@ PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ai_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
@@ -171,7 +175,7 @@ coyote time and camera heights together with controller tolerances. A jump
 reaches approximately 0.58 m at the 120 Hz timestep (the continuous target is
 0.6 m). The camera interpolates position, mouse look and stance height, with
 step smoothing. Footsteps, landings and stance/ADS state emit gameplay events;
-audio synthesis remains separate work.
+the audio system consumes footstep, landing and stance changes for movement foley.
 
 `moves.lua` manages tactical sprint and slide transitions. Crouch/sprint presses
 are buffered edges, so render rate and a held key cannot retrigger a slide or
@@ -260,8 +264,8 @@ vertices across 24 independently transformable parts, including hands, reticles
 and muzzle flashes (462,720 bytes of vertex streams before resource overhead).
 Twenty-four pooled effect meshes provide short-lived impact particles, cases and
 tracers; they have no debris physics. All generated buffers and game objects are
-released on teardown. Surface audio routing is ready for synthesized playback
-in step 7; there is no weapon sound playback yet.
+released on teardown. Surface audio routing now selects generated impact samples;
+weapon fire and reload beats also drive the audio system described below.
 
 `render/game.render_script` draws the viewmodel with its own camera into an RGBA
 colour target with a separate depth attachment. Its lighting coordinates are
@@ -310,9 +314,10 @@ subscriptions in `final`. In this port **damage events report already-applied
 damage**; listeners must never apply it again. Damage payloads contain `target`,
 `source`, `amount` (actual damage), `health`, `killed`, `headshot` and optional
 `point`. Death contains `actor`, `source`, optional `point` and `impulse`.
-FX ignores player damage for hitmarkers. Weapons produce fire, reload, shell,
-impact and tracer notifications; surface audio keys do not synthesize or play
-sound. Future systems supply their remaining event producers.
+FX ignores player damage for hitmarkers. Weapons produce fire, dry-trigger, reload,
+shell, impact and tracer notifications. Audio consumes notifications without
+applying damage or advancing any gameplay random stream. Future systems supply
+their remaining event producers.
 
 Actor, camera, generated mesh batches and structural collision objects are wired.
 World batches and collision objects belong to the world module; enemy game objects belong to AI.
@@ -420,7 +425,7 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 72 Lua checks and the
+with review images in `build/renderer-validation`. All 82 Lua checks and the
 native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
 HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no
@@ -428,6 +433,65 @@ shader/runtime errors after loading. That browser check does not replace the
 native pixel suite. Hardware context-loss recovery, physical mobile devices,
 full source visual parity and sustained combat GPU performance remain separate
 validation work.
+
+## Generated audio
+
+`game/audio/synth.lua` generates 76 mono PCM16 WAV samples at 22,050 Hz during
+loading. The bank occupies 1,627,520 bytes (about 1.55 MiB), excluding engine
+resource overhead and temporary synthesis buffers. The only bundled WAV is a
+32-frame silent placeholder required by Defold sound components. Audible samples
+are created with [`resource.create_sound_data`](https://defold.com/ref/resource/#resource.create_sound_data)
+and released on teardown; no native audio extension or imported recording is used.
+
+The rifle, SMG and pistol combine a pressure transient, swept low body, noisy crack,
+tail and delayed mechanical tick, with source-derived profile tuning. Each has
+three deterministic variations and dry, room-reflection and low-pass muffled
+versions. Twelve surface families supply impact and alternating-footstep samples.
+Reload sounds follow the actual magazine/bolt beats, including cancellation;
+dry triggers, casing ejection, landing, stance/slide/mantle cloth and player damage
+also have cues. Player shots stay centred; enemy shots and impacts use world
+positions. Casing audio accompanies ejection, since casings have no physics.
+
+Synthesis advances in 1,024-sample chunks, at most 8,192 samples per frame, with a
+soft 2 ms deadline checked between chunks. Final WAV concatenation and resource
+upload are indivisible. Gameplay waits at the world's final loading phase until
+the bank is ready. `audio.snapshot` reports measured total/peak CPU loading work;
+the native validation run took roughly 375 ms total, spread over frames, with a
+3.2 ms peak job. Loading rate and sound variation never affect world generation,
+weapon spread or enemy random streams. There is no synthesis during combat.
+
+Twenty-two one-shot slots and two dedicated ambience loops bound playback to 24
+voices. Four one-shot slots are reserved for local shots, dry triggers and hurt
+cues. A 64-entry presentation queue drops overflow or events older than 150 ms;
+slots are reused only after Defold's completion callback, including stopped sounds.
+The mixer follows the displayed camera, updates stereo pan and distance gain,
+checks Bullet world occlusion when a cue starts, and attenuates blocked sounds.
+Blocked gunshots also use the muffled waveform. Shop bounds select the reflected
+gunshot variant and reduce the generated wind/city ambience. A conservative sum
+of sample peaks limits simultaneous output, with gradual gain recovery.
+
+Encounter restart stops current voices and clears queued cues while retaining the
+bank. Focus loss stops playback; focus return starts fresh ambience without
+replaying old combat sounds. Master, weapons, foley and ambience gains (0..1), plus
+mute, are available through `audio.configure`. These controls are not yet in a
+settings GUI. Browser playback starts after the first click on the game canvas.
+
+The ten Lua audio tests verify WAV format/amplitude, deterministic chunking,
+spectral muffling, spatial transforms, routing, cancellation, queue/voice limits,
+mix headroom, mute/focus/restart cleanup, resource release and RNG isolation.
+The native suite checks actual mixer output and stereo channels, real wall
+occlusion, room selection, all three weapons, reload/footstep/damage events,
+surface playback, enemy fire and six encounter restarts without bank growth.
+An HTML5/WebGL 2 smoke check also confirms nonzero Web Audio output after the
+first click, movement/enemy combat sounds, encounter restart and reduced room
+ambience, without Lua or sound errors. The in-app browser rejected pointer lock,
+so player-fired browser shots remain outside that check; native tests cover them.
+Mixer peaks describe recent audio buffers and can retain the last value when
+the device becomes idle; completion callbacks track live voices separately.
+Physical mobile validation remains outstanding. These are compact synthesized
+approximations: full source timbre parity, soldier footsteps/voice barks, distant
+battle scheduling, continuous occlusion filtering, HRTF and convolution reverb
+remain future work. The room treatment uses two early reflections.
 
 ## Automation
 
@@ -457,6 +521,14 @@ creates optional fixtures at z=23..47 and reports target health; reset the playe
 to x=-5/0/5, y=0.01, z=40, yaw=0 for bare/wood/concrete lanes.
 
 Discover commands with `game.application_catalog(kind="command")`.
+
+`audio.snapshot` reports loading progress, bank bytes, live/peak voices, event
+counts, settings, the latest cue, per-voice gain/pan and native mixer peaks.
+`audio.configure` takes any subset of `{master, weapons, foley, ambience, muted}`.
+`audio.preview` auditions `{kind="shot", weapon="rifle"|"smg"|"pistol"}` or
+`{kind="impact"|"step", surface="wood"}` with an optional world
+`position={x,y,z}`. It uses the ordinary bounded queue and spatial mixer without
+emitting gameplay events.
 
 `ai.snapshot` reports state, health, travel, shots, mesh/palette sizes and upload
 cost. `ai.configure` takes `{enabled=false}` to freeze a shootable soldier.

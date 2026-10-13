@@ -1,5 +1,6 @@
 local M = {
     WEAPON_FIRE = "weapon:fire",
+    WEAPON_DRY = "weapon:dry",
     WEAPON_RELOAD = "weapon:reload",
     WEAPON_SHELL = "weapon:shell",
     BULLET_IMPACT = "bullet:impact",

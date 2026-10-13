@@ -1,5 +1,5 @@
 -- Source penetration depths/energy loss from src/physics/surfaces.js.
--- Impact/audio names are event routing keys; sample synthesis belongs to step 7.
+-- Impact/audio names route to effects and the generated sound bank.
 return {
     concrete={depth=.055,loss=.62,fx="chips",audio="concrete"},
     metal={depth=.022,loss=.70,fx="sparks",audio="metal"},

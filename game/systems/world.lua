@@ -36,7 +36,7 @@ function M.update(ctx, dt)
         end
     elseif world.phase == "settle" then
         -- Factory-created collision objects have entered the physics world.
-        world.phase, world.ready = "ready", true
+        if not ctx.audio or ctx.audio.ready then world.phase, world.ready = "ready", true end
     end
     local elapsed = os.clock() - started
     world.work_seconds = world.work_seconds + elapsed
