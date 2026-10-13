@@ -2,9 +2,10 @@
 -- detail is deliberately bounded and merged into independently animated parts.
 local V = require "game.weapons.math"
 local M = {}
-M.colors={metal={.15,.18,.19,1},steel={.29,.32,.34,1},dark={.025,.032,.035,1},
-    polymer={.085,.105,.10,1},tan={.33,.28,.18,1},skin={.50,.32,.22,1},glove={.22,.24,.18,1},
-    light={.85,.91,.78,1},red={1,.08,.02,1},flash={1,.72,.22,1}}
+-- Vertex alpha is metalness; the weapon shader writes opaque coverage.
+M.colors={metal={.15,.18,.19,.8},steel={.29,.32,.34,1},dark={.025,.032,.035,0},
+    polymer={.085,.105,.10,0},tan={.33,.28,.18,0},skin={.50,.32,.22,0},glove={.22,.24,.18,0},
+    light={.85,.91,.78,0},red={1,.08,.02,0},flash={1,.72,.22,0}}
 function M.batch() return {positions={},normals={},colors={},vertex_count=0,bounds={math.huge,math.huge,math.huge,-math.huge,-math.huge,-math.huge}} end
 local function vertex(b,p,n,color)
     for i=1,3 do

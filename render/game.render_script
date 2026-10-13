@@ -1,74 +1,262 @@
--- World -> isolated weapon colour/depth -> composite -> GUI. The weapon target
--- can stay outside future world fog and temporal effects without material hacks.
+-- Generated surface maps + sky environment -> sun shadow -> world -> isolated
+-- weapon -> bloom -> shared tone mapping -> GUI. Every target is owned here.
+local settings=require "game.render.settings"
 local G=graphics
+local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
+local WORLD_CAMERA="main:/camera#camera"
+local WEAPON_CAMERA="main:/viewmodel#camera"
+local function colour_target(w,h,depth,nearest,cube)
+    local params={ [COLOR]={format=G.TEXTURE_FORMAT_RGBA,width=w,height=h,
+        min_filter=nearest and G.TEXTURE_FILTER_NEAREST or G.TEXTURE_FILTER_LINEAR,
+        mag_filter=nearest and G.TEXTURE_FILTER_NEAREST or G.TEXTURE_FILTER_LINEAR,
+        u_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE,v_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE} }
+    if depth then params[DEPTH]={format=G.TEXTURE_FORMAT_DEPTH,width=w,height=h} end
+    if cube then params.type=G.TEXTURE_TYPE_CUBE_MAP end
+    return render.render_target(params)
+end
 local function resize(self)
-    local w,h=render.get_window_width(),render.get_window_height()
-    if w<=0 or h<=0 then return false end
-    if w~=self.width or h~=self.height then
-        self.width,self.height=w,h
-        if self.weapon_target then render.set_render_target_size(self.weapon_target,w,h)
-        else
-            self.weapon_target=render.render_target({
-                [G.BUFFER_TYPE_COLOR0_BIT]={format=G.TEXTURE_FORMAT_RGBA,width=w,height=h,
-                    min_filter=G.TEXTURE_FILTER_LINEAR,mag_filter=G.TEXTURE_FILTER_LINEAR,
-                    u_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE,v_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE},
-                [G.BUFFER_TYPE_DEPTH_BIT]={format=G.TEXTURE_FORMAT_DEPTH,width=w,height=h}})
+    local d=settings.dimensions(render.get_window_width(),render.get_window_height())
+    if not d then return false end
+    if d.width~=self.width or d.height~=self.height then
+        self.width,self.height=d.width,d.height
+        self.bloom_width,self.bloom_height=d.bloom_width,d.bloom_height
+        for _,name in ipairs({"scene","weapon","bloom_a","bloom_b"}) do
+            local small=name=="bloom_a" or name=="bloom_b"
+            local w,h=small and d.bloom_width or d.width,small and d.bloom_height or d.height
+            if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
+            else self.targets[name]=colour_target(w,h,not small) end
         end
-        self.gui_projection=vmath.matrix4_orthographic(0,w,0,h,-1,1)
+        self.gui_projection=vmath.matrix4_orthographic(0,d.width,0,d.height,-1,1)
+        self.resizes=self.resizes+1
+        self.report=true
     end
     return true
 end
-function init(self)
-    self.world=render.predicate({"model"})
-    self.weapon=render.predicate({"viewmodel"})
-    self.composite=render.predicate({"weapon_composite"})
-    self.gui=render.predicate({"gui"})
-    self.debug=render.predicate({"debug_text"})
-    self.identity=vmath.matrix4()
-    self.clear={ [G.BUFFER_TYPE_COLOR0_BIT]=vmath.vector4(.66,.74,.77,1),
-        [G.BUFFER_TYPE_DEPTH_BIT]=1,[G.BUFFER_TYPE_STENCIL_BIT]=0 }
-    resize(self)
-end
-function update(self)
-    if not resize(self) then return end
-    render.set_render_target(render.RENDER_TARGET_DEFAULT)
-    render.set_viewport(0,0,self.width,self.height)
-    render.set_depth_mask(true)
-    render.set_stencil_mask(0xff)
-    render.disable_state(G.STATE_BLEND)
-    render.enable_state(G.STATE_DEPTH_TEST)
-    render.enable_state(G.STATE_CULL_FACE)
-    render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
-    render.clear(self.clear)
-    render.set_camera("main:/camera#camera",{use_frustum=true})
-    render.draw(self.world)
-    render.draw_debug3d()
-
-    render.set_render_target(self.weapon_target)
-    render.clear({[G.BUFFER_TYPE_COLOR0_BIT]=vmath.vector4(0,0,0,0),[G.BUFFER_TYPE_DEPTH_BIT]=1})
-    render.set_camera("main:/viewmodel#camera",{use_frustum=true})
-    render.draw(self.weapon)
-
-    render.set_render_target(render.RENDER_TARGET_DEFAULT)
+local function fullscreen(self,material,constants)
     render.set_camera()
     render.set_view(self.identity)
     render.set_projection(self.identity)
     render.set_depth_mask(false)
     render.disable_state(G.STATE_DEPTH_TEST)
     render.disable_state(G.STATE_CULL_FACE)
+    render.disable_state(G.STATE_BLEND)
+    if material then render.enable_material(material) end
+    render.draw(self.quad,{constants=constants})
+    if material then render.disable_material() end
+end
+local function bind(name,target) render.enable_texture(name,target,COLOR) end
+local function bake_next(self)
+    if self.bake_step>=9 then return end
+    local step=self.bake_step
+    if step<3 then
+        local target=({"albedo","normal","material"})[step+1]
+        render.set_render_target(self.targets[target])
+        render.set_viewport(0,0,settings.atlas_tile*settings.surface_count,settings.atlas_tile)
+        self.bake_constants.bake=vmath.vector4(step,0,0,0)
+        fullscreen(self,"bake",self.bake_constants)
+    else
+        local face=step-3
+        render.set_render_target(self.targets.environment,{face=self.faces[face+1]})
+        render.set_viewport(0,0,settings.environment_size,settings.environment_size)
+        self.bake_constants.bake=vmath.vector4(face,0,0,0)
+        fullscreen(self,"environment",self.bake_constants)
+    end
+    self.bake_step=step+1
+    self.bake_draws=self.bake_draws+1
+    self.report=true
+end
+local function report(self)
+    if not self.report and self.frames%30~=0 then return end
+    self.report=false
+    msg.post("main:/controller#script","renderer_stats",{
+        ready=self.bake_step==9, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
+        atlas_width=settings.atlas_tile*settings.surface_count,atlas_height=settings.atlas_tile,
+        environment_faces=math.max(0,self.bake_step-3), environment_size=settings.environment_size,
+        shadow_size=settings.shadow_size, shadow_frames=self.shadow_frames,
+        width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
+        target_count=9,target_bytes=settings.target_bytes(self.width,self.height),resizes=self.resizes,
+        local_light_count=self.light_count,frames=self.frames,settings=self.options,
+        radiance_range=settings.radiance_range })
+end
+function init(self)
+    self.world=render.predicate({"model"})
+    self.world_shadow=render.predicate({"world_shadow"})
+    self.soldier_shadow=render.predicate({"soldier_shadow"})
+    self.weapon=render.predicate({"viewmodel"})
+    self.quad=render.predicate({"fullscreen"})
+    self.gui=render.predicate({"gui"})
+    self.debug=render.predicate({"debug_text"})
+    self.identity=vmath.matrix4()
+    self.options=settings.defaults()
+    self.targets={}
+    self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
+    self.light_count=0
+    self.lighting=render.constant_buffer()
+    self.bake_constants=render.constant_buffer()
+    self.sky_constants=render.constant_buffer()
+    self.post_constants=render.constant_buffer()
+    self.bloom_constants=render.constant_buffer()
+    self.shadow_constants=render.constant_buffer()
+    for _,name in ipairs({"light_positions","light_colours","light_minimums","light_maximums"}) do
+        self.lighting[name]={vmath.vector4(),vmath.vector4(),vmath.vector4(),vmath.vector4()}
+    end
+    local centre=vmath.vector3(-1,2,-2)
+    local sun=vmath.normalize(vmath.vector3(-.6,.85,.4))
+    self.sun_view=vmath.matrix4_look_at(centre+sun*50,centre,vmath.vector3(0,1,0))
+    local extent=settings.shadow_extent
+    self.sun_projection=vmath.matrix4_orthographic(-extent,extent,-extent,extent,1,110)
+    self.sun_matrix=self.sun_projection*self.sun_view
+    self.lighting.sun_matrix=self.sun_matrix
+    self.shadow_constants.sun_matrix=self.sun_matrix
+    self.targets.shadow=colour_target(settings.shadow_size,settings.shadow_size,true,true)
+    for _,name in ipairs({"albedo","normal","material"}) do
+        self.targets[name]=colour_target(settings.atlas_tile*settings.surface_count,settings.atlas_tile)
+    end
+    self.targets.environment=colour_target(settings.environment_size,settings.environment_size,false,false,true)
+    self.faces={G.CUBEMAP_FACE_POSITIVE_X,G.CUBEMAP_FACE_NEGATIVE_X,G.CUBEMAP_FACE_POSITIVE_Y,
+        G.CUBEMAP_FACE_NEGATIVE_Y,G.CUBEMAP_FACE_POSITIVE_Z,G.CUBEMAP_FACE_NEGATIVE_Z}
+    resize(self)
+    render.set_listener(function(_,event)
+        if event==render.CONTEXT_EVENT_CONTEXT_RESTORED then
+            -- Runtime render-target contents are transient across context loss.
+            self.bake_step=0
+            self.report=true
+        end
+    end)
+end
+function update(self)
+    if not resize(self) then return end
+    self.frames=self.frames+1
+    bake_next(self)
+    local t,o=self.targets,self.options
+    if self.bake_step==9 then
+        -- Capture the same interpolated camera used by the world and weapon.
+        local view=camera.get_view(WORLD_CAMERA)
+        local projection=camera.get_projection(WORLD_CAMERA)
+        local inverse_view=vmath.inv(view)
+        local eye=inverse_view*vmath.vector4(0,0,0,1)
+        self.lighting.eye_position=eye
+        self.lighting.features=vmath.vector4(o.shadows and 1 or 0,o.normal_maps and 1 or 0,
+            o.local_lights and 1 or 0,o.fog and 1 or 0)
+        self.lighting.shadow_params=vmath.vector4(1/settings.shadow_size,.0007,1,0)
+        self.lighting.lighting_transform=self.identity
+        self.sky_constants.eye_position=eye
+        self.sky_constants.inverse_view_proj=vmath.inv(projection*view)
+
+        -- Clear every frame even when disabled, so re-enabling cannot expose stale data.
+        render.set_camera()
+        render.set_render_target(t.shadow)
+        render.set_viewport(0,0,settings.shadow_size,settings.shadow_size)
+        render.set_depth_mask(true)
+        render.disable_state(G.STATE_BLEND)
+        render.enable_state(G.STATE_DEPTH_TEST)
+        render.enable_state(G.STATE_CULL_FACE)
+        render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
+        render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+        if o.shadows then
+            render.set_view(self.sun_view)
+            render.set_projection(self.sun_projection)
+            render.enable_material("shadow")
+            render.draw(self.world_shadow,{constants=self.shadow_constants,frustum=self.sun_matrix})
+            render.enable_material("shadow_skinned")
+            render.draw(self.soldier_shadow,{constants=self.shadow_constants,frustum=self.sun_matrix})
+            render.disable_material()
+            self.shadow_frames=self.shadow_frames+1
+        end
+
+        render.set_render_target(t.scene)
+        render.set_viewport(0,0,self.width,self.height)
+        render.set_depth_mask(true)
+        render.clear({[COLOR]=vmath.vector4(0,0,0,1),[DEPTH]=1})
+        fullscreen(self,"sky",self.sky_constants)
+        bind("shadow_texture",t.shadow)
+        bind("environment_texture",t.environment)
+        bind("albedo_texture",t.albedo)
+        bind("normal_texture",t.normal)
+        bind("material_texture",t.material)
+        render.enable_state(G.STATE_DEPTH_TEST)
+        render.enable_state(G.STATE_CULL_FACE)
+        render.set_depth_mask(true)
+        render.set_camera(WORLD_CAMERA,{use_frustum=true})
+        render.draw(self.world,{constants=self.lighting})
+        render.draw_debug3d()
+
+        render.set_render_target(t.weapon)
+        render.clear({[COLOR]=vmath.vector4(0,0,0,0),[DEPTH]=1})
+        render.set_camera(WEAPON_CAMERA,{use_frustum=true})
+        self.lighting.lighting_transform=inverse_view
+        render.draw(self.weapon,{constants=self.lighting})
+        for _,name in ipairs({"shadow_texture","environment_texture","albedo_texture","normal_texture","material_texture"}) do
+            render.disable_texture(name)
+        end
+
+        render.set_render_target(t.bloom_a)
+        render.set_viewport(0,0,self.bloom_width,self.bloom_height)
+        if o.bloom then
+            bind("source_texture",t.scene)
+            self.bloom_constants.bloom_step=vmath.vector4(1/self.bloom_width,0,1,0)
+            fullscreen(self,"bloom",self.bloom_constants)
+            render.set_render_target(t.bloom_b)
+            bind("source_texture",t.bloom_a)
+            self.bloom_constants.bloom_step=vmath.vector4(0,1/self.bloom_height,0,0)
+            fullscreen(self,"bloom",self.bloom_constants)
+            render.disable_texture("source_texture")
+        else
+            render.set_render_target(t.bloom_b)
+            render.clear({[COLOR]=vmath.vector4()})
+        end
+        render.set_render_target(render.RENDER_TARGET_DEFAULT)
+        render.set_viewport(0,0,self.width,self.height)
+        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,settings.views[o.view],0)
+        bind("scene_texture",t.scene)
+        bind("weapon_texture",t.weapon)
+        bind("bloom_texture",t.bloom_b)
+        bind("environment_texture",t.environment)
+        bind("debug_texture",({albedo=t.albedo,normals=t.normal,material=t.material,shadow=t.shadow})[o.view] or t.albedo)
+        fullscreen(self,nil,self.post_constants)
+        for _,name in ipairs({"scene_texture","weapon_texture","bloom_texture","environment_texture","debug_texture"}) do
+            render.disable_texture(name)
+        end
+    else
+        render.set_render_target(render.RENDER_TARGET_DEFAULT)
+        render.set_viewport(0,0,self.width,self.height)
+        render.clear({[COLOR]=vmath.vector4(.08,.10,.13,1)})
+    end
+    render.set_camera()
+    render.set_view(self.identity)
+    render.set_projection(self.gui_projection)
+    render.set_depth_mask(false)
+    render.disable_state(G.STATE_DEPTH_TEST)
+    render.disable_state(G.STATE_CULL_FACE)
     render.enable_state(G.STATE_BLEND)
     render.set_blend_func(G.BLEND_FACTOR_SRC_ALPHA,G.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
-    render.enable_texture(0,self.weapon_target,G.BUFFER_TYPE_COLOR0_BIT)
-    render.draw(self.composite)
-    render.disable_texture(0)
-
-    render.set_projection(self.gui_projection)
+    render.set_stencil_mask(0xff)
+    render.clear({[G.BUFFER_TYPE_STENCIL_BIT]=0})
     render.enable_state(G.STATE_STENCIL_TEST)
     render.draw(self.gui)
     render.draw(self.debug)
     render.disable_state(G.STATE_STENCIL_TEST)
     render.disable_state(G.STATE_BLEND)
+    report(self)
+end
+function on_message(self,id,message)
+    if id==hash("renderer_configure") then
+        self.options=settings.configure(self.options,message)
+        self.report=true
+    elseif id==hash("renderer_lights") then
+        self.light_count=math.min(#message.lights,settings.max_lights)
+        for i=1,settings.max_lights do
+            local light=message.lights[i]
+            self.lighting.light_positions[i]=light and light.position or vmath.vector4()
+            self.lighting.light_colours[i]=light and light.colour or vmath.vector4()
+            self.lighting.light_minimums[i]=light and light.minimum or vmath.vector4()
+            self.lighting.light_maximums[i]=light and light.maximum or vmath.vector4()
+        end
+        self.report=true
+    end
 end
 function final(self)
-    if self.weapon_target then render.delete_render_target(self.weapon_target) end
+    render.set_listener(nil)
+    for _,target in pairs(self.targets) do render.delete_render_target(target) end
+    self.targets={}
 end

@@ -162,4 +162,20 @@ test("adapter receives each resource once; readiness waits for installation and 
     assert(disposed and ctx.world == nil)
 end)
 
+test("room light bounds include the actual floor, walls and ceiling without reaching the street", function()
+    local world=generate(24)
+    local light=world.lights[2]
+    local shapes={}
+    for _,s in ipairs(world.colliders) do shapes[s.id]=s end
+    local floor,ceiling=shapes["W2/floor"],shapes["W2/upper"]
+    local west,south,north=shapes["W2/west"],shapes["W2/south"],shapes["W2/north"]
+    local function near(a,b) assert(math.abs(a-b)<1e-6) end
+    near(light.minimum.y,floor.y+floor.h/2)
+    near(light.maximum.y,ceiling.y-ceiling.h/2)
+    near(light.minimum.x,west.x+west.w/2)
+    near(light.minimum.z,south.z+south.d/2)
+    near(light.maximum.z,north.z-north.d/2)
+    assert(light.maximum.x < -layout.street.half_width)
+end)
+
 print(count .. " world tests passed")

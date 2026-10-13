@@ -126,8 +126,8 @@ capsule controller. Key 9 restarts the encounter. Lua and native macOS/Metal
 checks cover animation bounds, head/body hits, occlusion, return fire, navigation,
 replacement and cleanup. A debug HTML5 bundle also passes a manual WebGL 2
 rendering/movement/return-fire/restart check; physical mobile testing remains
-outstanding. The skinning function is shared for a future shadow
-pass; shadows, runtime IK, ragdolls, squads and source visual parity are still
+outstanding. The skinning function is now shared with the shadow
+pass added in step 6; runtime IK, ragdolls, squads and source visual parity are still
 subsequent work. See `README.md` for costs, controls and validation scope.
 
 The original soldiers use a generated mesh, a 25-bone skeleton, procedural pose layers and IK. Importing a prebuilt animated model would sidestep the runtime-generation requirement.
@@ -147,6 +147,20 @@ Start AI with patrol, detection, pursuit, firing and death. Then add cover claim
 For navigation, generate a layered walkable graph from the building descriptions, validated through physics queries. A single height per X/Z cell is insufficient for overlapping floors. Stairs and doorways become explicit connections. Kaigen's navmesh behavior is the stronger reference for that part.
 
 **6. Generate materials on the GPU and develop the renderer in stages.**
+
+Initial renderer implemented: three GPU-baked material atlases cover plaster,
+asphalt, wood, metal and cloth; a six-face procedural sky environment is generated
+one face per frame. World, soldier and weapon share roughness/metalness lighting,
+sunlight, ambient/reflection terms and up to four bounded local lights. A 1024²
+sun shadow map uses the same animated soldier skinning as the colour pass.
+Height fog, quarter-resolution bloom, shared tone mapping and an isolated weapon
+colour/depth pass precede the GUI. Diagnostic views and effect toggles are exposed
+through the Automation Bridge. The 72 Lua tests, native macOS/Metal renderer and
+combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
+physical mobile validation is still outstanding. Surface recipes and environment lighting are
+bounded approximations; full material parity, mip/roughness filtering, local-light
+shadows, cascades, ambient occlusion and temporal effects remain later stages.
+See `README.md` for resource budgets and validation scope.
 
 Port the procedural surface functions into Defold shaders that render albedo, normal and packed material maps during loading. Preserve texture generation rather than replacing it with exported images.
 

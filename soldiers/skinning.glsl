@@ -1,4 +1,4 @@
-// Shared by the colour pass and a future shadow pass. 25 matrices = 100 vec4
+// Shared by the colour and shadow passes. 25 matrices = 100 vec4
 // uniforms; no SSBO, bone texture or imported Model resource is required.
 uniform highp mat4 bone_palette[25];
 mat4 skin_matrix(vec4 joints, vec4 weights)

@@ -12,7 +12,9 @@ sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slope
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
 reloads and generated viewmodels in an isolated render pass. One runtime-generated,
 25-bone soldier now patrols the street, detects and pursues the player, fires
-physical rounds and dies. Synthesized audio remains subsequent work.
+physical rounds and dies. GPU-generated surface maps, shared material lighting,
+animated sun shadows, a procedural sky, height fog, tone mapping and bloom are
+implemented. Synthesized audio remains subsequent work.
 
 ## Run and validate
 
@@ -26,6 +28,7 @@ lua tests/world_test.lua
 lua tests/movement_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
+lua tests/renderer_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks
@@ -38,6 +41,8 @@ PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ai_smoke.py
+# Requires Pillow for GPU pixel assertions:
+PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
@@ -96,8 +101,8 @@ presentation frame. One shared generated buffer serves replacement instances;
 each live soldier uses one mesh, one movement capsule and seven hit-volume GOs.
 Conservative bounds include the supported animations and death collapse. The
 fragment shader supplies procedural camouflage, with the world's sun, ambient
-light and fog. `skinning.glsl` is reusable by the future shadow pass; this
-increment does not add shadow rendering.
+light and fog. `skinning.glsl` is shared by the colour and animated sun shadow
+passes introduced in renderer step 6.
 
 Idle breathing, distance-driven walking, upper-body aiming, recoil and a bounded
 0.85-second death collapse are evaluated in Lua. Simulation poses advance at
@@ -258,13 +263,13 @@ tracers; they have no debris physics. All generated buffers and game objects are
 released on teardown. Surface audio routing is ready for synthesized playback
 in step 7; there is no weapon sound playback yet.
 
-`render/game.render_script` explicitly selects the world camera, then draws the
-viewmodel with its own camera into an RGBA target with a separate depth
-attachment. The transparent weapon target is composited before GUI. It resizes
-with the window and is released on shutdown. Weapon materials use the same sun
-and ambient colours as the world, with camera-relative sunlight, and receive no
-world fog. The reticle appears only in ADS. Future world post effects can run
-before weapon compositing. PBR and temporal effects remain renderer milestones.
+`render/game.render_script` draws the viewmodel with its own camera into an RGBA
+colour target with a separate depth attachment. Its lighting coordinates are
+transformed through the world camera, so the same sun, shadows, environment and
+room light illuminate the weapon and world. The weapon receives no world fog or
+world bloom; both layers go through one exposure and tone-mapping function before
+GUI. The reticle appears only in ADS. Weapon vertex alpha stores metalness while
+the shader writes opaque coverage. Temporal effects remain later work.
 
 The 18 weapon Lua tests cover timing, inputs, reload interruptions, deterministic
 spread/recoil, geometry bounds/winding and continuous collision/penetration.
@@ -353,10 +358,76 @@ navigation inputs, not a finished navmesh or proof of every route's clearance.
 The movement suite additionally checks capsule traversal from the street over
 the kerb and through the doorway into W2.
 
-The initial material uses procedural grain, directional/ambient lighting and
-distance fog in the custom renderer's world pass. Local lights are metadata for the
-later renderer; PBR, shadow maps, generated material textures and the full render
-pipeline remain in step 6. Separate weapon rendering is already implemented.
+Generated world materials now sample runtime GPU atlases and receive the lighting,
+shadows and height fog described below. The room light is sourced from the same
+world metadata and clipped to its authored interior bounds.
+
+## Generated materials and rendering
+
+The renderer owns nine targets. During the first nine rendered frames it bakes
+one 1280 × 256 atlas per frame (albedo variation, tangent-space normals, and
+roughness/metalness/cavity), then one 64 × 64 sky cubemap face per frame. Each atlas
+contains five 256² surface tiles with periodic padding. Reduced recipes adapt the
+reference's plaster mottling, asphalt aggregate, wood fibres, worn metal and cloth
+weave; these are not a complete port of its high-resolution material library.
+World-space projection keeps the generated geometry independent of UV assets.
+The GPU bakes never advance gameplay random streams and do not repeat on resize
+or encounter restart. Context restoration schedules the nine jobs again.
+
+World geometry, the soldier and weapons share GGX direct lighting, ambient light,
+approximate sky reflections and up to four authored point lights. The current
+room light has warm radiance, finite attenuation and interior bounds to prevent
+lighting across exterior walls. Props do not occlude this local light. The soldier
+retains procedural camouflage; weapon vertex colours now carry metalness.
+
+A 1024² shadow target covers a fixed 64-metre square around the initial street
+block. Static batches and the soldier use separate shadow materials; the latter
+shares the colour pass's 25-bone palette and skinning function. Shadow depth is
+packed in two RGBA8 channels and compared with nine nearest samples, a depth bias
+and a normal offset. Out-of-map receivers are unshadowed; the remote optional
+traversal/firing fixtures are not guaranteed shadow coverage. Cascades, local-light shadows
+and screen-space ambient occlusion remain future work.
+
+Pass order is sun shadow → sky/world → isolated weapon → two quarter-resolution
+bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
+height density along the eye ray. The world and weapon use square-root encoded
+0..8 radiance in RGBA8, with subtle dithering, so the pipeline needs no floating
+point colour-buffer extension. The final pass decodes the layers, applies one
+exposure and an ACES-style curve, then converts to display gamma. Bloom affects
+only the world; GUI stays outside exposure, fog and bloom. This is bounded HDR,
+not an unbounded floating-point pipeline. Environment reflections currently use
+an analytic broadening approximation rather than prefiltered roughness mipmaps;
+the material atlas also has no mip chain yet. `game.project` sets the default
+GLSL ES float precision to `highp` for noise, packed shadows and lighting. Using
+the project setting also keeps precision declarations ahead of Defold's generated
+fragment output in WebGL shaders.
+
+At a 1920 × 1280 backbuffer (the default window on a 2× display), target storage
+is approximately 50.5 MiB, excluding driver overhead and generated meshes. This
+includes conservatively budgeted 32-bit depth attachments. At 960 × 640 it is
+approximately 21.5 MiB. Resize updates the four screen-dependent targets while
+retaining the atlas, cubemap and shadow targets. Zero-sized windows skip rendering;
+finalization deletes every target.
+
+`renderer.snapshot` reports bake jobs, target dimensions/bytes, local-light count,
+shadow frames and active settings. `renderer.configure` accepts booleans
+`shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`; numeric `exposure` in
+0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow` or
+`environment`. Configuration applies on the next render message dispatch, so tests
+wait for the snapshot to reflect it. All controls affect presentation only.
+
+The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
+resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
+The native suite checks actual GPU atlas channels, visible shadow/normal/light/
+bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
+with review images in `build/renderer-validation`. All 72 Lua checks and the
+native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
+HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
+shadows, sky, movement, encounter restart and the separate weapon pass, with no
+shader/runtime errors after loading. That browser check does not replace the
+native pixel suite. Hardware context-loss recovery, physical mobile devices,
+full source visual parity and sustained combat GPU performance remain separate
+validation work.
 
 ## Automation
 

@@ -40,7 +40,7 @@ function M.new(ctx,mesh_factory,effect_factory)
         go.set(model.parts.reticle.url,"tint",vmath.vector4(1,1,1,1))
     end
     -- Fixed resource budget for short-lived surface particles, tracers and cases.
-    local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,1})
+    local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,0})
     for _=1,24 do
         local part=upload(a,cube,effect_factory);part.life=0
         visible(part,false);a.effects[#a.effects+1]=part
@@ -85,9 +85,6 @@ function M.update(a,ctx,dt,shown)
     local sample=pose.pose(ctx,active)
     local q=rotation(sample.rotation)
     local root=vector(sample.position)
-    local camera_rotation=vmath.quat_rotation_y(ctx.presentation.yaw)*vmath.quat_rotation_x(ctx.presentation.pitch)
-        *vmath.quat_rotation_z(ctx.presentation.roll)
-    local light=vmath.rotate(vmath.conj(camera_rotation),vmath.normalize(vmath.vector3(-.6,.85,.4)))
     for id,model in pairs(a.models) do
         for name,part in pairs(model.parts) do
             local part_pose=sample.parts[name]
@@ -96,7 +93,6 @@ function M.update(a,ctx,dt,shown)
             if enabled then
                 go.set_position(root+vmath.rotate(q,vector(part_pose.position)),part.id)
                 go.set_rotation(q,part.id)
-                go.set(part.url,"light_dir",vmath.vector4(light.x,light.y,light.z,0))
             end
         end
     end

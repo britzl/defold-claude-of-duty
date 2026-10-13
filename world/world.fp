@@ -1,40 +1,26 @@
 varying highp vec3 var_world;
 varying mediump vec3 var_normal;
 varying lowp vec4 var_color;
-varying highp float var_depth;
-uniform lowp vec4 surface;
-
-float hash21(vec2 p)
-{
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float noise(vec2 p)
-{
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
-               mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-
-void main()
-{
-    vec3 n = normalize(var_normal);
-    vec3 p = var_world;
-    vec2 uv = abs(n.y) > 0.5 ? p.xz : (abs(n.x) > 0.5 ? p.zy : p.xy);
-    float grain = noise(uv * 55.0);
-    float patches = noise(uv * 1.6);
-    float variation = 0.86 + patches * 0.15 + grain * 0.08;
-    if (surface.x > 1.5 && surface.x < 2.5) {
-        variation *= 0.82 + 0.18 * noise(vec2(uv.x * 35.0, uv.y * 1.5));
-    }
-    if (surface.x > 0.5 && surface.x < 1.5) {
-        variation = 0.80 + 0.24 * grain + 0.08 * patches;
-    }
-    float sun = max(dot(n, normalize(vec3(-0.6, 0.85, 0.4))), 0.0);
-    vec3 ambient = mix(vec3(0.35, 0.30, 0.23), vec3(0.55, 0.62, 0.67), n.y * 0.5 + 0.5);
-    vec3 lit = var_color.rgb * variation * (ambient + vec3(0.70, 0.61, 0.46) * sun);
-    float fog = smoothstep(25.0, 100.0, var_depth);
-    gl_FragColor = vec4(mix(lit, vec3(0.66, 0.74, 0.77), fog), 1.0);
+uniform highp vec4 surface;
+uniform lowp sampler2D albedo_texture;
+uniform lowp sampler2D normal_texture;
+uniform lowp sampler2D material_texture;
+#include "/render/lighting.glsl"
+void main() {
+    vec3 n=normalize(var_normal), tangent, bitangent;
+    // Right-handed basis on every side, including down-facing soffits.
+    if (abs(n.y)>0.5) tangent=vec3(1.0,0.0,0.0);
+    else if (abs(n.x)>0.5) tangent=vec3(0.0,0.0,1.0);
+    else tangent=vec3(1.0,0.0,0.0);
+    bitangent=normalize(cross(n,tangent));
+    tangent=normalize(cross(bitangent,n));
+    vec2 tile=fract(vec2(dot(var_world,tangent),dot(var_world,bitangent))*0.5);
+    vec2 uv=(tile*254.0+1.0)/256.0;
+    uv.x=(uv.x+surface.x)/5.0;
+    vec3 albedo=linear_colour(var_color.rgb)*texture2D(albedo_texture,uv).rgb;
+    vec3 packed=texture2D(material_texture,uv).rgb;
+    vec3 bump=texture2D(normal_texture,uv).rgb*2.0-1.0;
+    n=normalize(n*bump.z+(tangent*bump.x+bitangent*bump.y)*features.y);
+    vec3 radiance=lighting(albedo,max(packed.r,0.18),packed.g,packed.b,var_world,n);
+    gl_FragColor=vec4(encode_radiance(height_fog(radiance,var_world)),1.0);
 }

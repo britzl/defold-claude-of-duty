@@ -40,3 +40,6 @@ dependencies#0 = https://github.com/defold/extension-automation-bridge/archive/r
 
 [automation_bridge]
 application_api = 1
+
+[shader]
+glsl_es_default_precision_float = highp

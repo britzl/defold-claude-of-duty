@@ -13,6 +13,7 @@ local weapon_driver = require "game.weapons.driver"
 local firing_range = require "game.weapons.range"
 local ai_system = require "game.systems.ai"
 local soldier_adapter = require "game.ai.defold"
+local renderer_settings = require "game.render.settings"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
@@ -103,6 +104,20 @@ function init(self)
         and sys.get_config_boolean("physics.use_fixed_timestep"),
         "Gameplay requires metre-based 3D physics with a fixed timestep")
     self.ctx = runtime.new({ world = world_adapter.new("#world_mesh", "#world_collision") })
+    self.renderer_settings = renderer_settings.defaults()
+    self.renderer_stats = { ready = false }
+    local lights = {}
+    for _,light in ipairs(self.ctx.world.lights) do
+        if light.kind ~= "sun" and #lights < renderer_settings.max_lights then
+            local lo,hi=light.minimum,light.maximum
+            local colour=light.colour or {1,.76,.48}
+            local power=light.intensity or 16
+            lights[#lights+1]={position=vmath.vector4(light.x,light.y,light.z,light.radius),
+                colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,0),
+                minimum=vmath.vector4(lo.x,lo.y,lo.z,0),maximum=vmath.vector4(hi.x,hi.y,hi.z,0)}
+        end
+    end
+    msg.post("@render:","renderer_lights",{lights=lights})
     self.weapon_visuals = weapon_adapter.new(self.ctx, "#weapon_mesh", "#weapon_effect")
     self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
@@ -116,6 +131,18 @@ function init(self)
     msg.post(".", "acquire_input_focus")
     window.set_listener(window_event)
     if automation_bridge then
+        automation_bridge.command("renderer.snapshot",function() return self.renderer_stats end)
+        automation_bridge.command("renderer.configure",function(data)
+            self.renderer_settings=renderer_settings.configure(self.renderer_settings,data)
+            msg.post("@render:","renderer_configure",self.renderer_settings)
+            return self.renderer_settings
+        end)
+        automation_bridge.describe("command","renderer.snapshot",{
+            description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
+            output_schema={type="object"}})
+        automation_bridge.describe("command","renderer.configure",{
+            description="Set shadows/normal_maps/local_lights/fog/bloom booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment. Presentation only.",
+            input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.configure",function(data)
             assert(type(data.enabled)=="boolean","enabled must be a boolean")
@@ -404,6 +431,7 @@ function on_input(self, action_id, action)
 end
 
 function on_message(self, message_id, message, sender)
+    if message_id == hash("renderer_stats") then self.renderer_stats = message end
     if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end
 end
 
