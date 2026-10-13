@@ -83,7 +83,7 @@ events are wired. Tactical sprint, slides with steering and bounded jump exits,
 clearance-checked mantles and collision-limited camera lean are implemented.
 The expanded course covers mantle height, landing headroom, narrow tops and
 approach obstructions. Automatic vaulting and full source camera effects are
-outside this increment; browser/mobile validation is still required. See
+outside this increment; full browser/mobile traversal validation is still required. See
 `README.md` for controls/tests.
 
 Port the movement behavior and tuning: acceleration, sprint, tactical sprint, crouch, prone, slide, jump buffering, mantle and lean. The original [movement tuning](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/player/tuning.js) is a better starting point than approximating the feel.
@@ -104,7 +104,7 @@ material penetration and single-owner actor damage. Runtime-generated weapons,
 magazines, bolts/slides and hands animate in a separate camera/colour/depth pass.
 Surface particles, cases, tracers, an ammo/mode HUD and an optional native firing
 range are included. Lua and macOS/Metal smoke suites pass. Geometry is simplified;
-synthesized audio, full presentation effects and browser/mobile runtime validation
+synthesized audio, full presentation effects and full browser/mobile weapon validation
 remain later work. See `README.md` for contracts and deliberate source differences.
 
 Port the rifle, SMG and pistol definitions, ammunition, fire modes, recoil springs, spread, ADS, reload and inspection timelines.
@@ -116,6 +116,19 @@ Generate weapon geometry at load. Animate major parts—magazine, bolt, slide an
 Render the weapon with its own camera and depth buffer. The original [render pipeline](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/render/index.js) documents why it also separates the weapon from temporal effects and world fog. That distinction should survive the port.
 
 **5. Treat procedural soldiers as an early technical prototype.**
+
+Initial prototype implemented: one generated, 25-bone soldier with weighted Mesh
+streams, a matrix-palette skinning shader, procedural idle/walk/aim/recoil and a
+scripted death collapse. Seven skeleton-driven Bullet hit volumes connect to
+existing projectile damage. The soldier patrols, detects, pursues, fires physical
+rounds and navigates the street-to-shop route using the authored graph and swept
+capsule controller. Key 9 restarts the encounter. Lua and native macOS/Metal
+checks cover animation bounds, head/body hits, occlusion, return fire, navigation,
+replacement and cleanup. A debug HTML5 bundle also passes a manual WebGL 2
+rendering/movement/return-fire/restart check; physical mobile testing remains
+outstanding. The skinning function is shared for a future shadow
+pass; shadows, runtime IK, ragdolls, squads and source visual parity are still
+subsequent work. See `README.md` for costs, controls and validation scope.
 
 The original soldiers use a generated mesh, a 25-bone skeleton, procedural pose layers and IK. Importing a prebuilt animated model would sidestep the runtime-generation requirement.
 

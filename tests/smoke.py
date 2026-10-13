@@ -19,6 +19,7 @@ def main():
         # bridge version bundled with this project can keep advancing loading.
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=20,
                           message="generated world did not finish loading")
+        game.command("ai.configure", {"enabled": False})
         world = game.command("world.snapshot", {})["result"]
         assert world["batches"] > 0 and world["colliders"] > 0
         assert world["batches"] < world["boxes"] / 4

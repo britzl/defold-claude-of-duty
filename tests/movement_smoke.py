@@ -40,6 +40,7 @@ def main():
 
     try:
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=20)
+        game.command("ai.configure", {"enabled": False})
         command("movement.course")
         game.wait_frames(3)  # Factory-created course bodies enter the broadphase.
 

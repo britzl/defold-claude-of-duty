@@ -1,0 +1,19 @@
+type: COLLISION_OBJECT_TYPE_KINEMATIC
+mass: 0.0
+friction: 0.7
+restitution: 0.0
+group: "enemy"
+mask: "projectile"
+embedded_collision_shape {
+  shapes {
+    shape_type: TYPE_BOX
+    position { x: 0 y: 0 z: 0 }
+    rotation { x: 0 y: 0 z: 0 w: 1 }
+    index: 0
+    count: 3
+    id: "box"
+  }
+  data: 0.5
+  data: 0.5
+  data: 0.5
+}

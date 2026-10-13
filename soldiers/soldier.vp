@@ -1,0 +1,23 @@
+attribute highp vec3 position;
+attribute mediump vec3 normal;
+attribute lowp vec4 color;
+attribute highp vec4 joint_indices;
+attribute highp vec4 joint_weights;
+uniform highp mat4 world;
+uniform highp mat4 view_proj;
+uniform highp mat4 world_view;
+#include "/soldiers/skinning.glsl"
+varying highp vec3 var_local;
+varying mediump vec3 var_normal;
+varying lowp vec4 var_color;
+varying highp float var_depth;
+void main()
+{
+    mat4 skin = skin_matrix(joint_indices, joint_weights);
+    vec4 p = skin * vec4(position, 1.0);
+    var_local = position;
+    var_normal = (world * skin * vec4(normal, 0.0)).xyz;
+    var_color = color;
+    var_depth = -(world_view * p).z;
+    gl_Position = view_proj * world * p;
+}

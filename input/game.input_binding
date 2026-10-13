@@ -75,3 +75,4 @@ key_trigger { input: KEY_8 action: "weapon_pistol" }
 key_trigger { input: KEY_TAB action: "next_weapon" }
 key_trigger { input: KEY_B action: "fire_mode" }
 key_trigger { input: KEY_5 action: "firing_range" }
+key_trigger { input: KEY_9 action: "restart_encounter" }

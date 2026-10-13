@@ -11,6 +11,8 @@ local weapon_system = require "game.systems.weapons"
 local weapon_adapter = require "game.weapons.defold"
 local weapon_driver = require "game.weapons.driver"
 local firing_range = require "game.weapons.range"
+local ai_system = require "game.systems.ai"
+local soldier_adapter = require "game.ai.defold"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
@@ -39,6 +41,17 @@ local function create_range(self)
         self.range = firing_range.new(self.ctx)
         self.bullet_registries[#self.bullet_registries+1] = self.range.adapter.by_id
     end
+end
+
+local function restart_encounter(self)
+    select_view(self,nil)
+    combat.remove(self.ctx.combat,"player")
+    self.ctx.player.actor=combat.register(self.ctx.combat,"player",config.player_health)
+    player_system.reset(self.ctx,self.ctx.world.spawn,0)
+    weapon_system.init(self.ctx)
+    self.ctx.ai.enabled=true
+    ai_system.reset(self.ctx)
+    self.ctx.fx.hitmarker,self.ctx.fx.damage_flash=0,0
 end
 
 local function world_snapshot(world)
@@ -91,8 +104,11 @@ function init(self)
         "Gameplay requires metre-based 3D physics with a fixed timestep")
     self.ctx = runtime.new({ world = world_adapter.new("#world_mesh", "#world_collision") })
     self.weapon_visuals = weapon_adapter.new(self.ctx, "#weapon_mesh", "#weapon_effect")
-    self.bullet_registries = { self.ctx.world.adapter.by_id }
+    self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
+    self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
+    self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id},
+        {groups={hash("world"),hash("player")},actors={[hash("/player")]="player"}})
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -100,6 +116,76 @@ function init(self)
     msg.post(".", "acquire_input_focus")
     window.set_listener(window_event)
     if automation_bridge then
+        automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
+        automation_bridge.command("ai.configure",function(data)
+            assert(type(data.enabled)=="boolean","enabled must be a boolean")
+            self.ctx.ai.enabled=data.enabled
+            return ai_system.snapshot(self.ctx)
+        end)
+        automation_bridge.command("ai.reset",function(data)
+            assert(self.ctx.world.ready,"World is still loading")
+            if data.position then
+                for _,key in ipairs({"x","y","z"}) do
+                    local v=data.position[key]
+                    assert(type(v)=="number" and v==v and math.abs(v)<10000,"Invalid position")
+                end
+            end
+            local yaw=data.yaw or math.pi
+            assert(type(yaw)=="number" and yaw==yaw and math.abs(yaw)<10000,"Invalid yaw")
+            ai_system.reset(self.ctx,data.position,yaw)
+            return ai_system.snapshot(self.ctx)
+        end)
+        automation_bridge.command("ai.volumes",function()
+            local result={}
+            for _,shape in pairs(self.ctx.services.soldiers.by_id) do
+                if not shape.disabled then result[#result+1]={id=shape.id,x=shape.x,y=shape.y,z=shape.z,headshot=shape.headshot or false} end
+            end
+            return result
+        end)
+        automation_bridge.command("ai.route",function(data)
+            local e=self.ctx.ai.actors.enemy_1
+            assert(e and e.actor.alive,"No living soldier")
+            local q=soldier_adapter.query(self.ctx.services.soldiers,e)
+            assert(q,"Soldier physics is settling")
+            local target=data.target
+            assert(type(target)=="table","Missing target")
+            for _,key in ipairs({"x","y","z"}) do
+                local v=target[key]
+                assert(type(v)=="number" and v==v and math.abs(v)<10000,"Invalid target")
+            end
+            return {points=require("game.ai.navigation").route(self.ctx.world.navigation,e.position,target,q) or {}}
+        end)
+        automation_bridge.command("ai.patrol",function(data)
+            local e=self.ctx.ai.actors.enemy_1
+            assert(e and e.actor.alive,"No living soldier")
+            assert(type(data.points)=="table" and #data.points>0 and #data.points<=8,"Expected 1-8 patrol points")
+            local points={}
+            for i,p in ipairs(data.points) do
+                for _,key in ipairs({"x","y","z"}) do
+                    local v=p[key]
+                    assert(type(v)=="number" and v==v and math.abs(v)<10000,"Invalid patrol point")
+                end
+                points[i]={x=p.x,y=p.y,z=p.z}
+            end
+            e.patrol_points=points;e.patrol=1;e.route=nil;e.route_goal=nil;e.memory=0;e.notice=0;e.think=0
+            return ai_system.snapshot(self.ctx)
+        end)
+        automation_bridge.command("gameplay.restart",function()
+            assert(self.ctx.world.ready,"World is still loading")
+            restart_encounter(self)
+            return snapshot(self.ctx)
+        end)
+        for name,description in pairs({
+            ["ai.snapshot"]="Read the soldier state, health, navigation, shots, mesh and palette costs.",
+            ["ai.configure"]="Pause/resume AI with {enabled}; frozen soldiers remain shootable.",
+            ["ai.reset"]="Replace the soldier, optionally at {position={x,y,z},yaw}; preserve AI pause state.",
+            ["ai.volumes"]="Read current skeleton-driven Bullet hit-volume centres.",
+            ["ai.route"]="Find a supported, capsule-clear route from the soldier to {target={x,y,z}}.",
+            ["ai.patrol"]="Set 1-8 {points={{x,y,z},...}} for repeatable navigation scenarios; clear current alert.",
+            ["gameplay.restart"]="Restart the encounter, restoring player, weapons and the soldier.",
+        }) do
+            automation_bridge.describe("command",name,{description=description,input_schema={type="object"},output_schema={type="object"}})
+        end
         automation_bridge.command("weapons.snapshot", function() return weapon_system.snapshot(self.ctx) end)
         automation_bridge.command("weapons.drive", function(data)
             assert(self.ctx.world.ready, "World is still loading")
@@ -245,6 +331,7 @@ end
 function late_update(self, dt)
     -- Camera and GUI see interpolated presentation, never drive simulation.
     local out = self.ctx.presentation
+    ai_system.present(self.ctx)
     local view = self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
     self.camera_position.x, self.camera_position.y, self.camera_position.z = camera.x, camera.y, camera.z
@@ -278,6 +365,10 @@ function late_update(self, dt)
 end
 
 function on_input(self, action_id, action)
+    if action_id==hash("restart_encounter") and action.pressed and self.ctx.world.ready then
+        restart_encounter(self)
+        return true
+    end
     if action.pressed and (action_id == PLAY or action_id == ESCAPE) then
         if action_id == PLAY then select_view(self, nil) else select_view(self, self.view) end
         return true

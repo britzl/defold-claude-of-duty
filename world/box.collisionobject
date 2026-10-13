@@ -5,6 +5,7 @@ restitution: 0.0
 group: "world"
 mask: "player"
 mask: "enemy"
+mask: "enemy_body"
 mask: "projectile"
 embedded_collision_shape {
   shapes {

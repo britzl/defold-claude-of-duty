@@ -38,6 +38,7 @@ def main():
 
     try:
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=20)
+        game.command("ai.configure", {"enabled": False})
         idle("rifle")
         assert state()["ammo"] == 31 and state()["reserve"] == 210
         game.wait_for_element(type="gui_node_text", text_exact="M4A1  AUTO  31 / 210")

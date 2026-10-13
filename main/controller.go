@@ -12,3 +12,6 @@ components {
 }
 components { id: "weapon_mesh" component: "/weapons/part.factory" }
 components { id: "weapon_effect" component: "/weapons/effect.factory" }
+components { id: "soldier_mesh" component: "/soldiers/soldier.factory" }
+components { id: "soldier_mover" component: "/soldiers/mover.factory" }
+components { id: "soldier_hit" component: "/soldiers/hit.factory" }

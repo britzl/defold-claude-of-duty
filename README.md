@@ -10,8 +10,9 @@ market street, pavements, W2 with one open shop room, and the opposing E2 facade
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
-reloads and generated viewmodels in an isolated render pass. Soldiers and
-synthesized audio remain subsequent work.
+reloads and generated viewmodels in an isolated render pass. One runtime-generated,
+25-bone soldier now patrols the street, detects and pursues the player, fires
+physical rounds and dies. Synthesized audio remains subsequent work.
 
 ## Run and validate
 
@@ -24,6 +25,7 @@ lua tests/runtime_test.lua
 lua tests/world_test.lua
 lua tests/movement_test.lua
 lua tests/weapons_test.lua
+lua tests/ai_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks
@@ -35,6 +37,7 @@ PYTHONPATH=automation-bridge-python python3 tests/smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/ai_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
@@ -70,6 +73,76 @@ creates an optional firing range and moves you to its bare-target lane.
 The other lanes, to the right, have thin wood and thick concrete in front of
 their targets. Targets have 1,000 health and use the normal damage owner.
 Gamepad/touch adapters can feed the same `game.input` API later.
+
+One soldier patrols the far end of the street. Approach it to trigger detection
+and combat. **9** restarts the encounter with full player/enemy health, fresh
+weapons and ammunition. Inspection cameras pause enemy simulation. The separate
+world/movement/weapon smoke suites explicitly pause AI to isolate their fixtures.
+
+## Procedural soldier and combat
+
+`game/ai/rig.lua` retains the reference's 25 joint names, hierarchy and metre
+proportions, rotating the source's +Z-facing carry pose into this project's -Z
+convention. The bind axes are identity rotations; they do not yet reproduce the
+reference ragdoll joint frames. `geometry.lua` generates cloth limbs, helmet,
+goggles, carrier, pouches, boots, gloves and a simplified carried rifle. The mesh
+has 7,140 vertices and 514,080 bytes of float streams: position, normal, colour,
+four joint indices and four normalized skin weights. Some vertices blend two
+joints; rigid equipment follows one. No model or animation is imported.
+
+`soldiers/soldier.vp` performs linear blend skinning with 25 matrix uniforms.
+The palette is 1,600 bytes, uploaded with 25 indexed `go.set` calls per actor per
+presentation frame. One shared generated buffer serves replacement instances;
+each live soldier uses one mesh, one movement capsule and seven hit-volume GOs.
+Conservative bounds include the supported animations and death collapse. The
+fragment shader supplies procedural camouflage, with the world's sun, ambient
+light and fog. `skinning.glsl` is reusable by the future shadow pass; this
+increment does not add shadow rendering.
+
+Idle breathing, distance-driven walking, upper-body aiming, recoil and a bounded
+0.85-second death collapse are evaluated in Lua. Simulation poses advance at
+120 Hz. Presentation interpolates position, heading and pose parameters without
+changing collision transforms. This is a deliberately simplified animation
+prototype: runtime foot/hand IK, source clip parity and physics ragdolls remain
+later work. Death disables hit volumes and leaves one visible corpse until restart.
+
+`game/systems/ai.lua` owns the enemy and a separate bounded projectile pool. A
+patrol detects a visible player within 14 metres and a 130-degree field of view,
+after four perception checks at roughly 10 Hz. An alerted actor remembers the
+last seen point for five seconds and can see up to 24 metres. It pursues until
+within ten metres with a clear muzzle path, then aims and fires one 400 m/s round
+every 0.55 seconds. A round starts at the animated rifle muzzle, uses existing
+travel/drop/penetration code and queries the actual player capsule. Health still
+changes only through `game/combat.lua`, on the following fixed tick. Enemy fire
+has its own seeded random stream. Dead players cannot be reacquired or fired on.
+
+Patrol/pursuit routes use shortest paths over the existing authored, layered
+navigation graph, including temporary start/goal links. Native queries validate
+floor support and capsule clearance before accepting a connection. Movement then
+uses the same swept capsule controller as the player, including kerb step-up,
+wall sliding and overlap recovery. Routes are refreshed for moved targets or
+after one second. Unreachable goals leave the soldier in place and retry; this
+is not a generated navmesh or a squad navigation implementation. The movement
+capsule collides with the world; actor-to-actor movement blocking is not implemented.
+
+Head, chest, hips, thighs and shins have kinematic Bullet boxes transformed by
+the same skeleton as the mesh. Projectile thickness is measured in each box's
+rotated local frame. Head hits retain the existing 2× multiplier; overlapping
+body volumes still submit at most one hit per actor per round. Limbs use simple
+proxies; arms, hands and equipment do not have separate damage volumes yet.
+
+The 12 soldier Lua tests check mesh winding and weights, bind/deformed poses,
+animated bounds, rotated hit volumes, headshot/duplicate-damage rules, routing,
+perception, occlusion, death/reset and 30/60/144-FPS equivalence. Native Metal
+validation checks patrol, actual head/body shots, return fire, wall occlusion,
+shop entry, repeated replacement, keyboard restart and clean teardown. The
+snapshot reports Lua-side palette upload time and AI tick cost; these are not
+GPU timings or whole-frame performance measurements. A debug `wasm-web` bundle
+also passed a manual WebGL 2 browser check for world/soldier rendering, walking,
+enemy return fire, player death and key-9 restart, with no new console errors.
+That check caught and fixed a GLSL ES reserved-word error accepted by Metal.
+The browser check is narrower than the native automated suites; physical mobile
+devices and full browser regression coverage remain untested.
 
 ## Capsule movement
 
@@ -124,7 +197,7 @@ speed, corners, thin-wall sweeps, stairs, slopes, ceilings, door widths and
 entry into W2. The feature suite covers tactical sprint, slide duration and
 jump exits, valid/invalid mantle routes, crouch-only landings, lean clearance
 and cancellation on death. Native validation currently targets macOS/Metal;
-browser/mobile validation remains a later milestone.
+full browser/mobile traversal-suite validation remains a later milestone.
 
 ## Weapons and viewmodel rendering
 
@@ -198,7 +271,7 @@ spread/recoil, geometry bounds/winding and continuous collision/penetration.
 The native weapon suite uses real input bindings, fixed ticks and Bullet targets,
 checks damage through wood versus concrete and at a muzzle-obstructing wall,
 and captures hip/ADS/reload/inspection views. Native validation targets
-macOS/Metal; browser/mobile runtime validation remains outstanding.
+macOS/Metal; full browser/mobile weapon-suite validation remains outstanding.
 
 ## Framework contract
 
@@ -237,7 +310,7 @@ impact and tracer notifications; surface audio keys do not synthesize or play
 sound. Future systems supply their remaining event producers.
 
 Actor, camera, generated mesh batches and structural collision objects are wired.
-World batches and collision objects belong to the world module; future enemy game objects belong to AI.
+World batches and collision objects belong to the world module; enemy game objects belong to AI.
 Each system must release its generated Defold resources in `final`.
 
 ## Generated world
@@ -312,7 +385,19 @@ pistol. `weapons.result` returns its frozen final snapshot. `weapons.range`
 creates optional fixtures at z=23..47 and reports target health; reset the player
 to x=-5/0/5, y=0.01, z=40, yaw=0 for bare/wood/concrete lanes.
 
-Discover commands with `game.application_catalog(kind="command")`. For example:
+Discover commands with `game.application_catalog(kind="command")`.
+
+`ai.snapshot` reports state, health, travel, shots, mesh/palette sizes and upload
+cost. `ai.configure` takes `{enabled=false}` to freeze a shootable soldier.
+`ai.reset` replaces it with full health, optionally at `{position={x,y,z},yaw}`,
+while preserving that pause setting. `ai.volumes` returns live hit-volume centres.
+`ai.route` takes `{target={x,y,z}}` and returns validated waypoints; `ai.patrol`
+takes `{points={{x,y,z},...}}` (1–8 points) to exercise normal navigation without
+changing the behavior code. `gameplay.restart` performs the same encounter reset
+as key 9. Native resources are released on replacement/finalization, and the
+shared mesh resource is retained until finalization.
+
+Example:
 
 ```python
 from automation_bridge import editor

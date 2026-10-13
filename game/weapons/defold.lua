@@ -74,7 +74,8 @@ function M.new(ctx,mesh_factory,effect_factory)
         if length<.01 then return end
         local e=effect(V.point(shot.from,delta,.5),{x=0,y=0,z=0},{.95,.78,.36},.008,.035)
         e.tracer=true;e.length=length
-        go.set_rotation(vmath.quat_from_to(vmath.vector3(0,0,1),vmath.vector3(delta.x/length,delta.y/length,delta.z/length)),e.id)
+        local q=V.forward_rotation(delta)
+        go.set_rotation(vmath.quat(q.x,q.y,q.z,q.w),e.id)
     end)
     return a
 end
@@ -113,20 +114,24 @@ function M.update(a,ctx,dt,shown)
     end
     return sample
 end
-function M.query(registries)
+function M.query(registries,options)
+    options=options or {}
     return {segment=function(_,from,dir,length)
         local destination=V.point(from,dir,length)
         local hits=physics.raycast(vmath.vector3(from.x,from.y,from.z),
-            vmath.vector3(destination.x,destination.y,destination.z),GROUPS,{all=true}) or {}
+            vmath.vector3(destination.x,destination.y,destination.z),options.groups or GROUPS,{all=true}) or {}
         local result,seen={},{}
         for _,hit in ipairs(hits) do
             local shape
             for _,registry in ipairs(registries) do shape=registry[hit.id] or shape end
-            if shape then
+            if shape and shape.disabled then
+                seen[hit.id]=true
+            elseif shape then
                 local interval=trace.box(shape,from,dir,length)
                 if interval then result[#result+1]=interval;seen[hit.id]=true end
             else
-                result[#result+1]={id=hash_to_hex(hit.id),surface="concrete",enter=hit.fraction*length,
+                local actor=options.actors and options.actors[hit.id]
+                result[#result+1]={id=hash_to_hex(hit.id),surface=actor and "flesh" or "concrete",actor=actor,enter=hit.fraction*length,
                     normal={x=hit.normal.x,y=hit.normal.y,z=hit.normal.z}}
             end
         end
@@ -134,7 +139,7 @@ function M.query(registries)
         -- only containing boxes, using the very same collider descriptions.
         for _,registry in ipairs(registries) do
             for id,shape in pairs(registry) do
-                if not seen[id] then
+                if not seen[id] and not shape.disabled then
                     local interval=trace.box(shape,from,dir,length)
                     if interval and interval.enter<=1e-7 then result[#result+1]=interval end
                 end

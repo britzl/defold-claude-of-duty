@@ -1,0 +1,5 @@
+material: "/soldiers/soldier.material"
+vertices: "/soldiers/empty.buffer"
+primitive_type: PRIMITIVE_TRIANGLES
+position_stream: "position"
+normal_stream: "normal"
