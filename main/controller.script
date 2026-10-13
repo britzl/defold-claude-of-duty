@@ -1,0 +1,108 @@
+local runtime = require "game.runtime"
+local input = require "game.input"
+local combat = require "game.combat"
+local config = require "game.config"
+
+local actions = {}
+for _, name in ipairs(input.actions) do actions[hash(name)] = name end
+local APPLY_DAMAGE = hash("apply_damage")
+local HUD_STATE = hash("hud_state")
+
+local function snapshot(ctx)
+    return {
+        tick = ctx.time.tick, elapsed = ctx.time.elapsed,
+        frame = ctx.time.frame, frame_elapsed = ctx.time.frame_elapsed,
+        fixed_dt = ctx.time.fixed_dt, alpha = ctx.time.alpha,
+        health = ctx.player.actor.health, alive = ctx.player.actor.alive,
+        move_x = ctx.player.intent.move_x, move_z = ctx.player.intent.move_z,
+        physics = sys.get_config_string("physics.type"),
+        gravity = sys.get_config_number("physics.gravity_y"),
+        physics_scale = sys.get_config_number("physics.scale"),
+    }
+end
+
+local function window_event(self, event)
+    if event == window.WINDOW_EVENT_FOCUS_LOST then input.reset(self.ctx.input) end
+end
+
+function init(self)
+    assert(sys.get_config_int("engine.fixed_update_frequency") == config.fixed_frequency,
+        "game.project and game.config must agree on the fixed update frequency")
+    assert(math.abs(sys.get_config_number("physics.gravity_y") - config.gravity) < 0.00001,
+        "game.project and game.config must agree on gravity")
+    assert(sys.get_config_string("physics.type") == "3D"
+        and sys.get_config_number("physics.scale") == 1
+        and sys.get_config_boolean("physics.use_fixed_timestep"),
+        "Gameplay requires metre-based 3D physics with a fixed timestep")
+    self.ctx = runtime.new()
+    self.position = vmath.vector3()
+    self.camera_position = vmath.vector3()
+    self.hud = {}
+    msg.post(".", "acquire_input_focus")
+    window.set_listener(window_event)
+    if automation_bridge then
+        automation_bridge.command("gameplay.snapshot", function()
+            return snapshot(self.ctx)
+        end)
+        automation_bridge.describe("command", "gameplay.snapshot", {
+            description = "Read simulation timing, input intent, health and physics configuration.",
+            output_schema = { type = "object" },
+        })
+        automation_bridge.command("gameplay.damage", function(hit)
+            return { accepted = combat.request(self.ctx.combat, hit) }
+        end)
+        automation_bridge.describe("command", "gameplay.damage", {
+            description = "Queue a debug hit. Health changes at the next fixed tick through the combat owner.",
+            input_schema = { type = "object", required = { "target", "amount" },
+                properties = { target = { type = "string" }, amount = { type = "number", exclusiveMinimum = 0 } } },
+            output_schema = { type = "object", properties = { accepted = { type = "boolean" } } },
+        })
+    end
+    print("Gameplay framework ready: 120 Hz, 3D physics, metres, gravity -20.6 m/s^2")
+end
+
+function fixed_update(self, dt)
+    runtime.fixed_update(self.ctx, dt)
+    -- Authoritative actor transform for future collision components.
+    local p = self.ctx.player.position
+    self.position.x, self.position.y, self.position.z = p.x, p.y, p.z
+    go.set_position(self.position, "/player")
+end
+
+function update(self, dt)
+    runtime.update(self.ctx, dt)
+end
+
+function late_update(self, dt)
+    -- Camera and GUI see interpolated presentation, never drive simulation.
+    local out = self.ctx.presentation
+    self.camera_position.x, self.camera_position.y, self.camera_position.z = out.camera.x, out.camera.y, out.camera.z
+    go.set_position(self.camera_position, "/camera")
+    local hit = self.ctx.fx.hitmarker > 0
+    local hurt = self.ctx.fx.damage_flash > 0
+    if self.hud.health ~= out.health or self.hud.hit ~= hit or self.hud.hurt ~= hurt then
+        self.hud.health, self.hud.hit, self.hud.hurt = out.health, hit, hurt
+        msg.post("/hud#gui", HUD_STATE, self.hud)
+    end
+end
+
+function on_input(self, action_id, action)
+    if not action_id then
+        input.look(self.ctx.input, action.dx or 0, action.dy or 0)
+        return false
+    end
+    local name = actions[action_id]
+    if name then return input.button(self.ctx.input, name, action) end
+    return false
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end
+end
+
+function final(self)
+    window.set_listener(nil)
+    msg.post(".", "release_input_focus")
+    -- Automation Bridge clears callbacks with the Lua application lifecycle.
+    runtime.final(self.ctx)
+end

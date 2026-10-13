@@ -1,0 +1,56 @@
+mouse_trigger {
+  input: MOUSE_BUTTON_1
+  action: "fire"
+}
+mouse_trigger {
+  input: MOUSE_BUTTON_2
+  action: "aim"
+}
+key_trigger {
+  input: KEY_W
+  action: "forward"
+}
+key_trigger {
+  input: KEY_S
+  action: "back"
+}
+key_trigger {
+  input: KEY_A
+  action: "left"
+}
+key_trigger {
+  input: KEY_D
+  action: "right"
+}
+key_trigger {
+  input: KEY_SPACE
+  action: "jump"
+}
+key_trigger {
+  input: KEY_LSHIFT
+  action: "sprint"
+}
+key_trigger {
+  input: KEY_LCTRL
+  action: "crouch"
+}
+key_trigger {
+  input: KEY_Z
+  action: "prone"
+}
+key_trigger {
+  input: KEY_R
+  action: "reload"
+}
+key_trigger {
+  input: KEY_F
+  action: "inspect"
+}
+key_trigger {
+  input: KEY_Q
+  action: "lean_left"
+}
+key_trigger {
+  input: KEY_E
+  action: "lean_right"
+}

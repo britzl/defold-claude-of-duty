@@ -1,0 +1,21 @@
+local HUD_STATE = hash("hud_state")
+local WHITE = vmath.vector4(0.9, 0.92, 0.95, 1)
+local RED = vmath.vector4(1, 0.25, 0.2, 1)
+
+function init(self)
+    self.health = gui.new_text_node(vmath.vector3(32, 32, 0), "HEALTH 100")
+    gui.set_font(self.health, "default")
+    gui.set_pivot(self.health, gui.PIVOT_W)
+    gui.set_id(self.health, "health")
+    self.crosshair = gui.new_text_node(vmath.vector3(480, 320, 0), "+")
+    gui.set_font(self.crosshair, "default")
+    gui.set_id(self.crosshair, "crosshair")
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == HUD_STATE then
+        gui.set_text(self.health, string.format("HEALTH %d", math.ceil(message.health)))
+        gui.set_color(self.health, message.hurt and RED or WHITE)
+        gui.set_text(self.crosshair, message.hit and "x" or "+")
+    end
+end

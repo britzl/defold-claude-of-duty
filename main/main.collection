@@ -1,0 +1,18 @@
+name: "main"
+instances {
+  id: "controller"
+  prototype: "/main/controller.go"
+}
+instances {
+  id: "camera"
+  prototype: "/main/camera.go"
+}
+instances {
+  id: "hud"
+  prototype: "/main/hud.go"
+}
+embedded_instances {
+  id: "player"
+  data: ""
+}
+scale_along_z: 1

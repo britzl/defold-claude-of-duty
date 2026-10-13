@@ -1,0 +1,32 @@
+[bootstrap]
+main_collection = /main/main.collectionc
+
+[script]
+shared_state = 1
+
+[engine]
+fixed_update_frequency = 120
+
+[display]
+width = 960
+height = 640
+high_dpi = 1
+
+[android]
+input_method = HiddenInputField
+
+[physics]
+type = 3D
+gravity_y = -20.6
+scale = 1.0
+use_fixed_timestep = 1
+
+[html5]
+scale_mode = stretch
+
+[project]
+title = Claude of Duty
+dependencies#0 = https://github.com/defold/extension-automation-bridge/archive/refs/tags/2.5.0.zip
+
+[automation_bridge]
+application_api = 1
