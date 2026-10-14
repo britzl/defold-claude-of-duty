@@ -4,7 +4,7 @@ local daylight=require "game.render.daylight"
 local shadows=require "game.render.shadows"
 local M = { atlas_tile = atlas.scratch_size, surface_count = #atlas.surfaces, environment_size = daylight.environment_size,
     shadow_size = shadows.size, radiance_range = 8, max_lights = 4 }
-M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7, cascades = 8, shadow_visibility = 9 }
+M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7, cascades = 8, shadow_visibility = 9, depth = 10, geometry_normals = 11, ao = 12, contact = 13, occlusion_raw = 14 }
 -- A format constant alone does not prove renderability/filtering/blending.
 -- Enable the measured backend first; qualify WebGL/mobile before expanding it.
 function M.pipeline(adapter, half_float, requested)
@@ -16,7 +16,7 @@ function M.pipeline(adapter, half_float, requested)
         tone_mapper="agx_neutral",output="srgb",exposure_mode="fixed"}
 end
 function M.defaults()
-    return { shadows = true, normal_maps = true, local_lights = true, fog = true,
+    return { ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
         interior_lighting = true, environment_filter = true, environment_level = 0,
         bloom = true, weathering = true, micro_detail = true, parallax = true,
         exposure = 1, view = "scene", atlas_half = 0, atlas_page = 0 }
@@ -66,14 +66,14 @@ function M.select_lights(lights,camera)
 end
 function M.dimensions(w,h)
     if w<=0 or h<=0 then return nil end
-    return { width=w, height=h, bloom_width=math.max(1,math.floor(w/4)), bloom_height=math.max(1,math.floor(h/4)) }
+    return { width=w, height=h, occlusion_width=math.max(1,math.ceil(w/2)), occlusion_height=math.max(1,math.ceil(h/2)), bloom_width=math.max(1,math.floor(w/4)), bloom_height=math.max(1,math.floor(h/4)) }
 end
 function M.target_bytes(w,h,hdr,baking)
     local d=M.dimensions(w,h)
     if not d then return 0 end
     -- HDR radiance, RGBA8 data maps, conservative 32-bit depth; no driver overhead.
     local colour=hdr and 8 or 4
-    return w*h*(colour+4)*2 + d.bloom_width*d.bloom_height*colour*2 + shadows.atlas_size^2*8
+    return w*h*((colour+4)*2+12) + d.occlusion_width*d.occlusion_height*4 + d.bloom_width*d.bloom_height*colour*2 + shadows.atlas_size^2*8
         + atlas.width*atlas.height*4*3 + (baking and atlas.width*atlas.height*4+2*atlas.scratch_size^2*4 or 0) + daylight.environment_width*daylight.environment_height*colour
 end
 return M

@@ -46,10 +46,19 @@ vec3 brdf(vec3 albedo,float roughness,float metal,vec3 n,vec3 v,vec3 l)
     vec3 f=f0+(1.0-f0)*pow(1.0-max(dot(h,v),0.0),5.0);
     return ((1.0-f)*(1.0-metal)*albedo/PI + d*g*f/max(4.0*nv*nl,0.001))*nl;
 }
+#ifdef WORLD_SCREEN_OCCLUSION
+uniform lowp sampler2D occlusion_texture;
+uniform highp vec4 screen_effects; // inverse dimensions, AO/contact enable
+#endif
 vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec3 geometric)
 {
     float visibility=shadow_visibility(p,geometric);
     if(shadow_data[17].w>.5) return shadow_debug(p,visibility);
+    vec2 screen_visibility=vec2(1.0);
+#ifdef WORLD_SCREEN_OCCLUSION
+    screen_visibility=mix(vec2(1.0),texture2D(occlusion_texture,gl_FragCoord.xy*screen_effects.xy).rg,screen_effects.zw);
+#endif
+    visibility=min(visibility,screen_visibility.y);
     vec3 v=normalize(eye_position.xyz-p);
     vec3 sun=normalize(sun_direction.xyz);
     vec3 result=brdf(albedo,roughness,metal,n,v,sun)*sun_radiance.rgb*visibility;
@@ -62,8 +71,12 @@ vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec
     // Restrained warm bounce from sunlit surfaces on the opposite side; diffuse
     // only, gated indoors along with the sky. Material cavities are applied once.
     diffuse+=sun_radiance.rgb*ground_radiance.rgb*indirect.w*max(dot(n,-sun)*.5+.5,0.0);
-    result+=((1.0-specular_weight)*(1.0-metal)*albedo*diffuse
-        +reflected*specular_weight*indirect.y)*ao*indoor;
+    // Macro AO and authored material cavities overlap: take their minimum,
+    // not their product. Glossy reflections retain directional environment light.
+    float diffuse_ao=min(ao,screen_visibility.x);
+    float specular_ao=min(ao,mix(1.0,screen_visibility.x,roughness*roughness));
+    result+=((1.0-specular_weight)*(1.0-metal)*albedo*diffuse*diffuse_ao
+        +reflected*specular_weight*indirect.y*specular_ao)*indoor;
     if (features.z>0.5) for (int i=0;i<4;i++) {
         vec3 delta=light_positions[i].xyz-p;
         float distance_squared=dot(delta,delta);

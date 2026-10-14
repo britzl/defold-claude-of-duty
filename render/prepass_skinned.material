@@ -1,0 +1,9 @@
+name: "prepass_skinned"
+tags: "depth_pass"
+vertex_program: "/render/prepass_skinned.vp"
+fragment_program: "/render/prepass.fp"
+vertex_space: VERTEX_SPACE_LOCAL
+vertex_constants { name: "view_proj" type: CONSTANT_TYPE_VIEWPROJ }
+vertex_constants { name: "view" type: CONSTANT_TYPE_VIEW }
+vertex_constants { name: "world" type: CONSTANT_TYPE_WORLD }
+vertex_constants { name: "bone_palette" type: CONSTANT_TYPE_USER_MATRIX4 value { x: 1 y: 0 z: 0 w: 0 } value { x: 0 y: 1 z: 0 w: 0 } value { x: 0 y: 0 z: 1 w: 0 } value { x: 0 y: 0 z: 0 w: 1 } }

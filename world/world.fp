@@ -7,6 +7,7 @@ uniform highp vec4 surface;
 uniform lowp sampler2D albedo_texture;
 uniform lowp sampler2D normal_texture;
 uniform lowp sampler2D material_texture;
+#define WORLD_SCREEN_OCCLUSION
 #include "/render/lighting.glsl"
 #include "/render/surface_sampling.glsl"
 #include "/render/weathering.glsl"

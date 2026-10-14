@@ -2,6 +2,7 @@ varying highp vec3 var_local;
 varying highp vec3 var_world;
 varying mediump vec3 var_normal;
 varying lowp vec4 var_color;
+#define WORLD_SCREEN_OCCLUSION
 #include "/render/lighting.glsl"
 void main() {
     vec3 p=var_local;

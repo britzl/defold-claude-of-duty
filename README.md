@@ -67,6 +67,7 @@ PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/shadows_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/occlusion_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ui_smoke.py
 ```
@@ -657,7 +658,7 @@ for every supported shot, recording `repeatability.json` and separate per-launch
 manifests. The overlapping wall/slab and trim surfaces have been repaired and
 buried faces clipped. Shared trim/slab edges also use matching endpoints to
 prevent one-pixel depth ties at grazing angles. No pixels are masked or tolerated.
-Catalogue version 6 expands the repeatability gate to 34 supported shots and retains the 0.1–500 m world clip
+Catalogue version 7 expands the repeatability gate to 36 supported shots and retains the 0.1–500 m world clip
 range; the 0.1 m near plane improves depth precision while remaining inside the
 player's wall clearance. The separate weapon clip range is unchanged.
 
@@ -797,7 +798,7 @@ fill under the canopies while preserving their open sides. The deep-interior
 floor is tuned to 0.18 for this renderer's fixed exposure; closed upper windows
 admit no additional sky. Cooler sky fill, warm ground bounce and bounded room
 lights remain distinct. These are coarse authored visibility volumes, not GI or
-per-prop occlusion; GTAO/contact shadows remain step 7. The eight-volume limit
+per-prop occlusion; step 7 supplies screen-space AO/contact detail. The eight-volume limit
 is checked explicitly and is independent of room-light selection. The laboratory
 ignores world volumes so its overlapping test geometry remains neutral.
 
@@ -834,9 +835,37 @@ reads) for bounded contact-hardening softness. Kernels stay fixed in light space
 there is no screen-noise rotation to shimmer before TAA. Close blockers remain
 sharp, distant blockers soften with a 0.022 sun-radius factor, capped at four
 texels. This is a bounded approximation to the reference PCSS, not exact renderer
-parity. Local-light shadows and screen-space occlusion remain steps 9 and 7.
+parity. Local-light shadows remain step 9.
 
-Pass order is four sun cascades → sky/world → isolated weapon → two quarter-resolution
+Rendering step 7 adds a full-resolution world prepass with the same static geometry,
+25-bone skinning and binary cutout coverage as colour/shadows. RGBA8 stores
+16-bit logarithmic view depth in RG and octahedral geometric view normals in BA;
+its separate depth attachment resolves visibility. Nearest sampling and explicit
+sky coverage work on both Metal HDR and the WebGL compatibility pipeline.
+Weapons, particles and GUI are excluded. Material normal maps stay in the colour
+pass, avoiding false occlusion from small surface bumps.
+
+Half-resolution AO integrates horizon arcs over four fixed slices with six
+quadratically spaced samples on each side, within a 0.85 m radius. Short contact
+rays take twelve steps over 0.4 m toward the current sun, with normal/depth bias,
+12 cm thickness rejection, distance falloff and screen-edge fading. A joint 3×3
+bilateral resolve uses full-resolution normals and surface-plane distance to
+filter and upsample both channels. Incompatible thin-edge samples fall back to
+lit visibility; sky remains white. Offscreen/hidden occluders cannot contribute.
+Fixed samples are deterministic but retain some spatial banding in the isolated
+AO view; motion-vector temporal accumulation remains step 8.
+
+AO affects indirect diffuse and roughness-weighted indirect specular. Taking the
+minimum of material cavity visibility and screen AO prevents multiplying the
+same cavity twice. Contact visibility takes the minimum with cascaded sun
+visibility and affects only direct sunlight; local room lights retain their
+existing response. The weapon samples neither screen-space effect.
+`ambient_occlusion` and `contact_shadows` independently toggle the effects; both
+off skips prepass/effect draws unless a depth diagnostic needs the prepass.
+Buffers are cleared to lit visibility when disabled and retain bounded ownership.
+
+Pass order is four sun cascades → depth/normals → AO/contact → bilateral resolve
+→ sky/world → isolated weapon → two quarter-resolution
 bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
 height density along the eye ray. Rendering step 2 enables linear RGBA16F for
 scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
@@ -862,13 +891,15 @@ At the 1280 × 720 capture size, estimated HDR target storage is:
 
 | Preset | Atlas size | Steady / bake peak (MiB) | Bake jobs / draws |
 | --- | --- | ---: | ---: |
-| Low | 1024 × 1368 | 71.80 / 77.64 | 825 / 1245 |
-| Medium | 2048 × 2712 | 119.33 / 142.52 | 921 / 1389 |
-| High | 4096 × 5408 | 309.27 / 401.77 | 1017 / 1533 |
+| Low | 1024 × 1368 | 83.22 / 89.07 | 825 / 1245 |
+| Medium | 2048 × 2712 | 130.76 / 153.94 | 921 / 1389 |
+| High | 4096 × 5408 | 320.69 / 413.19 | 1017 / 1533 |
 
 The environment added 1.61 MiB on HDR (0.80 MiB on the compatibility path)
 in step 5. Step 6 adds 24 MiB for cascaded colour/depth storage on both paths.
-The sampler count and nine-target ownership remain unchanged. Four static and
+Step 7 adds 11.43 MiB at this size for the full-resolution prepass and resolved
+occlusion plus half-resolution raw occlusion. Ownership is twelve steady targets
+and fifteen during baking. World materials gain one sampler. Four static and
 four skinned shadow submissions replace the previous one of each, with per-cascade
 frustum culling; frozen captures omit the skinned submissions. These material
 presets currently share the same shadow resolution; mobile budgets remain open.
@@ -876,16 +907,22 @@ The previous six-recipe implementation used 102.49 / 134.60 MiB at this size.
 These are allocation estimates including conservative 32-bit depth, excluding
 meshes and driver overhead; they are not measured process peaks. The world now
 uses 86 material/chunk batches, 36,552 vertices, 2.51 MiB of mesh streams and the
-same 190 colliders. Resize affects only four screen-sized targets; zero-sized
+same 190 colliders. Resize affects seven screen-sized targets; zero-sized
 windows skip drawing and finalization releases owned targets.
 
 `renderer.snapshot` reports cascade splits, world texel sizes, atlas dimensions and
 shadow submissions, plus bake jobs/draws, current/peak target bytes, local-light count,
-shadow frames, environment dimensions/levels/sample count, volume count and active settings. `renderer.configure` accepts booleans
-`shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
+shadow frames, environment dimensions/levels/sample count, volume count and active settings.
+It also reports prepass/effect submissions, occlusion dimensions, sample counts,
+metre-space radius/ray length and the depth/normal format. `renderer.configure` accepts booleans
+`ambient_occlusion`, `contact_shadows`, `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
 `micro_detail`, `parallax`, `interior_lighting`, `environment_filter`; numeric `exposure` in
 0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
-`environment`, `environment_atlas`, `cascades`, `shadow_visibility` or `hdr_probe`.
+`environment`, `environment_atlas`, `cascades`, `shadow_visibility`, `hdr_probe`,
+`depth`, `geometry_normals`, `ao`, `contact` or `occlusion_raw`.
+`depth` shows logarithmic camera depth (white sky); `geometry_normals` shows
+view-space geometry normals (black sky). `ao`/`contact` show resolved visibility;
+`occlusion_raw` shows unfiltered AO in red and contact in green.
 `shadow` shows all four atlas tiles; `cascades` colours the receiver slices and
 blend bands; `shadow_visibility` isolates sun visibility. `hdr_probe` renders diagnostic HDR stripes into
 the actual scene/weapon targets and displays transfer/filter/blend samples.
@@ -995,6 +1032,31 @@ sustained combat or mobile budgets. New artifacts are:
 - `captures/rendering/shadows-review`: labelled before/after stills, motion samples and cost comparisons.
 - `captures/rendering/shadow-validation`: atlas/visibility diagnostics, projected cutout samples and native GPU report.
 - `captures/rendering/shadows-browser`: WebGL captures, GPU queries and build provenance.
+
+
+Step 7 validation passes 146 Lua checks, the native renderer/HDR suites and
+`tests/occlusion_smoke.py`. Pixel gates verify unit view normals and projected
+log depth, lit sky/open floor, occlusion beside a table foot, a short sun contact,
+actual cutout holes, animated soldier depth, independent toggles and exact camera,
+resize and motion returns. All 36 native captures match every RGB pixel across
+three launches; the five 121-frame sweeps remain reproducible. The 89-stage
+WebGL 2 compatibility run passes the same projected-contact/cutout checks,
+material regressions and exact camera return on Chromium / ANGLE Metal / M3 Pro.
+
+New artifacts are:
+
+- `captures/rendering/occlusion-final`: three-launch stills, five sweeps, source fingerprints and native profiles.
+- `captures/rendering/occlusion-review`: labelled step-6/step-7 comparisons and rendering costs.
+- `captures/rendering/occlusion-validation`: native depth/normal/AO/contact diagnostics, projected samples and A/B costs.
+- `captures/rendering/occlusion-browser`: WebGL captures, pixel checks, GPU queries and build provenance.
+
+The frozen native street adds 70 draws (398 → 468). Render-script CPU samples
+vary with scheduling, so short-run differences are not treated as a speedup or
+stable percentage. Target storage increases by 11.43 MiB at 1280 × 720 on either
+colour pipeline. Browser timing scope and before/after samples are recorded in
+`captures/rendering/occlusion-review/costs.json`. Physical mobile, other native
+backends, forced browser context recovery and sustained-combat budgets remain
+unqualified. These checks do not qualify WebGL floating-point HDR.
 
 ## Generated audio
 

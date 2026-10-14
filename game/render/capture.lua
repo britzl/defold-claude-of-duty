@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 6, width = 1280, height = 720, settle_frames = 32,
+local M = { version = 7, width = 1280, height = 720, settle_frames = 32,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -41,6 +41,10 @@ shots[#shots+1]={id="shadow_distance",position={0,3,27},target={0,1.5,-30},fov=6
     reference=false,purpose="All four cascades, near/distant coverage and blended boundaries in motion."}
 shots[#shots+1]={id="shadow_remote",position={164,4,7},target={160,.5,0},fov=65,
     laboratory=true,reference=false,purpose="Camera-following shadows at a fixture 160 m outside the old fixed map."}
+shots[#shots+1]={id="contact_furniture",position={7.5,1.7,5.3},target={4.8,.4,2.1},fov=60,
+    laboratory=true,reference=false,purpose="Table legs, near-ground contacts and silhouette rejection."}
+shots[#shots+1]={id="contact_corner",position={-4.1,1.8,.2},target={-6.7,.5,-3.6},fov=65,
+    laboratory=true,reference=false,purpose="Stacked boxes and floor/wall contact without black halos."}
 local extra=require("game.render.laboratory").extra_materials
 for i,name in ipairs(extra) do
     local x=8.4+i*2.4

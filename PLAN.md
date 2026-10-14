@@ -192,8 +192,8 @@ combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
 physical mobile validation is still outstanding. All fifteen planned surface recipes, material mip filtering and world weathering
 are now implemented (steps 3–4 below);
 Unified daylight, filtered environment lighting and interior attenuation are
-implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Local-light
-shadows, ambient occlusion and temporal effects remain later stages.
+implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Local-light
+shadows and temporal effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -448,7 +448,27 @@ short 1024² browser street GPU sample from 3.76 to 6.25 ms. Comparisons and sco
 costs are in `captures/rendering/shadows-review`.
 Physical mobile, other native backends, forced browser context recovery and
 sustained combat budgets remain separate qualification work. Step 7, depth/normals,
-ambient occlusion and contact shadows, is the next rendering improvement.
+ambient occlusion and contact shadows, is implemented below.
+
+Step 7 implementation is complete: a shared static/skinned prepass stores
+logarithmic depth and octahedral geometric normals in portable RGBA8, including
+the same perforated coverage as colour/shadows. Half-resolution GTAO-style
+horizon integration and 0.4 m sun rays feed a full-resolution normal/plane-aware
+bilateral resolve. AO affects indirect light only and combines with material
+cavities by minimum; contact visibility affects sunlight only and combines with
+cascades by minimum. The separate weapon, particles and GUI are excluded.
+Independent toggles and depth/normal/raw/resolved diagnostic views are exposed.
+
+The new targets add 11.43 MiB at 1280 × 720; medium HDR now estimates
+130.76 MiB steady / 153.94 MiB bake peak, with twelve steady targets. Static
+prepass, optional skinned prepass and two fullscreen draws add contact depth.
+The native frozen street has 468 submitted draws versus 398 with effects off.
+Fixed spatial samples avoid frame noise but retain some AO diagnostic banding;
+offscreen occluders, temporal filtering and physical mobile qualification remain
+open. Validation passes 146 Lua checks, native renderer/HDR and projected
+contact/depth checks, 36 views with exact pixels across three launches, five
+121-frame sweeps and 89 WebGL stages with pixel assertions. See `README.md`
+for costs, limitations and local before/after artifacts.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

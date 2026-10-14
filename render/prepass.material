@@ -1,0 +1,7 @@
+name: "prepass"
+tags: "depth_pass"
+vertex_program: "/render/prepass.vp"
+fragment_program: "/render/prepass.fp"
+vertex_space: VERTEX_SPACE_LOCAL
+vertex_constants { name: "view_proj" type: CONSTANT_TYPE_VIEWPROJ }
+vertex_constants { name: "view" type: CONSTANT_TYPE_VIEW }

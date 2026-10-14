@@ -1,5 +1,5 @@
--- Generated surface maps + sky environment -> sun shadow -> world -> isolated
--- weapon -> bloom -> shared tone mapping -> GUI. Every target is owned here.
+-- Generated maps/sky -> sun shadows -> depth/normals -> AO/contact -> world
+-- -> isolated weapon -> bloom -> tone mapping -> GUI. Every target is owned here.
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
@@ -23,11 +23,18 @@ local function resize(self)
     if d.width~=self.width or d.height~=self.height then
         self.width,self.height=d.width,d.height
         self.bloom_width,self.bloom_height=d.bloom_width,d.bloom_height
+        self.occlusion_width,self.occlusion_height=d.occlusion_width,d.occlusion_height
         for _,name in ipairs({"scene","weapon","bloom_a","bloom_b"}) do
             local small=name=="bloom_a" or name=="bloom_b"
             local w,h=small and d.bloom_width or d.width,small and d.bloom_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
             else self.targets[name]=colour_target(w,h,not small,false,false,self.radiance_format) end
+        end
+        for _,name in ipairs({"depth_normal","occlusion_raw","occlusion"}) do
+            local half=name=="occlusion_raw"
+            local w,h=half and d.occlusion_width or d.width,half and d.occlusion_height or d.height
+            if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
+            else self.targets[name]=colour_target(w,h,name=="depth_normal",true) end
         end
         self.gui_projection=vmath.matrix4_orthographic(0,d.width,0,d.height,-1,1)
         self.resizes=self.resizes+1
@@ -138,7 +145,11 @@ local function report(self)
         shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
         shadow_draw_passes=self.shadow_draw_passes or 0,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
-        target_count=self.targets.scratch_a and 12 or 9,
+        target_count=self.targets.scratch_a and 15 or 12,
+        occlusion_width=self.occlusion_width,occlusion_height=self.occlusion_height,
+        prepass_draw_passes=self.prepass_draw_passes or 0,occlusion_draw_passes=self.occlusion_draw_passes or 0,
+        occlusion_radius=.85,contact_length=.4,occlusion_slices=4,occlusion_steps=6,contact_steps=12,
+        depth_normal_format="rgba8_log_depth_oct_normal",
         target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,self.targets.scratch_a~=nil),
         peak_target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,true),resizes=self.resizes,
         local_light_count=self.light_count,frames=self.frames,settings=self.options,
@@ -172,6 +183,7 @@ function init(self)
     self.post_constants=render.constant_buffer()
     self.bloom_constants=render.constant_buffer()
     self.probe_constants=render.constant_buffer()
+    self.occlusion_constants=render.constant_buffer()
     for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants}) do
         constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
     end
@@ -263,11 +275,59 @@ function update(self)
             self.shadow_frames=self.shadow_frames+1
         end
 
+        -- World geometry only; identical skinning and cutouts to colour/shadows.
+        -- This data target is deliberately portable RGBA8, independent of HDR.
+        local screen_debug=settings.views[o.view]>=10
+        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug
+        self.prepass_draw_passes,self.occlusion_draw_passes=0,0
+        render.set_render_target(t.depth_normal)
+        render.set_viewport(0,0,self.width,self.height)
+        render.set_depth_mask(true)
+        render.clear({[COLOR]=vmath.vector4(1,0,.5,.5),[DEPTH]=1})
+        if need_depth then
+            render.set_camera(WORLD_CAMERA,{use_frustum=true})
+            render.enable_material("prepass")
+            render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow)
+            self.prepass_draw_passes=1
+            if not self.capture.active then
+                render.enable_material("prepass_skinned")
+                render.draw(self.soldier_shadow)
+                self.prepass_draw_passes=2
+            end
+            render.disable_material()
+        end
+        local constants=self.occlusion_constants
+        constants.screen_projection=vmath.vector4(projection.m00,projection.m11,projection.m02,projection.m12)
+        constants.screen_size=vmath.vector4(self.width,self.height,self.occlusion_width,self.occlusion_height)
+        constants.occlusion_params=vmath.vector4(.85,.4,o.ambient_occlusion and 1 or 0,o.contact_shadows and 1 or 0)
+        local sun=daylight.sun_direction
+        constants.sun_view=view*vmath.vector4(sun[1],sun[2],sun[3],0)
+        render.set_render_target(t.occlusion_raw)
+        render.set_viewport(0,0,self.occlusion_width,self.occlusion_height)
+        if o.ambient_occlusion or o.contact_shadows then
+            bind("depth_normal_texture",t.depth_normal)
+            fullscreen(self,"occlusion",constants)
+            render.set_render_target(t.occlusion)
+            render.set_viewport(0,0,self.width,self.height)
+            bind("occlusion_texture",t.occlusion_raw)
+            fullscreen(self,"occlusion_filter",constants)
+            render.disable_texture("depth_normal_texture")
+            render.disable_texture("occlusion_texture")
+            self.occlusion_draw_passes=2
+        else
+            render.clear({[COLOR]=vmath.vector4(1)})
+            render.set_render_target(t.occlusion)
+            render.clear({[COLOR]=vmath.vector4(1)})
+        end
+        self.lighting.screen_effects=vmath.vector4(1/self.width,1/self.height,
+            o.ambient_occlusion and 1 or 0,o.contact_shadows and 1 or 0)
+
         render.set_render_target(t.scene)
         render.set_viewport(0,0,self.width,self.height)
         render.set_depth_mask(true)
         render.clear({[COLOR]=vmath.vector4(0,0,0,1),[DEPTH]=1})
         fullscreen(self,"sky",self.sky_constants)
+        bind("occlusion_texture",t.occlusion)
         bind("shadow_texture",t.shadow)
         bind("environment_texture",t.environment)
         bind("albedo_texture",t.albedo)
@@ -281,6 +341,7 @@ function update(self)
         render.draw(scene,{constants=self.lighting})
         if not self.capture.active then render.draw_debug3d() end
 
+        render.disable_texture("occlusion_texture")
         render.set_render_target(t.weapon)
         render.clear({[COLOR]=vmath.vector4(0,0,0,0),[DEPTH]=1})
         render.set_camera(WEAPON_CAMERA,{use_frustum=true})
@@ -330,7 +391,7 @@ function update(self)
         bind("weapon_texture",t.weapon)
         bind("bloom_texture",t.bloom_b)
         bind("environment_texture",t.environment)
-        bind("debug_texture",({albedo=t.albedo,normals=t.normal,material=t.material,shadow=t.shadow})[o.view] or t.albedo)
+        bind("debug_texture",({albedo=t.albedo,normals=t.normal,material=t.material,shadow=t.shadow,depth=t.depth_normal,geometry_normals=t.depth_normal,ao=t.occlusion,contact=t.occlusion,occlusion_raw=t.occlusion_raw})[o.view] or t.albedo)
         fullscreen(self,nil,self.post_constants)
         for _,name in ipairs({"scene_texture","weapon_texture","bloom_texture","environment_texture","debug_texture"}) do
             render.disable_texture(name)

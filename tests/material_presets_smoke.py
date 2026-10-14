@@ -43,7 +43,7 @@ def main():
                 engine.wait_until(lambda: (cmd('renderer.snapshot')['width'],cmd('renderer.snapshot')['height'])==(1024,1024),timeout=10)
                 stats=cmd('renderer.snapshot');expected=atlas_stats(quality)
                 assert stats['material_quality']==quality and stats['bake_draws']==expected['draws']
-                assert stats['target_count']==9 and stats['width']==1024 and stats['height']==1024,stats
+                assert stats['target_count']==12 and stats['width']==1024 and stats['height']==1024,stats
                 width,height=stats['atlas_width'],stats['atlas_height'];columns=(width+1023)//1024
                 maps={}
                 for view in ('albedo','normals','material'):

@@ -7,3 +7,7 @@ materials { name: "shadow_skinned" material: "/render/shadow_skinned.material" }
 materials { name: "bloom" material: "/render/bloom.material" }
 materials { name: "hdr_probe" material: "/render/hdr_probe.material" }
 materials { name: "surface_filter" material: "/render/surface_filter.material" }
+materials { name: "prepass" material: "/render/prepass.material" }
+materials { name: "prepass_skinned" material: "/render/prepass_skinned.material" }
+materials { name: "occlusion" material: "/render/occlusion.material" }
+materials { name: "occlusion_filter" material: "/render/occlusion_filter.material" }

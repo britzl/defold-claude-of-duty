@@ -8,12 +8,22 @@ uniform highp vec4 atlas_window;
 uniform highp vec4 post; // exposure, bloom strength, debug view, atlas half (0=all,1=lower,2=upper)
 #include "/render/radiance.glsl"
 #include "/render/agx.glsl"
+#include "/render/depth_normal.glsl"
 #include "/render/environment_sampling.glsl"
 vec3 tone_map(vec3 c) {
     return display_colour(agx_neutral(c*post.x));
 }
 void main() {
-    if (post.z>6.5) {
+    if(post.z>9.5) {
+        vec4 data=texture2D(debug_texture,var_uv);
+        vec3 value;
+        if(post.z<10.5) value=depth_covered(data)?vec3(log2(1.0+unpack_view_depth(data.rg))/DEPTH_LOG_RANGE):vec3(1.0);
+        else if(post.z<11.5) value=depth_covered(data)?unpack_view_normal(data.ba)*.5+.5:vec3(0.0);
+        else if(post.z<12.5) value=vec3(data.r);
+        else if(post.z<13.5) value=vec3(data.g);
+        else value=vec3(data.r,data.g,1.0);
+        gl_FragColor=vec4(value,1.0);
+    } else if (post.z>6.5) {
         vec3 value=texture2D(environment_texture,var_uv).rgb;
         bool lut=var_uv.y>(environment_layout.w-1.0)/environment_layout.w;
         gl_FragColor=vec4(lut?value:tone_map(decode_radiance(value)),1);

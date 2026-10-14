@@ -1,0 +1,22 @@
+attribute highp vec3 position;
+attribute mediump vec3 normal;
+attribute highp vec4 joint_indices;
+attribute highp vec4 joint_weights;
+uniform highp mat4 world;
+uniform highp mat4 view_proj;
+uniform highp mat4 view;
+#include "/soldiers/skinning.glsl"
+varying highp vec3 var_position;
+varying mediump vec3 var_normal;
+varying highp float var_depth;
+varying mediump vec3 var_view_normal;
+varying lowp float var_coverage;
+void main() {
+    mat4 transform=world*skin_matrix(joint_indices,joint_weights);
+    vec4 p=transform*vec4(position,1.0);
+    var_position=p.xyz;var_normal=(transform*vec4(normal,0.0)).xyz;
+    var_coverage=1.0; // Soldier alpha is camouflage, not coverage.
+    var_depth=-(view*p).z;
+    var_view_normal=(view*vec4(var_normal,0.0)).xyz;
+    gl_Position=view_proj*p;
+}

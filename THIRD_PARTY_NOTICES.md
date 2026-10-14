@@ -23,6 +23,11 @@ approach in `game/render/shadows.lua` and `render/shadows.glsl` adapt
 sampling, fixed bilinear comparison kernel and shared procedural cutout coverage
 are local adaptations.
 
+The visibility-arc integration and short sun-ray march in `render/occlusion.fp`
+adapt `src/render/gtao.js` and `src/render/contact.js` from the same project.
+The packed depth/normal prepass, fixed spatial samples, bilateral upsampling and
+material-cavity combination are local adaptations; no temporal history is used.
+
 MIT License
 
 Copyright (c) 2026 mshumer

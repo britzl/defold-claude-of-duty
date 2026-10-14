@@ -51,6 +51,18 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
         for y in (0,h//2):
             for x in (0,w//2):
                 assert sum(atlas.crop((x,y,x+w//2,y+h//2)).getchannel('R').histogram()[:250])>100
+    from occlusion_smoke import validate_buffers,fixture_samples,cutout_depth_samples
+    for name in ('street','contact_furniture','contact_corner','shadow_cutout'):
+        buffers=[Image.open(output/(name+'_'+view+'.png')).convert('RGB') for view in ('depth','geometry_normals','ao','contact')]
+        metrics[name+'_buffers']=validate_buffers(*buffers)
+        if name=='contact_furniture': metrics['projected_contacts']=fixture_samples(*buffers)
+        if name=='shadow_cutout': metrics['projected_cutout_depth']=cutout_depth_samples(buffers[0])
+    furniture=Image.open(output/'contact_furniture.png').convert('RGB')
+    for suffix in ('no_ao','no_contact','disabled'):
+        other=Image.open(output/('contact_furniture_'+suffix+'.png')).convert('RGB')
+        delta=sum(ImageStat.Stat(ImageChops.difference(furniture,other)).mean)/3
+        assert delta>.005,(suffix,delta);metrics[suffix]=delta
+    assert ImageChops.difference(furniture,Image.open(output/'contact_furniture_return.png').convert('RGB')).getbbox() is None
     first=Image.open(output/'street.png').convert('RGB')
     returned=Image.open(output/'street_return.png').convert('RGB')
     assert ImageChops.difference(first,returned).getbbox() is None,'Browser return pixels differ'

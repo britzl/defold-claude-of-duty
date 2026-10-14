@@ -26,6 +26,15 @@ function M.new()
         {name="shadow_remote",id="shadow_remote_disabled",changes={shadows=false}},
         {name="shadow_remote",id="shadow_remote_return"},
     }) do steps[#steps+1]=step end
+    for _,name in ipairs({"street","contact_furniture","contact_corner","shadow_cutout"}) do
+        for _,view in ipairs({"depth","geometry_normals","ao","contact"}) do
+            steps[#steps+1]={name=name,id=name.."_"..view,changes={view=view}}
+        end
+    end
+    steps[#steps+1]={name="contact_furniture",id="contact_furniture_no_ao",changes={ambient_occlusion=false}}
+    steps[#steps+1]={name="contact_furniture",id="contact_furniture_no_contact",changes={contact_shadows=false}}
+    steps[#steps+1]={name="contact_furniture",id="contact_furniture_disabled",changes={ambient_occlusion=false,contact_shadows=false}}
+    steps[#steps+1]={name="contact_furniture",id="contact_furniture_return"}
     for _,view in ipairs({"albedo","normals","material"}) do
         for page=1,math.ceil(atlas.width/1024)*math.ceil(atlas.height/1024) do
             steps[#steps+1]={name="laboratory",id=view.."_page_"..page,changes={view=view,atlas_page=page},page=page,view=view}
@@ -49,7 +58,7 @@ function M.update(test,self,dt)
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==9)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==12)
             assert(stats.surface_count==15 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,

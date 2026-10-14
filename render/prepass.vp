@@ -1,0 +1,16 @@
+attribute highp vec3 position;
+attribute mediump vec3 normal;
+attribute lowp vec4 color;
+uniform highp mat4 view_proj;
+uniform highp mat4 view;
+varying highp vec3 var_position;
+varying mediump vec3 var_normal;
+varying highp float var_depth;
+varying mediump vec3 var_view_normal;
+varying lowp float var_coverage;
+void main() {
+    var_position=position;var_normal=normal;var_coverage=color.a;
+    var_depth=-(view*vec4(position,1.0)).z;
+    var_view_normal=(view*vec4(normal,0.0)).xyz;
+    gl_Position=view_proj*vec4(position,1.0);
+}
