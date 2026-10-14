@@ -79,16 +79,17 @@ function M.new(ctx,mesh_factory,effect_factory)
     end)
     return a
 end
-function M.update(a,ctx,dt,shown)
+function M.update(a,ctx,dt,shown,capture_pose)
     local w=ctx.weapons
-    local active=a.models[w.equipped]
-    local sample=pose.pose(ctx,active)
+    local equipped=capture_pose and "rifle" or w.equipped
+    local active=a.models[equipped]
+    local sample=capture_pose and pose.capture(active,capture_pose=="ads") or pose.pose(ctx,active)
     local q=rotation(sample.rotation)
     local root=vector(sample.position)
     for id,model in pairs(a.models) do
         for name,part in pairs(model.parts) do
             local part_pose=sample.parts[name]
-            local enabled=shown and id==w.equipped and part_pose.visible
+            local enabled=shown and id==equipped and part_pose.visible
             visible(part,enabled)
             if enabled then
                 go.set_position(root+vmath.rotate(q,vector(part_pose.position)),part.id)
@@ -97,7 +98,8 @@ function M.update(a,ctx,dt,shown)
         end
     end
     for _,e in ipairs(a.effects) do
-        if e.life>0 then
+        if capture_pose then visible(e,false)
+        elseif e.life>0 then
             e.life=math.max(0,e.life-dt)
             if not e.tracer then
                 e.velocity.y=e.velocity.y-9.81*dt

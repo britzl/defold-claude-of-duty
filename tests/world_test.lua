@@ -17,7 +17,7 @@ local function generate(budget, options)
         local jobs = generator.step(world, budget)
         assert(jobs <= budget)
         frames = frames + 1
-        assert(frames < 1000, "Generation did not finish")
+        assert(frames < 2000, "Generation did not finish")
     end
     return world, frames
 end
@@ -27,7 +27,7 @@ test("loading yields within its job budget and respects the clock deadline", fun
     assert(generator.step(world, 10, 1, function() return 2 end) == 0)
     assert(world.stats.boxes == 0)
     local completed, frames = generate(1)
-    assert(frames > 100 and completed.stats.boxes == frames - 1)
+    assert(frames > 100 and completed.stats.boxes*2 == frames - 2)
 end)
 
 test("changing loading budget does not change meshes, bounds or collider placement", function()

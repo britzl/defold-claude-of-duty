@@ -1,7 +1,7 @@
 #include "/render/radiance.glsl"
 #include "/render/sky.glsl"
 uniform lowp sampler2D shadow_texture;
-uniform lowp samplerCube environment_texture;
+uniform highp samplerCube environment_texture;
 uniform highp mat4 sun_matrix;
 uniform highp vec4 eye_position;
 uniform highp vec4 features; // shadow, normals, local lights, fog

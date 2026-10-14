@@ -17,6 +17,16 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(d.bloom_width==1 and d.bloom_height==1)
     assert(settings.target_bytes(1920,1280)==52969472)
 end)
+test("HDR requires a qualified backend and format; compatibility remains explicit",function()
+    assert(settings.pipeline({family="metal"},1,"auto").hdr)
+    for _,backend in ipairs({"opengl","vulkan","null"}) do
+        assert(not settings.pipeline({family=backend},1,"auto").hdr)
+    end
+    assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
+    assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
+    assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==7931904)
+end)
 
 test("camera light selection covers both buildings and every floor within four slots",function()
     local world=require("game.world.generator").new(require "game.world.layout")
@@ -35,6 +45,8 @@ end)
 -- The stub records resource ownership and pass inputs; matrix maths is tested
 -- by the native screenshots, rather than reimplementing vmath here.
 graphics=setmetatable({},{__index=function(t,k) rawset(t,k,k);return k end})
+graphics.get_adapter_info=function() return {family="metal"} end
+sys={get_config_string=function(_,default) return default end}
 hash=function(s) return s end
 local matrix_mt={}
 local function value(...) return setmetatable({x=0,y=0,z=0,w=1,args={...}},matrix_mt) end
@@ -81,6 +93,13 @@ local self={}
 test("loading spreads three atlas and six cubemap passes across nine frames",function()
     init(self)
     assert(#targets==9)
+    assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
+    for _,name in ipairs({"scene","weapon","environment","bloom_a","bloom_b"}) do
+        assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
+    end
+    for _,name in ipairs({"shadow","albedo","normal","material"}) do
+        assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA)
+    end
     for frame=1,9 do
         update(self)
         assert(self.bake_step==frame and self.bake_draws==frame)
@@ -123,6 +142,17 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     for _,draw in ipairs(draws) do assert(draw.material~="shadow" and draw.material~="shadow_skinned" and draw.material~="bloom") end
     on_message(self,"renderer_configure",{shadows=true,bloom=true})
     update(self);assert(self.shadow_frames==before+1 and self.bake_draws==9)
+end)
+test("capture isolates the laboratory, hides HUD/actors, and restores ordinary passes",function()
+    on_message(self,"capture_configure",{active=true,laboratory=true})
+    draws={};update(self)
+    assert(draws[1].predicate=="capture_lab_shadow" and draws[3].predicate=="capture_lab")
+    for _,draw in ipairs(draws) do
+        assert(draw.predicate~="gui" and draw.predicate~="debug_text" and draw.predicate~="soldier_shadow")
+    end
+    on_message(self,"capture_configure",{active=false,laboratory=false})
+    draws={};update(self)
+    assert(draws[2].predicate=="soldier_shadow" and draws[#draws-1].predicate=="gui")
 end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)

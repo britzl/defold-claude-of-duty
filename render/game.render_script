@@ -5,8 +5,8 @@ local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local WORLD_CAMERA="main:/camera#camera"
 local WEAPON_CAMERA="main:/viewmodel#camera"
-local function colour_target(w,h,depth,nearest,cube)
-    local params={ [COLOR]={format=G.TEXTURE_FORMAT_RGBA,width=w,height=h,
+local function colour_target(w,h,depth,nearest,cube,format)
+    local params={ [COLOR]={format=format or G.TEXTURE_FORMAT_RGBA,width=w,height=h,
         min_filter=nearest and G.TEXTURE_FILTER_NEAREST or G.TEXTURE_FILTER_LINEAR,
         mag_filter=nearest and G.TEXTURE_FILTER_NEAREST or G.TEXTURE_FILTER_LINEAR,
         u_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE,v_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE} }
@@ -24,7 +24,7 @@ local function resize(self)
             local small=name=="bloom_a" or name=="bloom_b"
             local w,h=small and d.bloom_width or d.width,small and d.bloom_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
-            else self.targets[name]=colour_target(w,h,not small) end
+            else self.targets[name]=colour_target(w,h,not small,false,false,self.radiance_format) end
         end
         self.gui_projection=vmath.matrix4_orthographic(0,d.width,0,d.height,-1,1)
         self.resizes=self.resizes+1
@@ -32,7 +32,7 @@ local function resize(self)
     end
     return true
 end
-local function fullscreen(self,material,constants)
+local function fullscreen(self,material,constants,blend)
     render.set_camera()
     render.set_view(self.identity)
     render.set_projection(self.identity)
@@ -40,6 +40,10 @@ local function fullscreen(self,material,constants)
     render.disable_state(G.STATE_DEPTH_TEST)
     render.disable_state(G.STATE_CULL_FACE)
     render.disable_state(G.STATE_BLEND)
+    if blend then
+        render.enable_state(G.STATE_BLEND)
+        render.set_blend_func(G.BLEND_FACTOR_SRC_ALPHA,G.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+    end
     if material then render.enable_material(material) end
     render.draw(self.quad,{constants=constants})
     if material then render.disable_material() end
@@ -74,12 +78,16 @@ local function report(self)
         environment_faces=math.max(0,self.bake_step-3), environment_size=settings.environment_size,
         shadow_size=settings.shadow_size, shadow_frames=self.shadow_frames,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
-        target_count=9,target_bytes=settings.target_bytes(self.width,self.height),resizes=self.resizes,
+        target_count=9,target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr),resizes=self.resizes,
         local_light_count=self.light_count,frames=self.frames,settings=self.options,
-        radiance_range=settings.radiance_range })
+        radiance_range=self.pipeline.hdr and 65504 or settings.radiance_range,pipeline=self.pipeline })
 end
 function init(self)
     self.world=render.predicate({"model"})
+    self.static_world=render.predicate({"model","world_shadow"})
+    self.laboratory=render.predicate({"capture_lab"})
+    self.laboratory_shadow=render.predicate({"capture_lab_shadow"})
+    self.capture={active=false,laboratory=false}
     self.world_shadow=render.predicate({"world_shadow"})
     self.soldier_shadow=render.predicate({"soldier_shadow"})
     self.weapon=render.predicate({"viewmodel"})
@@ -88,6 +96,8 @@ function init(self)
     self.debug=render.predicate({"debug_text"})
     self.identity=vmath.matrix4()
     self.options=settings.defaults()
+    self.pipeline=settings.pipeline(G.get_adapter_info(),G.TEXTURE_FORMAT_RGBA16F,sys.get_config_string("render.hdr","auto"))
+    self.radiance_format=self.pipeline.hdr and G.TEXTURE_FORMAT_RGBA16F or G.TEXTURE_FORMAT_RGBA
     self.targets={}
     self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
     self.light_count=0
@@ -97,6 +107,10 @@ function init(self)
     self.post_constants=render.constant_buffer()
     self.bloom_constants=render.constant_buffer()
     self.shadow_constants=render.constant_buffer()
+    self.probe_constants=render.constant_buffer()
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants}) do
+        constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
+    end
     for _,name in ipairs({"light_positions","light_colours","light_minimums","light_maximums"}) do
         self.lighting[name]={vmath.vector4(),vmath.vector4(),vmath.vector4(),vmath.vector4()}
     end
@@ -112,7 +126,7 @@ function init(self)
     for _,name in ipairs({"albedo","normal","material"}) do
         self.targets[name]=colour_target(settings.atlas_tile*settings.surface_count,settings.atlas_tile)
     end
-    self.targets.environment=colour_target(settings.environment_size,settings.environment_size,false,false,true)
+    self.targets.environment=colour_target(settings.environment_size,settings.environment_size,false,false,true,self.radiance_format)
     self.faces={G.CUBEMAP_FACE_POSITIVE_X,G.CUBEMAP_FACE_NEGATIVE_X,G.CUBEMAP_FACE_POSITIVE_Y,
         G.CUBEMAP_FACE_NEGATIVE_Y,G.CUBEMAP_FACE_POSITIVE_Z,G.CUBEMAP_FACE_NEGATIVE_Z}
     resize(self)
@@ -157,9 +171,12 @@ function update(self)
             render.set_view(self.sun_view)
             render.set_projection(self.sun_projection)
             render.enable_material("shadow")
-            render.draw(self.world_shadow,{constants=self.shadow_constants,frustum=self.sun_matrix})
-            render.enable_material("shadow_skinned")
-            render.draw(self.soldier_shadow,{constants=self.shadow_constants,frustum=self.sun_matrix})
+            render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,
+                {constants=self.shadow_constants,frustum=self.sun_matrix})
+            if not self.capture.active then
+                render.enable_material("shadow_skinned")
+                render.draw(self.soldier_shadow,{constants=self.shadow_constants,frustum=self.sun_matrix})
+            end
             render.disable_material()
             self.shadow_frames=self.shadow_frames+1
         end
@@ -178,8 +195,9 @@ function update(self)
         render.enable_state(G.STATE_CULL_FACE)
         render.set_depth_mask(true)
         render.set_camera(WORLD_CAMERA,{use_frustum=true})
-        render.draw(self.world,{constants=self.lighting})
-        render.draw_debug3d()
+        local scene=self.capture.laboratory and self.laboratory or self.capture.active and self.static_world or self.world
+        render.draw(scene,{constants=self.lighting})
+        if not self.capture.active then render.draw_debug3d() end
 
         render.set_render_target(t.weapon)
         render.clear({[COLOR]=vmath.vector4(0,0,0,0),[DEPTH]=1})
@@ -188,6 +206,19 @@ function update(self)
         render.draw(self.weapon,{constants=self.lighting})
         for _,name in ipairs({"shadow_texture","environment_texture","albedo_texture","normal_texture","material_texture"}) do
             render.disable_texture(name)
+        end
+
+        -- Opt-in GPU qualification uses the actual scene/weapon targets and
+        -- sampler states. The last stripe tests hardware alpha blending in HDR.
+        if o.view=="hdr_probe" then
+            render.set_render_target(t.scene)
+            self.probe_constants.probe=vmath.vector4(0,0,0,0)
+            fullscreen(self,"hdr_probe",self.probe_constants)
+            self.probe_constants.probe=vmath.vector4(1,0,0,0)
+            fullscreen(self,"hdr_probe",self.probe_constants,true)
+            render.set_render_target(t.weapon)
+            self.probe_constants.probe=vmath.vector4(2,0,0,0)
+            fullscreen(self,"hdr_probe",self.probe_constants)
         end
 
         render.set_render_target(t.bloom_a)
@@ -233,14 +264,18 @@ function update(self)
     render.set_stencil_mask(0xff)
     render.clear({[G.BUFFER_TYPE_STENCIL_BIT]=0})
     render.enable_state(G.STATE_STENCIL_TEST)
-    render.draw(self.gui)
-    render.draw(self.debug)
+    if not self.capture.active then
+        render.draw(self.gui)
+        render.draw(self.debug)
+    end
     render.disable_state(G.STATE_STENCIL_TEST)
     render.disable_state(G.STATE_BLEND)
     report(self)
 end
 function on_message(self,id,message)
-    if id==hash("renderer_configure") then
+    if id==hash("capture_configure") then
+        self.capture=message
+    elseif id==hash("renderer_configure") then
         self.options=settings.configure(self.options,message)
         self.report=true
     elseif id==hash("renderer_lights") then

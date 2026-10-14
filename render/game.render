@@ -5,3 +5,4 @@ materials { name: "sky" material: "/render/sky.material" }
 materials { name: "shadow" material: "/render/shadow.material" }
 materials { name: "shadow_skinned" material: "/render/shadow_skinned.material" }
 materials { name: "bloom" material: "/render/bloom.material" }
+materials { name: "hdr_probe" material: "/render/hdr_probe.material" }

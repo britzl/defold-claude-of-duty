@@ -35,21 +35,24 @@ local function building(layout, b)
     local base, wall, slab, storey = layout.street.walk_height, layout.wall, layout.slab, layout.storey
     local x0, x1, z0, z1 = b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2
     local height = b.floors * storey
+    -- Slabs own the top of each storey. X walls own the corners; Z walls
+    -- butt against them. Overlapping faces used to depend on batch draw order.
+    local wall_height = storey - slab
     if b.room then
         assert(b.side == 1 or b.side == -1)
         local front = b.x+b.side*(b.w/2-wall/2)
         local facade = b.x+b.side*b.w/2
         -- Split the street-facing wall around a true doorway on either side.
         box(b.id .. "/floor", "concrete", b.x, base - slab / 2, b.z, b.w, slab, b.d, "concrete")
-        box(b.id .. (b.side == 1 and "/west" or "/east"), "plaster_inside", b.x-b.side*(b.w/2-wall/2), base + storey / 2, b.z, wall, storey, b.d, "plaster")
-        box(b.id .. "/north", b.material, b.x, base + storey / 2, z1 - wall / 2, b.w, storey, wall, "plaster")
-        box(b.id .. "/south", b.material, b.x, base + storey / 2, z0 + wall / 2, b.w, storey, wall, "plaster")
+        box(b.id .. (b.side == 1 and "/west" or "/east"), "plaster_inside", b.x-b.side*(b.w/2-wall/2), base + wall_height / 2, b.z, wall, wall_height, b.d, "plaster")
+        box(b.id .. "/north", b.material, b.x, base + wall_height / 2, z1 - wall / 2, b.w-2*wall, wall_height, wall, "plaster")
+        box(b.id .. "/south", b.material, b.x, base + wall_height / 2, z0 + wall / 2, b.w-2*wall, wall_height, wall, "plaster")
         local door = b.door
         local lo, hi = door.z - door.width / 2, door.z + door.width / 2
-        box(b.id .. "/front_left", b.material, front, base + storey / 2, (z0 + lo) / 2, wall, storey, lo - z0, "plaster")
-        box(b.id .. "/front_right", b.material, front, base + storey / 2, (hi + z1) / 2, wall, storey, z1 - hi, "plaster")
-        box(b.id .. "/door_lintel", b.material, front, base + (storey + door.height) / 2,
-            door.z, wall, storey - door.height, door.width, "plaster")
+        box(b.id .. "/front_left", b.material, front, base + wall_height / 2, (z0 + lo) / 2, wall, wall_height, lo - z0, "plaster")
+        box(b.id .. "/front_right", b.material, front, base + wall_height / 2, (hi + z1) / 2, wall, wall_height, z1 - hi, "plaster")
+        box(b.id .. "/door_lintel", b.material, front, base + (wall_height + door.height) / 2,
+            door.z, wall, wall_height - door.height, door.width, "plaster")
         interior.geometry(layout, b, box)
         local counter, shelves = b.counter, b.shelves
         local counter_x, counter_z = x0 + counter.x * b.w, z0 + counter.z * b.d
@@ -60,7 +63,7 @@ local function building(layout, b)
         end
         awning(b.id .. "/awning", facade + b.side * 0.85, base + 2.95, door.z, 1.7, 4.4, b.side)
         for _, sign in ipairs({ -1, 1 }) do
-            box(b.id .. "/door_frame/" .. sign, "wood", facade + b.side * 0.015, base + door.height / 2,
+            box(b.id .. "/door_frame/" .. sign, "wood", facade + b.side * 0.08, base + door.height / 2,
                 door.z + sign * (door.width / 2 + 0.07), 0.16, door.height, 0.14)
         end
     else
@@ -81,7 +84,7 @@ local function building(layout, b)
             -- Exterior trim must not span the open stairwell like the old solid facade.
             for _, sign in ipairs({-1,1}) do
                 box(b.id.."/belt/"..floor.."/x/"..sign,"trim",b.x+sign*b.w/2,base+floor*storey,b.z,.2,.18,b.d+.2)
-                box(b.id.."/belt/"..floor.."/z/"..sign,"trim",b.x,base+floor*storey,b.z+sign*b.d/2,b.w,.18,.2)
+                box(b.id.."/belt/"..floor.."/z/"..sign,"trim",b.x,base+floor*storey,b.z+sign*b.d/2,b.w-.2,.18,.2)
             end
         else
             box(b.id .. "/belt/" .. floor, "trim", b.x, base + floor * storey, b.z, b.w + 0.2, 0.18, b.d + 0.2)
@@ -91,7 +94,7 @@ local function building(layout, b)
     box(b.id .. "/coping", "trim", b.x, base + height + 0.07, b.z, b.w + 0.25, 0.14, b.d + 0.25)
     for _, sign in ipairs({ -1, 1 }) do
         box(b.id .. "/parapet_x/" .. sign, b.material, b.x + sign * (b.w / 2 - 0.13), base + height + 0.4, b.z, 0.26, 0.7, b.d, "plaster")
-        box(b.id .. "/parapet_z/" .. sign, b.material, b.x, base + height + 0.4, b.z + sign * (b.d / 2 - 0.13), b.w, 0.7, 0.26, "plaster")
+        box(b.id .. "/parapet_z/" .. sign, b.material, b.x, base + height + 0.4, b.z + sign * (b.d / 2 - 0.13), b.w-.52, 0.7, 0.26, "plaster")
     end
 end
 

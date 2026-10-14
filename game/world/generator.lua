@@ -2,6 +2,7 @@ local rng = require "game.rng"
 local mesh = require "game.world.mesh"
 local recipes = require "game.world.recipes"
 local interior = require "game.world.interior"
+local visible_faces = require "game.world.visible_faces"
 local M = {}
 
 local function metadata(layout)
@@ -98,7 +99,7 @@ function M.new(layout, options)
     return world
 end
 
-local function add(world, shape)
+local function add(world, shape, faces)
     local chunk = world.layout.chunk_size
     local cx, cz = math.floor(shape.x / chunk), math.floor(shape.z / chunk)
     local key = shape.material .. "/" .. cx .. "/" .. cz
@@ -109,8 +110,8 @@ local function add(world, shape)
         world.batches[#world.batches + 1] = batch
         world.batch_lookup[key] = batch
     end
-    mesh.box(batch, shape, 0.94 + world.decoration_rng() * 0.12)
-    world.shapes[#world.shapes + 1] = shape
+    local before=batch.vertex_count
+    mesh.box(batch, shape, 0.94 + world.decoration_rng() * 0.12, faces)
     if shape.surface then
         world.colliders[#world.colliders + 1] = shape
         world.minimap[#world.minimap + 1] = { id = shape.id, x = shape.x, z = shape.z, w = shape.w, d = shape.d,
@@ -123,7 +124,7 @@ local function add(world, shape)
         end
     end
     local stats = world.stats
-    stats.boxes, stats.vertices = stats.boxes + 1, stats.vertices + 36
+    stats.boxes, stats.vertices = stats.boxes + 1, stats.vertices + batch.vertex_count-before
     stats.mesh_bytes = stats.vertices * 10 * 4
     stats.batches, stats.colliders = #world.batches, #world.colliders
 end
@@ -134,14 +135,26 @@ function M.step(world, max_jobs, deadline, now)
     if world.phase ~= "geometry" then return 0 end
     local done = 0
     while done < max_jobs and (not deadline or now() < deadline) do
-        local ok, shape = coroutine.resume(world.job)
-        assert(ok, shape)
-        if coroutine.status(world.job) == "dead" then
-            world.job, world.batch_lookup, world.decoration_rng = nil, nil, nil
-            world.phase = "meshes"
+        if world.job then
+            local ok, shape = coroutine.resume(world.job)
+            assert(ok, shape)
+            if coroutine.status(world.job) == "dead" then
+                world.job=nil
+                world.mesh_index=1
+            else
+                world.shapes[#world.shapes+1]=shape
+                world.shape_bounds=world.shape_bounds or {}
+                world.shape_bounds[#world.shapes]=visible_faces.bounds(shape)
+            end
+        elseif world.mesh_index<=#world.shapes then
+            local i=world.mesh_index
+            add(world,world.shapes[i],visible_faces.for_box(i,world.shape_bounds))
+            world.mesh_index=i+1
+        else
+            world.batch_lookup,world.decoration_rng,world.shape_bounds=nil,nil,nil
+            world.phase="meshes"
             break
         end
-        add(world, shape)
         done = done + 1
         world.jobs_done = world.jobs_done + 1
     end

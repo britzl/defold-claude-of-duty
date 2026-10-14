@@ -1,6 +1,8 @@
 /.editor_settings
 /.internal
 /build
+/captures
+__pycache__/
 .DS_Store
 Thumbs.db
 /automation-bridge-python

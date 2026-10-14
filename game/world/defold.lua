@@ -25,7 +25,8 @@ function M.add_batch(adapter, batch)
     adapter.buffers[#adapter.buffers + 1] = path
     local url = msg.url(nil, id, "mesh")
     go.set(url, "vertices", path)
-    go.set(url, "surface", vmath.vector4(materials[batch.material].kind, 0, 0, 0))
+    local surface=batch.surface or {materials[batch.material].kind,0,0,0}
+    go.set(url, "surface", vmath.vector4(surface[1],surface[2],surface[3],surface[4]))
     batch.object, batch.resource = id, path
     -- The resource owns the buffer now. Keep only bounds/stats in Lua.
     batch.positions, batch.normals, batch.colors = nil, nil, nil

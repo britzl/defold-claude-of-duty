@@ -1,0 +1,66 @@
+local shots=require "game.render.capture"
+local laboratory=require "game.render.laboratory"
+local input=require "game.input"
+local audio=require "game.systems.audio"
+local settings=require "game.render.settings"
+local M={}
+function M.snapshot(self)
+    if not self.capture then return {active=false} end
+    local c=self.capture
+    return {active=true,shot=c.shot.id,frame=c.frame,camera=shots.camera(c.shot,c.frame),
+        weapon=c.shot.weapon or "hidden",laboratory=c.shot.laboratory or false,
+        simulation_tick=self.ctx.time.tick,lab_meshes=self.capture_lab and #self.capture_lab.objects or 0,
+        lab_vertices=self.capture_lab and self.capture_lab.vertices or 0,
+        lighting=shots.catalog().lighting,catalog_version=shots.version}
+end
+function M.finish(self)
+    if not self.capture then return M.snapshot(self) end
+    local saved=self.capture.saved
+    self.capture=nil
+    self.renderer_settings=saved.settings
+    msg.post("@render:","renderer_configure",saved.settings)
+    msg.post("@render:","capture_configure",{active=false,laboratory=false})
+    self.active_lights=nil
+    input.reset(self.ctx.input)
+    audio.suspend(self.ctx,self.ctx.paused)
+    if self.capture_lab then laboratory.final(self.capture_lab);self.capture_lab=nil end
+    return M.snapshot(self)
+end
+function M.install(self)
+    automation_bridge.command("capture.catalog",shots.catalog)
+    automation_bridge.command("capture.snapshot",function() return M.snapshot(self) end)
+    automation_bridge.command("capture.shot",function(data)
+        assert(self.ctx.world.ready and self.renderer_stats.ready,"Wait for world and renderer loading")
+        local shot=shots.select(data.name)
+        local frame=data.frame or 0
+        shots.camera(shot,frame)
+        if shot.laboratory and not self.capture_lab then self.capture_lab=laboratory.create() end
+        local saved=self.capture and self.capture.saved or {settings=self.renderer_settings}
+        self.capture={shot=shot,frame=frame,saved=saved}
+        self.renderer_settings=settings.defaults()
+        self.active_lights=nil
+        input.reset(self.ctx.input)
+        window.set_mouse_lock(false)
+        audio.suspend(self.ctx,true)
+        msg.post("@render:","renderer_configure",self.renderer_settings)
+        msg.post("@render:","capture_configure",{active=true,laboratory=shot.laboratory or false})
+        return M.snapshot(self)
+    end)
+    automation_bridge.command("capture.frame",function(data)
+        assert(self.capture,"Select a capture shot first")
+        assert(type(data.frame)=="number","frame is required")
+        shots.camera(self.capture.shot,data.frame)
+        self.capture.frame=data.frame
+        return M.snapshot(self)
+    end)
+    automation_bridge.command("capture.end",function() return M.finish(self) end)
+    for name,description in pairs({
+        ["capture.catalog"]="Versioned visual baseline shots, unsupported states and output contract.",
+        ["capture.shot"]="Freeze gameplay; select HUD-free name from capture.catalog, optional integer frame 0..120. Settings restored by capture.end.",
+        ["capture.frame"]="Address a deterministic 30 FPS camera sweep with integer frame 0..120; never advances gameplay.",
+        ["capture.snapshot"]="Read active capture camera, frame, lighting and fixture resource counts.",
+        ["capture.end"]="Leave capture mode, free its fixture and restore renderer settings; normal pause/focus rules apply."}) do
+        automation_bridge.describe("command",name,{description=description,input_schema={type="object"},output_schema={type="object"}})
+    end
+end
+return M

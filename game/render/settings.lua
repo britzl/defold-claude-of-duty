@@ -1,7 +1,17 @@
 -- Presentation settings only: never consume simulation RNG or alter gameplay.
 local M = { atlas_tile = 256, surface_count = 5, environment_size = 64,
     shadow_size = 1024, shadow_extent = 32, radiance_range = 8, max_lights = 4 }
-M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5 }
+M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6 }
+-- A format constant alone does not prove renderability/filtering/blending.
+-- Enable the measured backend first; qualify WebGL/mobile before expanding it.
+function M.pipeline(adapter, half_float, requested)
+    assert(requested=="auto" or requested=="rgba8", "render.hdr must be auto or rgba8")
+    local hdr=requested=="auto" and adapter.family=="metal" and half_float~=nil
+    return {hdr=hdr,format=hdr and "rgba16f" or "rgba8_encoded",backend=adapter.family,
+        reason=hdr and "Metal half-float path" or requested=="rgba8" and "Explicit compatibility override"
+            or "Backend awaiting HDR qualification or missing RGBA16F",
+        tone_mapper="agx_neutral",output="srgb",exposure_mode="fixed"}
+end
 function M.defaults()
     return { shadows = true, normal_maps = true, local_lights = true, fog = true,
         bloom = true, exposure = 1, view = "scene" }
@@ -46,11 +56,12 @@ function M.dimensions(w,h)
     if w<=0 or h<=0 then return nil end
     return { width=w, height=h, bloom_width=math.max(1,math.floor(w/4)), bloom_height=math.max(1,math.floor(h/4)) }
 end
-function M.target_bytes(w,h)
+function M.target_bytes(w,h,hdr)
     local d=M.dimensions(w,h)
     if not d then return 0 end
-    -- RGBA8 colour and conservative 32-bit depth storage; excludes driver overhead.
-    return w*h*16 + d.bloom_width*d.bloom_height*8 + M.shadow_size^2*8
-        + M.atlas_tile^2*M.surface_count*4*3 + M.environment_size^2*6*4
+    -- HDR radiance, RGBA8 data maps, conservative 32-bit depth; no driver overhead.
+    local colour=hdr and 8 or 4
+    return w*h*(colour+4)*2 + d.bloom_width*d.bloom_height*colour*2 + M.shadow_size^2*8
+        + M.atlas_tile^2*M.surface_count*4*3 + M.environment_size^2*6*colour
 end
 return M

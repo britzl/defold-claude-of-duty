@@ -1,5 +1,5 @@
 varying highp vec2 var_uv;
-uniform lowp sampler2D source_texture;
+uniform highp sampler2D source_texture;
 uniform highp vec4 bloom_step; // uv step xy, extraction flag z
 #include "/render/radiance.glsl"
 vec3 sample_light(vec2 uv) {

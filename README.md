@@ -41,6 +41,7 @@ lua tests/ai_test.lua
 lua tests/squads_test.lua
 lua tests/suppression_test.lua
 lua tests/renderer_test.lua
+lua tests/render_capture_test.lua
 lua tests/audio_test.lua
 lua tests/ui_test.lua
 ```
@@ -548,12 +549,17 @@ walls and floors have simple solid proxies.
 `generator.lua` merges geometry by material and 16-metre spatial bucket, capped
 at 64 boxes per mesh upload. Every batch carries explicit AABB buffer metadata
 for Defold's frustum culling. There are no game objects per decorative piece.
-The slice generates 519 boxes, 77 mesh batches, 18,684 vertices and 190
-collision objects. Vertex streams occupy 747,360 bytes (CPU/GPU resource overhead
+Slabs own the top of each storey, and walls/trim use butt joints at corners.
+`visible_faces.lua` subtracts buried surfaces and gives coincident outward faces
+one owner before triangulation. This removes depth ties at slab edges, trim
+undersides and kerbs without changing collision proxies. The slice generates
+519 boxes, 77 mesh batches, 21,030 vertices and 190
+collision objects. Vertex streams occupy 841,200 bytes (CPU/GPU resource overhead
 is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
-settling frame before `ready`. Geometry handles at most 24 boxes per frame;
+settling frame before `ready`. Geometry first collects recipes, then clips/meshes
+them, handling at most 24 jobs per frame across both stages;
 collision creation at most eight; uploads at most one bounded batch. A soft
 2 ms CPU deadline is checked between geometry/collision jobs. A single upload
 is indivisible. `world.snapshot` reports total CPU work and the peak loading
@@ -602,18 +608,89 @@ and `costs.json` to `build/market-validation`. `world.view` also accepts `courty
 `rear` and `alley`. The Lua checks verify both independent paths, continuous ground
 and standing capsule clearance along every new edge, cover clearance, deterministic
 loading and the existing GUI/resource budgets. The 77 world batches are up from
-50; stream storage is about 0.71 MiB, up from 0.51 MiB. The existing mesh, physics,
+50; stream storage was about 0.71 MiB, up from 0.51 MiB, before face clipping
+raised it to 0.80 MiB. The existing mesh, physics,
 GUI, texture and render-target limits are unchanged. A macOS/Metal debug run at
 1920 × 1280 measured 29.1 ms of world-loading CPU work (1.03 ms peak job). Short
 90-frame inspection captures reported 154 submitted draws for the street, 121
 for the courtyard/alley and 131 behind W2; these include shadows, post-processing
 and GUI. `DrawRenderList` averaged 0.83–1.01 ms of CPU time across those views.
-The nine render targets still occupy an estimated 50.5 MiB. These idle views do
+That pre-HDR run used an estimated 50.5 MiB for nine render targets; the current
+HDR path uses 70.5 MiB at this resolution. These idle views do
 not establish GPU timing, sustained combat performance or browser/mobile budgets.
 
 Generated world materials now sample runtime GPU atlases and receive the lighting,
 shadows and height fog described below. Room lights are sourced from the same
 world metadata and clipped to the interior bounds.
+
+## Rendering reference captures
+
+Rendering step 1 now provides an opt-in, versioned visual baseline. It freezes
+gameplay without altering its state, hides HUD/actors/effects, sets exact camera
+poses and vertical FOVs, and uses fixed hip/ADS rifle poses. Normal rendering and
+settings return on `capture.end` or Escape. Capture requires the debug Automation
+Bridge; ordinary play does not allocate the laboratory.
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/render_baseline.py --motion --profile
+PYTHONPATH=automation-bridge-python python3 tests/render_baseline.py --launches 3
+```
+
+Requires Pillow and an open Defold editor. `ffmpeg` is optional for MP4 encoding;
+the PNG sequence is always retained. Outputs go to a new timestamped directory
+under `captures/rendering`, or a new directory passed with `--output`. Captures
+are ignored by Git and kept outside `build` so a clean build preserves them.
+The harness produces 1280 × 720 images at actual framebuffer resolution, including
+on HiDPI displays, and verifies exact repeat pixels after changing cameras away
+and back. It records camera/FOV, source revision and source hash, renderer settings,
+seed, resource estimates, engine metadata, and optional CPU scopes/draw counters.
+These profiles are frozen views, not GPU timing or sustained combat measurements.
+The contact sheet is `contact-sheet.jpg`; complete metadata is `manifest.json`.
+`--launches 3` starts three independent engines and asserts exact RGB equality
+for every supported shot, recording `repeatability.json` and separate per-launch
+manifests. The overlapping wall/slab and trim surfaces have been repaired and
+buried faces clipped; all seven shots now pass this gate on Metal. No pixels are
+masked or tolerated. Catalogue version 2 also records the 0.1–500 m world clip
+range; the 0.1 m near plane improves depth precision while remaining inside the
+player's wall clearance. The separate weapon clip range is unchanged.
+
+The catalogue in `game/render/capture.lua` has street, interior, detail, courtyard,
+weapon, ADS and laboratory captures. Sunset and night are explicitly unsupported
+until rendering step 10; no substitute daylight images are written. Current
+lighting is fixed daylight, not a matched 16:30 astronomical configuration.
+The generated laboratory has five surface panels, a floor, a corner with crates,
+a table and two sphere rows: rear dielectric, front metal, with roughness
+0.08/0.25/0.5/0.75/1 from left to right. It uses the production world shader and
+shadow pass; uniform sphere parameters isolate lighting from the texture recipes.
+Its 17 meshes are released on exit.
+
+The optional four-second laboratory sweep contains 121 frame-addressed camera
+samples at 30 FPS. Screenshot transport never advances gameplay or the sweep;
+`capture.frame` explicitly selects each pose. Its MP4 is for visual stability
+review and does not measure real-time frame pacing.
+
+Capture the local Three.js source with its own deterministic 90-frame shutter:
+
+```sh
+# In the reference checkout first: npm ci --ignore-scripts
+node tools/capture_reference.mjs --source=/path/to/Claude-of-Duty-main --baseline=/path/to/defold/manifest.json
+python3 tools/compare_render_baselines.py /path/to/defold/manifest.json /path/to/threejs/manifest.json --output captures/rendering/comparison
+```
+
+The reference tool uses Playwright from that checkout (its Chromium must be
+installed), starts/stops its own Vite server, and leaves source files untouched.
+It transforms the same level-space cameras through `world.levelToWorld`, matches
+resolution/FOV and records the reference's Ultra settings, fixed seed and source
+hash. Each shot boots afresh to avoid inherited temporal history. Reference shots
+use 16:30 daylight, 19:12 sunset or 01:30 night. The generators, partial map and
+lighting differ, so these are visual comparisons, not cross-engine pixel tests.
+The comparison tool also accepts two Defold manifests for later regression review.
+Kaigen reference captures and a corresponding reference laboratory remain pending:
+the local Kaigen download does not include its closed-beta engine.
+
+Automation commands: `capture.catalog`, `capture.shot {name}`, `capture.snapshot`,
+`capture.frame {frame=0..120}`, and `capture.end`. Settings reset to the baseline
+defaults while capturing and are restored on exit. A restart exits capture mode.
 
 ## Generated materials and rendering
 
@@ -646,12 +723,22 @@ and screen-space ambient occlusion remain future work.
 
 Pass order is sun shadow → sky/world → isolated weapon → two quarter-resolution
 bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
-height density along the eye ray. The world and weapon use square-root encoded
-0..8 radiance in RGBA8, with subtle dithering, so the pipeline needs no floating
-point colour-buffer extension. The final pass decodes the layers, applies one
-exposure and an ACES-style curve, then converts to display gamma. Bloom affects
-only the world; GUI stays outside exposure, fog and bloom. This is bounded HDR,
-not an unbounded floating-point pipeline. Environment reflections currently use
+height density along the eye ray. Rendering step 2 enables linear RGBA16F for
+scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
+remain linear and are no longer limited to 0..8. Authored vertex colours use the
+piecewise sRGB transfer function; generated atlas values remain linear multipliers.
+The final pass composites world/weapon light, applies one fixed exposure and the
+references' neutral AgX curve, then performs one accurate sRGB display conversion
+with deterministic 8-bit dithering. Bloom affects only the world; GUI stays
+outside exposure, fog and bloom. The reference look/grade is deferred to step 12.
+
+Other backends retain the square-root encoded 0..8 RGBA8 compatibility path until
+float renderability, filtering and blending are qualified there. The presence of
+`graphics.TEXTURE_FORMAT_RGBA16F` alone is insufficient. Set `hdr = rgba8` under
+`[render]` (or use engine argument `--config=render.hdr=rgba8`) to force that path
+on Metal; the default is `auto`. Both paths share AgX and sRGB conversion.
+`renderer.snapshot.pipeline` records the selected format, backend and reason.
+Environment reflections currently use
 an analytic broadening approximation rather than prefiltered roughness mipmaps;
 the material atlas also has no mip chain yet. `game.project` sets the default
 GLSL ES float precision to `highp` for noise, packed shadows and lighting. Using
@@ -659,29 +746,38 @@ the project setting also keeps precision declarations ahead of Defold's generate
 fragment output in WebGL shaders.
 
 At a 1920 × 1280 backbuffer (the default window on a 2× display), target storage
-is approximately 50.5 MiB, excluding driver overhead and generated meshes. This
+is approximately 70.5 MiB with HDR, excluding driver overhead and generated meshes. This
 includes conservatively budgeted 32-bit depth attachments. At 960 × 640 it is
-approximately 21.5 MiB. Resize updates the four screen-dependent targets while
+approximately 26.6 MiB; at the 1280 × 720 capture size it is 33.91 MiB, versus
+26.35 MiB on the compatibility path. Resize updates the four screen-dependent targets while
 retaining the atlas, cubemap and shadow targets. Zero-sized windows skip rendering;
 finalization deletes every target.
 
 `renderer.snapshot` reports bake jobs, target dimensions/bytes, local-light count,
 shadow frames and active settings. `renderer.configure` accepts booleans
 `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`; numeric `exposure` in
-0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow` or
-`environment`. Configuration applies on the next render message dispatch, so tests
+0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
+`environment` or `hdr_probe`. The last view renders diagnostic HDR stripes into
+the actual scene/weapon targets and displays transfer/filter/blend samples.
+Configuration applies on the next render message dispatch, so tests
 wait for the snapshot to reflect it. All controls affect presentation only.
 
 The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 119 Lua checks pass; the
-native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
-HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
+with review images in `build/renderer-validation`. All 128 Lua checks pass. The
+new `tests/hdr_smoke.py` verifies radiance above 8, hardware alpha blending,
+linear filtering, world/weapon composition, sRGB knees and reference AgX goldens
+at three exposures; results go to `captures/rendering/hdr-validation`.
+The native renderer/HDR suites and full W2/E2 building traversal suite pass on
+macOS/Metal. The latter checks player/AI ascent and descent, all floors, guards,
+doorways and native collision after the joint repairs. Earlier weapons, soldier and
+framework suites passed before this rendering step. The earlier HTML5 debug
+bundle passed a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no
 shader/runtime errors after loading. That browser check does not replace the
-native pixel suite. Hardware context-loss recovery, physical mobile devices,
+native pixel suite or qualify the new HDR path. Hardware context-loss recovery, physical mobile devices,
 full source visual parity and sustained combat GPU performance remain separate
 validation work.
 

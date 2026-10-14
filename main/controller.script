@@ -14,6 +14,8 @@ local firing_range = require "game.weapons.range"
 local ai_system = require "game.systems.ai"
 local soldier_adapter = require "game.ai.defold"
 local renderer_settings = require "game.render.settings"
+local capture_controller = require "game.render.capture_controller"
+local capture_shots = require "game.render.capture"
 local audio_system = require "game.systems.audio"
 local audio_adapter = require "game.audio.defold"
 local ui = require "game.ui.controller"
@@ -50,6 +52,7 @@ local function create_range(self)
 end
 
 local function restart_encounter(self)
+    capture_controller.finish(self)
     self.suppression_validation=nil
     audio_system.reset(self.ctx)
     select_view(self,nil)
@@ -137,6 +140,7 @@ function init(self)
     msg.post(".", "acquire_input_focus")
     window.set_listener(window_event)
     if automation_bridge then
+        capture_controller.install(self)
         automation_bridge.command("audio.snapshot",function() return audio_system.snapshot(self.ctx) end)
         automation_bridge.command("audio.configure",function(data)
             local result=audio_system.configure(self.ctx,data)
@@ -158,7 +162,7 @@ function init(self)
             description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
             output_schema={type="object"}})
         automation_bridge.describe("command","renderer.configure",{
-            description="Set shadows/normal_maps/local_lights/fog/bloom booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment. Presentation only.",
+            description="Set shadows/normal_maps/local_lights/fog/bloom booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/hdr_probe. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.validate_suppression",function()
@@ -371,7 +375,7 @@ function init(self)
 end
 
 function fixed_update(self, dt)
-    if self.ctx.paused then return end
+    if self.ctx.paused or self.capture then return end
     -- Collision objects acquire their Bullet broadphase handles after init.
     if self.ctx.world.ready and not self.ctx.services.capsule then
         self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id)
@@ -387,6 +391,7 @@ function fixed_update(self, dt)
 end
 
 function update(self, dt)
+    if self.capture then return end
     runtime.update(self.ctx, dt)
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
@@ -401,7 +406,8 @@ function update(self, dt)
 end
 
 local function update_lights(self,camera)
-    local selected=renderer_settings.select_lights(self.ctx.world.lights,camera)
+    local lights_source=self.capture and self.capture.shot.laboratory and {} or self.ctx.world.lights
+    local selected=renderer_settings.select_lights(lights_source,camera)
     local changed=not self.active_lights or #self.active_lights~=#selected
     for i,light in ipairs(selected) do
         if not self.active_lights or self.active_lights[i]~=light then changed=true end
@@ -423,17 +429,20 @@ function late_update(self, dt)
     -- Camera and GUI see interpolated presentation, never drive simulation.
     local out = self.ctx.presentation
     ai_system.present(self.ctx)
-    local view = self.view and self.ctx.world.views[self.view]
+    local view = self.capture and capture_shots.camera(self.capture.shot,self.capture.frame)
+        or self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
     update_lights(self,camera)
-    audio_system.present(self.ctx,dt,camera,view and view.yaw or out.yaw)
+    if not self.capture then audio_system.present(self.ctx,dt,camera,view and view.yaw or out.yaw) end
     self.camera_position.x, self.camera_position.y, self.camera_position.z = camera.x, camera.y, camera.z
     go.set_position(self.camera_position, "/camera")
     go.set_rotation(vmath.quat_rotation_y(view and view.yaw or out.yaw) * vmath.quat_rotation_x(view and view.pitch or out.pitch)
         * vmath.quat_rotation_z(view and 0 or out.roll), "/camera")
-    local visible = not view and self.ctx.world.ready and self.ctx.player.actor.alive
-    local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, self.ctx.paused and 0 or dt, visible)
-    go.set("/camera#camera", "fov", view and math.rad(70) or weapon_pose.world_fov)
+    local visible = self.capture and self.capture.shot.weapon~=nil
+        or not view and self.ctx.world.ready and self.ctx.player.actor.alive
+    local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, (self.ctx.paused or self.capture) and 0 or dt,
+        visible,self.capture and (self.capture.shot.weapon or "hidden"))
+    go.set("/camera#camera", "fov", view and (view.fov or math.rad(70)) or weapon_pose.world_fov)
     go.set("/viewmodel#camera", "fov", weapon_pose.view_fov)
     local weapon = weapon_system.snapshot(self.ctx)
     local ammo = string.format("%s  %s  %d / %d", weapon.label, string.upper(weapon.mode), weapon.ammo, weapon.reserve)
@@ -466,6 +475,10 @@ function late_update(self, dt)
 end
 
 function on_input(self, action_id, action)
+    if self.capture then
+        if action_id==ESCAPE and action.pressed then capture_controller.finish(self) end
+        return true
+    end
     local name = actions[action_id]
     ui_controls.observe(self.ui, name, action)
     if action_id == ESCAPE and action.pressed then
@@ -522,6 +535,7 @@ function on_message(self, message_id, message, sender)
 end
 
 function final(self)
+    if self.capture_lab then require("game.render.laboratory").final(self.capture_lab) end
     window.set_mouse_lock(false)
     window.set_listener(nil)
     msg.post(".", "release_input_focus")

@@ -194,24 +194,146 @@ bounded approximations; full material parity, mip/roughness filtering, local-lig
 shadows, cascades, ambient occlusion and temporal effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
-Port the procedural surface functions into Defold shaders that render albedo, normal and packed material maps during loading. Preserve texture generation rather than replacing it with exported images.
+**Rendering quality sequence — agreed 2026-10-14.** The target is the visual
+quality of the Three.js and Kaigen reference versions. Preserve runtime-generated
+materials and geometry. Prioritize surface richness, lighting and contact depth,
+then stability in motion and atmospheric effects. The numbered steps below are
+rendering steps, separate from the top-level implementation milestones.
 
-The initial lighting pipeline should contain:
+1. **Repeatable visual comparisons.** Define street, interior looking outside,
+   material detail, courtyard, hip-fire, ADS, sunset and night shots. Record
+   camera position/orientation, vertical FOV, pixel dimensions, seed, lighting,
+   exposure, quality and source revision. Hide UI and freeze gameplay. Add an
+   opt-in generated material laboratory with panels, a floor, roughness spheres
+   and a furnished corner, plus a deterministic slow camera sweep. Save stills,
+   motion sequences and a comparison manifest. Separate exact within-backend
+   regression comparisons from adapted cross-engine framing. Explicitly report
+   unsupported lighting states and unavailable reference captures.
+   **Gate:** Fixed, reproducible captures and motion samples establish the
+   baseline; every later step produces comparisons and a rendering-cost report.
 
-- Sunlight, ambient/environment illumination and a bounded set of local lights.
-- Normal mapping and roughness/metalness shading.
-- Shadow maps.
-- Procedural sky and height fog.
-- Separate weapon rendering.
-- Tone mapping, modest bloom and the HUD.
+2. **HDR and colour pipeline.** Replace the fixed 0–8 encoded RGBA8 radiance on
+   the main quality path with floating-point HDR. Verify renderability, filtering
+   and blending on each backend first. Establish linear-light calculations,
+   accurate sRGB conversion and one display conversion. Port the references'
+   AgX tone mapper, initially using fixed exposure and a neutral grade.
+   **Gate:** Bright sky, metal and dark rooms retain detail without clipping,
+   banding or inconsistent world/weapon exposure.
 
-Defold exposes PBR material data, but its documentation explicitly distinguishes that from providing a complete built-in PBR lighting model. Lighting and reflections still need shader implementation. [PBR documentation](https://defold.com/manuals/physically-based-rendering/)
+3. **Full procedural surface recipes.** Port plaster, concrete, asphalt and wood
+   first; brick, tile, dirt and gravel next; then painted/rusted/brushed metal,
+   fabric, rubber and glass. Generate albedo/height, normals and packed
+   occlusion/roughness/metalness with per-material physical scale and relief.
+   Implement mipmaps, suitable filtering and storage that prevents tile bleeding.
+   **Gate:** Materials remain distinct at near, medium and far distances without
+   distant shimmer or atlas seams.
 
-Use 1.14.0 cubemap targets for environment generation, with updates spread over frames. Roughness filtering remains additional work.
+4. **Weathering and variation.** Add metre-scale discolouration, replastering,
+   runoff, ground splash, dust, cavity grime and edge wear. Extend generated mesh
+   data with wear/grime/occlusion masks. Add fading micro normals and selective
+   close-range parallax; keep variation deterministic and surface-anchored.
+   **Gate:** Whole façades have structure at several scales and close-ups show
+   relief without an obvious repeating grid.
 
-Add ambient occlusion and better shadows next. Treat TAA, motion vectors, SSR, volumetric lighting and motion blur as later rendering milestones. The source's full pipeline is substantial enough to be a project within the port.
+5. **Sunlight, environment and interiors.** Use one lighting configuration for
+   the sun, sky, diffuse fill and environment reflections. Implement filtered
+   reflection levels by roughness and a proper image-based lighting response.
+   Port the references' interior-volume attenuation of skylight and bounce;
+   preserve warm ground bounce, cooler sky fill and bounded room lights.
+   **Gate:** Sunlit walls, shade, covered stalls and deep interiors have distinct
+   illumination, with bright doorways into darker rooms.
 
-Establish consistent world and weapon lighting early. The Three.js README's reported viewmodel exposure problems are a useful warning against accumulating compensating material adjustments.
+6. **Stable cascaded sun shadows.** Add camera-following cascades, texel
+   stabilization, blended boundaries, tuned bias and reference-like softness.
+   Start with three/four cascades and choose resolution from measured quality and
+   cost. Include matching animated and alpha-cutout shadow casters.
+   **Gate:** Detail holds near the camera and coverage holds at distance without
+   crawling, detached shadows or visible cascade seams during a slow sweep.
+
+7. **Depth/normals, ambient occlusion and contact shadows.** Add a shared prepass
+   for static and skinned geometry, GTAO-style occlusion with edge-aware filtering,
+   and short depth-buffer rays toward the sun. Apply occlusion to the appropriate
+   lighting terms and avoid double-darkening material cavities.
+   **Gate:** Floors, furniture, stairs, window recesses and feet have convincing
+   contact depth without black halos.
+
+8. **Temporal stability.** Add camera, object and skinned motion vectors, then
+   TAA with history rejection and neighbourhood clipping. Reset history after
+   teleports, restarts and size changes. Antialias the weapon separately and
+   composite it after the world's temporal processing.
+   **Gate:** Thin edges, textures and highlights remain stable in motion without
+   trails behind soldiers or ghosting/transparency on the weapon.
+
+9. **Reflections, glass and local lights.** Add SSR for smooth materials with
+   filtered environment fallback, an explicit transparent glass path, improved
+   local-light selection and a bounded shadow budget for important local lights.
+   Integrate muzzle-flash lighting.
+   **Gate:** Metal, glass and masonry respond differently; reflections disappear
+   gracefully at screen edges and room lighting does not visibly pop.
+
+10. **Atmosphere.** Port the reference atmospheric sky, cloud layers, sun/moon
+    appearance and matching environment updates. Establish fixed daylight,
+    sunset and night before animating time. Add shadowed volumetric fog/window
+    shafts with reduced-resolution rendering and edge-aware reconstruction.
+    **Gate:** Distance reads convincingly, sunset retains colour and contrast,
+    and indoor shafts follow real openings and occluders.
+
+11. **Weapon and combat rendering.** Apply richer materials to weapons, gloves
+    and soldiers; match their indirect lighting indoors. Add emissive flashes,
+    depth-softened smoke/dust, impact decals and correct transparent sorting.
+    **Gate:** Hip-fire, ADS and firing shots have consistent quality and readable
+    sights, without particle rectangles, glowing dark metal or fogged weapons.
+
+12. **Final photographic treatment and qualification.** Add multiscale bloom,
+    controlled exposure adaptation, the generated reference colour grade and
+    restrained sharpening. Add adjustable motion blur and ADS depth of field
+    after temporal data is reliable; tune vignette and grain last. Record GPU
+    time/memory throughout and derive quality presets from the measurements.
+    **Gate:** The complete still/motion set has comparable contrast, colour,
+    material richness and stability at the agreed performance target.
+
+Steps 1–7 form the first substantial visual milestone. Full screenshot parity
+also depends on geometry: bevels, façade recesses, balconies, clutter and weapon
+silhouettes must be tracked wherever they limit a rendering comparison.
+Step 1 is in progress: a versioned Defold capture catalogue, opt-in material lab,
+frozen hip/ADS poses, frame-addressed sweep, manifest and comparison tools are
+implemented. Native Metal captures verify exact repeat pixels, frozen simulation,
+fixture cleanup and restoration of settings. A Three.js capture adapter uses the
+same level-space cameras through its world transform. Kaigen captures, reference
+laboratory coverage and matching time-of-day lighting remain open; sunset/night
+are explicitly unsupported in the current Defold renderer. See `README.md` for
+capture commands and the distinction between visual and pixel comparisons.
+The overlap blocker is fixed: slabs and walls meet at butt joints, trim and
+parapet corners no longer overlap, and box faces buried by adjacent solids are
+clipped before upload. The world near plane is 0.1 m to improve depth precision
+at close trim joints; the viewmodel retains its own near plane. All seven
+supported shots match every RGB pixel across three independent Metal launches.
+`tests/render_baseline.py --launches 3` makes this a strict regression gate.
+Native collision checks also pass continuous player and AI traversal through
+W2 and both E2 upper floors, including the return journeys and stair guards.
+The Three.js street also matched exactly across two independent launches.
+
+Step 2 is in progress: Metal uses linear RGBA16F for scene, weapon, bloom and
+environment, with accurate sRGB transfer functions and the references' neutral
+AgX curve at fixed exposure. The final composite performs the only display
+conversion; GUI remains display-referred. GPU probes verify values above 8,
+linear filtering, hardware blending, world/weapon coverage, transfer-function
+knees and the reference curve at exposures 0.25/1/4. Native rendering smoke
+checks also pass. Storage at 1280 × 720 rises from 26.35 to 33.91 MiB; the target
+count remains nine. The encoded RGBA8 compatibility path remains available.
+The HDR capture set also passes all seven shots across three fresh launches;
+per-shot CPU scopes, submitted draws and target estimates are in the manifests.
+Remaining step-2 work: qualify HDR renderability/filtering/blending on WebGL and
+other native backends, test physical mobile devices, measure GPU frame cost,
+and review the bright-sky/metal/dark-room motion set before closing the gate.
+Unqualified backends deliberately retain the compatibility path; exposing an
+RGBA16F enum alone is not treated as evidence of complete support.
+The [Three.js pipeline](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/render/index.js),
+[material library](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/materials/library.js),
+and [Kaigen look configuration](/Users/bjornritzl/Downloads/kaigen-claude-of-duty-main/src/claude_of_duty/cod_look.c)
+are the source references. Kaigen's engine implementation is not included in the
+local checkout; its renderer integration must not be mistaken for a locally
+verified engine build.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

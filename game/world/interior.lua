@@ -45,6 +45,7 @@ local function floor_geometry(layout, b, level, box)
     local s, u = M.describe(layout,b,level), upper(b,level)
     local node_prefix = M.prefix(b,level)
     local wall, slab, storey = layout.wall, layout.slab, layout.storey
+    local wall_height = storey - slab
     local x0, x1, z0, z1 = b.x-b.w/2, b.x+b.w/2, b.z-b.d/2, b.z+b.d/2
     local prefix = level == 1 and b.id .. "/upper/" or node_prefix
     for _, r in ipairs(s.slabs) do
@@ -67,10 +68,10 @@ local function floor_geometry(layout, b, level, box)
         box(prefix.."guard/end","wood",s.x,s.upper+.55,s.start-s.direction*.06,s.x1-s.x0,1.1,.12,"wood")
     end
     for _, side in ipairs({{"west",x0+wall/2},{"east",x1-wall/2}}) do
-        box(prefix..side[1],b.material,side[2],s.upper+storey/2,b.z,wall,storey,b.d,"plaster")
+        box(prefix..side[1],b.material,side[2],s.upper+wall_height/2,b.z,wall,wall_height,b.d,"plaster")
     end
     for _, side in ipairs({{"south",z0+wall/2},{"north",z1-wall/2}}) do
-        box(prefix..side[1],b.material,b.x,s.upper+storey/2,side[2],b.w,storey,wall,"plaster")
+        box(prefix..side[1],b.material,b.x,s.upper+wall_height/2,side[2],b.w-2*wall,wall_height,wall,"plaster")
     end
     if level == b.floors-1 then
         box(b.id.."/roof","concrete",b.x,s.upper+storey-slab/2,b.z,b.w,slab,b.d,"concrete")
@@ -82,9 +83,9 @@ local function floor_geometry(layout, b, level, box)
                 axis=="x" and (a+c)/2 or fixed,axis=="x" and wall or c-a,h,
                 axis=="x" and c-a or wall,"plaster")
         end
-        piece("left",lo,door-width/2,s.upper+storey/2,storey)
-        piece("right",door+width/2,hi,s.upper+storey/2,storey)
-        piece("lintel",door-width/2,door+width/2,s.upper+(storey+u.door_height)/2,storey-u.door_height)
+        piece("left",lo,door-width/2,s.upper+wall_height/2,wall_height)
+        piece("right",door+width/2,hi,s.upper+wall_height/2,wall_height)
+        piece("lintel",door-width/2,door+width/2,s.upper+(wall_height+u.door_height)/2,wall_height-u.door_height)
     end
     partition("hall_door","x",u.partition_x,z0+wall,z1-wall,u.door_z,u.door_width)
     partition("bedroom_door","z",u.bedroom_z,b.side == 1 and u.partition_x or x0+wall,

@@ -20,7 +20,13 @@ void main() {
     vec3 albedo=linear_colour(var_color.rgb)*texture2D(albedo_texture,uv).rgb;
     vec3 packed=texture2D(material_texture,uv).rgb;
     vec3 bump=texture2D(normal_texture,uv).rgb*2.0-1.0;
+    // Uniform-material laboratory spheres exercise the production lighting path.
+    if (surface.y>0.5) {
+        albedo=linear_colour(var_color.rgb);
+        packed=vec3(surface.z,surface.w,1.0);
+        bump=vec3(0.0,0.0,1.0);
+    }
     n=normalize(n*bump.z+(tangent*bump.x+bitangent*bump.y)*features.y);
-    vec3 radiance=lighting(albedo,max(packed.r,0.18),packed.g,packed.b,var_world,n);
+    vec3 radiance=lighting(albedo,max(packed.r,surface.y>0.5?0.04:0.18),packed.g,packed.b,var_world,n);
     gl_FragColor=vec4(encode_radiance(height_fog(radiance,var_world)),1.0);
 }
