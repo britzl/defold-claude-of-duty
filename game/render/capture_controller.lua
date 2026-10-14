@@ -17,6 +17,7 @@ function M.finish(self)
     if not self.capture then return M.snapshot(self) end
     local saved=self.capture.saved
     self.capture=nil
+    require("game.render.combat_fx_defold").fixture(self.combat_visuals,false)
     self.renderer_settings=saved.settings
     msg.post("@render:","renderer_configure",saved.settings)
     msg.post("@render:","capture_configure",{active=false,laboratory=false})
@@ -33,14 +34,15 @@ function M.select(self,data)
     shots.camera(shot,frame)
     if shot.laboratory and not self.capture_lab then self.capture_lab=laboratory.create() end
     local saved=self.capture and self.capture.saved or {settings=self.renderer_settings}
-    self.capture={shot=shot,frame=frame,saved=saved,temporal_live=data.temporal_live==true}
+    require("game.render.combat_fx_defold").fixture(self.combat_visuals,shot.combat_fixture)
+    self.capture={shot=shot,frame=frame,saved=saved,actors=data.actors==true,temporal_live=data.temporal_live==true}
     self.renderer_settings=settings.configure(settings.defaults(),{lighting=shot.lighting or "daylight",clouds=shot.clouds~=false})
     self.active_lights=nil
     input.reset(self.ctx.input)
     window.set_mouse_lock(false)
     audio.suspend(self.ctx,true)
     msg.post("@render:","renderer_configure",self.renderer_settings)
-    msg.post("@render:","capture_configure",{active=true,laboratory=shot.laboratory or false,temporal_live=self.capture.temporal_live})
+    msg.post("@render:","capture_configure",{active=true,laboratory=shot.laboratory or false,actors=self.capture.actors,temporal_live=self.capture.temporal_live})
     return M.snapshot(self)
 end
 function M.install(self)

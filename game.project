@@ -34,7 +34,7 @@ clear_color_blue = 0.77
 clear_color_alpha = 1.0
 
 [mesh]
-max_count = 256
+max_count = 384
 
 [sound]
 max_component_count = 24

@@ -20,3 +20,4 @@ materials { name: "glass_composite" material: "/render/glass_composite.material"
 materials { name: "atmosphere" material: "/render/atmosphere.material" }
 materials { name: "fog" material: "/render/fog.material" }
 materials { name: "fog_composite" material: "/render/fog_composite.material" }
+materials { name: "weapon_composite" material: "/render/weapon_composite.material" }

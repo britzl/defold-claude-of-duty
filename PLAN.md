@@ -194,8 +194,8 @@ are now implemented (steps 3–4 below);
 Unified daylight, filtered environment lighting and interior attenuation are
 implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Temporal stability is implemented in rendering step 8. Reflections, transparent
 glass, local-light shadows and muzzle lighting are implemented in rendering step 9.
-Atmosphere is implemented in rendering step 10. Weapon/combat refinements and
-the remaining photographic effects remain later stages.
+Atmosphere is implemented in rendering step 10. Weapon/combat rendering is
+implemented in rendering step 11. Final photographic effects remain step 12.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -562,6 +562,28 @@ The WebGL 2 compatibility path passes 124 stages and the complete pixel gates.
 See `README.md` for validation scope, retained failure logs and remaining backend qualification.
 The sky bake is synchronous on preset changes; full reference multiscattering,
 animated cloud shadows and time-of-day transitions remain future refinements.
+
+Step 11 implementation is complete: shared, footprint-filtered recipes cover
+coated/bare metal, polymer, woven/camouflage fabric, rubber and skin. Weapon
+and soldier detail stays in mesh/bind space and receives the existing world-space
+indirect light, local lights and shadows. Feathered emissive viewmodel flashes
+retain independent depth and AA. An isolated linear flash
+layer samples weapon depth and resolves into premultiplied radiance, preserving
+HDR/encoded storage precision and correct blending on both paths.
+
+Real shot/impact events feed bounded pools of 24 smoke/world-flash quads and 32
+surface-aligned impact marks, backed by one shared generated buffer. Soft depth
+intersections, receiver depth/normal clipping, fading and restart/pause lifecycle
+are implemented. A shared transparent queue sorts effects with glass after world
+TAA. The capture catalogue covers all weapon hip/ADS poses, indoor balance,
+firing, soft intersections and smoke/glass overlap; frozen actor captures support
+soldier review. The Combat menu and automation expose independent feature toggles.
+No new render targets are needed; 720p HDR remains 218.11 MiB steady. See README.md
+for qualification results, bounded resource costs and compatibility limitations.
+All 172 Lua checks pass, and all 56 capture views match every RGB pixel across
+three independent native launches. The WebGL 2 compatibility path passes all
+143 capture stages and pixel assertions. Physical mobile and sustained GPU budgets
+remain subsequent qualification work.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

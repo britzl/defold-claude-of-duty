@@ -21,6 +21,13 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
         images[view]=combined;combined.save(output/(view+'.png'))
     validate_maps(images,atlas_layout(stats['material_quality']))
     metrics={}
+    for first,second in [('rifle_hip','rifle_materials_off'),('weapon_indoor','weapon_indoor_ungated'),
+                         ('weapon_fire','weapon_flash_off'),('combat_effects','combat_effects_off'),
+                         ('combat_effects','combat_soft_off'),('combat_effects','combat_decals_off'),('combat_glass','combat_glass_off')]:
+        a=Image.open(output/(first+'.png')).convert('RGB');b=Image.open(output/(second+'.png')).convert('RGB')
+        difference=sum(ImageStat.Stat(ImageChops.difference(a,b)).mean)/3
+        assert difference>.002,(first,second,difference);metrics[first+'_'+second]=difference
+    assert ImageChops.difference(Image.open(output/'combat_effects.png'),Image.open(output/'combat_effects_return.png')).getbbox() is None
     for first,second in [('street','sunset'),('sunset','night'),('sky_daylight','clouds_disabled'),
                          ('sunset','sunset_fog_disabled'),('shafts_shadowed','shafts_unshadowed'),
                          ('environment_atlas','sunset_environment'),('sunset_environment','night_environment')]:

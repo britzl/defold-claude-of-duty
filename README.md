@@ -45,6 +45,7 @@ lua tests/atmosphere_test.lua
 lua tests/shadows_test.lua
 lua tests/temporal_test.lua
 lua tests/local_lights_test.lua
+lua tests/combat_fx_test.lua
 lua tests/surface_atlas_test.lua
 lua tests/visible_faces_test.lua
 lua tests/weathering_test.lua
@@ -70,6 +71,7 @@ PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/atmosphere_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/combat_rendering_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/shadows_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/occlusion_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/temporal_smoke.py
@@ -730,7 +732,7 @@ rubber has pebble grain, scuffs and mould seams; glass has smears and water spot
 The glass recipe panel remains an opaque material preview. Step 9 uses that recipe
 on separate transparent panes, including the two shop display cases. Thin panes
 use Fresnel reflection and transmission; refractive distortion is not implemented.
-Weapon/soldier material expansion remains step 11.
+Weapon/soldier material expansion is implemented in step 11; see the combat rendering section.
 
 | Recipe | Tile width (m) | Height relief (m) |
 | --- | ---: | ---: |
@@ -1207,6 +1209,74 @@ remain unqualified.
 - `captures/rendering/reflections-validation`: reflection/glass/shadow diagnostics, toggle returns, a 13-image continuous-history sweep and firing-light checks.
 - `captures/rendering/reflections-review-verified`: labelled step-8/step-9 comparisons and `costs.json` with measurement scope.
 - `captures/rendering/reflections-browser-verified`: 107 WebGL stages, pixel checks, GPU queries and matching-source build provenance.
+
+## Weapon and combat rendering (step 11)
+
+Weapons, gloves and soldiers share generated combat surface recipes for coated
+metal, steel, polymer, woven fabric, camouflage, skin and rubber. Mesh-local or
+bind-pose coordinates keep the detail attached during recoil, reloads and skinning.
+Physical-frequency brush marks, coating scratches, stipple and weave fade with
+pixel footprint; small surface gradients perturb the lighting normal. Metallic
+and dielectric responses use the existing world-space daylight, filtered IBL,
+room attenuation, local lights and shadows. The carried carbine uses metal and
+polymer responses rather than the soldier's fabric response.
+
+The muzzle flash is a feathered emissive quad in the independent weapon depth
+pass. It retains coverage through weapon AA and never enters world fog or TAA.
+Weapon colour retains RGBA16F on qualified Metal and square-root-encoded RGBA8
+on the fallback, now representing premultiplied radiance consistently. A separate
+linear flash layer samples the weapon's [texture-backed depth](https://defold.com/ref/render-lua/#render_target) and resolves in a
+shader before AA. It reuses idle transparency/AA targets and costs one resolve
+draw only while a flash is visible. This preserves dark-tone precision and correct
+blending on the compatibility path, with its existing 0–8 radiance ceiling.
+World radiance encoding is unchanged.
+Sparks and tracers emit light; cartridge cases use a brass response.
+
+Actual firing and impact events feed 24 smoke/world-flash slots and 32 static
+impact-mark slots. All 56 meshes share one generated six-vertex buffer (144 bytes
+of vertex data). Spawns reuse expired slots or replace the oldest; smoke grows,
+rises and fades, and marks fade over the last two seconds of an 18-second life.
+Player smoke resolves the animated muzzle rather than spawning at the ballistic
+eye origin. Flesh, glass, water and moving fabric/foliage do not receive static
+marks. Existing rigid chips, tracers and cases keep their separate 24-slot pool.
+Restart clears both pools; pause freezes their lifetimes.
+
+Smoke uses opaque view depth to soften intersections and suppress near-camera
+rectangles. Impact marks align to the collision normal and clip against the
+receiver's depth and geometric normal, preventing marks across openings or sharp
+corners. Glass, smoke, world flashes and decals share a single back-to-front draw
+queue with premultiplied linear blending after world TAA. Transparent effects
+therefore do not leave temporal trails. This is object-centre sorting of small
+quads and nonintersecting panes, not order-independent volume transparency.
+
+The pause menu's **Combat** tab exposes material detail, effects, soft intersections
+and impact marks. Automation accepts `combat_materials`, `combat_effects`,
+`soft_particles` and `impact_decals` in `renderer.configure`; `combat_fx.snapshot`
+reports live counts, events and fixed resources. Version 11 captures add hip/ADS
+for all three weapons, indoor weapon lighting, firing, soft intersections and
+glass overlap. `capture.shot` optionally accepts `actors=true` to retain frozen
+live soldiers while hiding the HUD; ordinary catalogue shots still hide actors.
+The mesh component ceiling is 384 to accommodate effects alongside the material
+laboratory. No additional render targets or material textures are allocated;
+steady 720p HDR target storage remains 218.11 MiB (23 targets).
+
+Validation covers 172 Lua checks, native material/effect toggle returns, actual
+shot and impact events, pause/restart/resource bounds, skinned soldier materials,
+odd resizing and a continuous camera sweep. All 56 catalogue views match every
+RGB pixel across three independent Metal launches. Chromium WebGL 2 passes all
+143 capture stages and the full texture/depth/feature/return-pixel assertions.
+Native renderer, HDR, temporal, weapons, AI and UI regressions pass. Review artifacts are:
+
+- `captures/rendering/combat-final`: repeatability, stills and frozen native profiles.
+- `captures/rendering/combat-validation`: pixel gates, motion samples and live firing costs.
+- `captures/rendering/combat-review`: labelled step-10/step-11 comparisons and `costs.json`.
+- `captures/rendering/combat-browser-final`: WebGL compatibility captures and GPU samples.
+
+The frozen native weapon view submits 776 draws; its firing counterpart submits
+778 (one flash quad and one resolve). These are scene-specific submitted counts,
+not a sustained gameplay or GPU benchmark. Physical mobile, other native backends, WebGL floating-point HDR, context recovery
+and sustained combat GPU budgets remain unqualified. Geometry bevels, richer
+soldier anatomy and source weapon silhouettes remain separate visual-parity work.
 
 ## Atmosphere (rendering step 10)
 

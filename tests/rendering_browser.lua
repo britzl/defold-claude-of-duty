@@ -71,6 +71,17 @@ function M.new()
         {name="night",id="night_environment",changes={view="environment_atlas"}},
         {name="street",id="step10_disabled_cost",live=true,changes={fog=false}},
     }) do steps[#steps+1]=step end
+    for _,step in ipairs({
+        {name="rifle_hip",id="rifle_materials_off",changes={combat_materials=false}},
+        {name="weapon_indoor",id="weapon_indoor_ungated",changes={interior_lighting=false}},
+        {name="weapon_fire",id="weapon_flash_off",changes={combat_effects=false}},
+        {name="combat_effects",id="combat_effects_off",changes={combat_effects=false}},
+        {name="combat_effects",id="combat_soft_off",changes={soft_particles=false}},
+        {name="combat_effects",id="combat_decals_off",changes={impact_decals=false}},
+        {name="combat_effects",id="combat_effects_return"},
+        {name="combat_glass",id="combat_glass_off",changes={glass=false}},
+        {name="combat_glass",id="combat_glass_return"},
+    }) do steps[#steps+1]=step end
     steps[#steps+1]={name="street",id="street_return"}
     return {steps=steps,index=0,frames=0,intervals={}}
 end

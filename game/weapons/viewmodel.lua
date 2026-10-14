@@ -52,11 +52,12 @@ function M.pose(ctx,model)
     sample.parts.reticle.visible=ads>.8 and not w.clip
     return sample
 end
-function M.capture(model,ads)
+function M.capture(model,ads,equipped)
+    equipped=equipped or "rifle"
     local recoil,previous={},{}
     for _,name in ipairs({"pitch","roll","up","back"}) do recoil[name]={x=0};previous[name]=0 end
     return M.pose({time={alpha=0,elapsed=0},player={motion={velocity={x=0,z=0},grounded=true}},
-        weapons={equipped="rifle",ads=ads and 1 or 0,previous_ads=ads and 1 or 0,
-            recoil=recoil,previous_recoil=previous,inventory={rifle={chambered=true}},since_shot=1,flash=0}},model)
+        weapons={equipped=equipped,ads=ads and 1 or 0,previous_ads=ads and 1 or 0,
+            recoil=recoil,previous_recoil=previous,inventory={[equipped]={chambered=true}},since_shot=1,flash=0}},model)
 end
 return M

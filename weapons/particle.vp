@@ -1,0 +1,17 @@
+attribute highp vec3 position;
+attribute mediump vec3 normal;
+uniform highp mat4 world;
+uniform highp mat4 view_proj;
+uniform highp mat4 view;
+varying highp vec3 var_world;
+varying mediump vec3 var_normal;
+varying mediump vec3 var_view_normal;
+varying highp float var_depth;
+varying mediump vec2 var_uv;
+void main() {
+    vec4 p=world*vec4(position,1);
+    var_world=p.xyz;var_normal=normalize((world*vec4(normal,0)).xyz);
+    var_view_normal=mat3(view)*var_normal;var_depth=-(view*p).z;
+    var_uv=position.xy*2.0;
+    gl_Position=view_proj*p;
+}

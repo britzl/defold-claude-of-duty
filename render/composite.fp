@@ -67,7 +67,7 @@ void main() {
         world+=decode_radiance(texture2D(bloom_texture,var_uv).rgb)*post.y;
         vec4 weapon=texture2D(weapon_texture,var_uv);
         // Fog and bloom apply to the world; tone mapping is identical for both.
-        vec3 combined=mix(world,decode_radiance(weapon.rgb),weapon.a);
+        vec3 combined=world*(1.0-weapon.a)+decode_radiance(weapon.rgb);
         float dither=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(0.06711056,0.00583715))));
         gl_FragColor=vec4(clamp(tone_map(combined)+(dither-0.5)/255.0,0.0,1.0),1.0);
     }

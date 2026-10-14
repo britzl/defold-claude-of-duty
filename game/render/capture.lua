@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 10, width = 1280, height = 720, settle_frames = 40,
+local M = { version = 11, width = 1280, height = 720, settle_frames = 40,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -82,6 +82,20 @@ shots[#shots+1]={id="sky_night",position={0,12,10},target={-6,28,-30},fov=65,ref
     purpose="Phased lunar disc, stars and cloud occlusion."}
 shots[#shots+1]={id="moon",position={0,12,10},target={-7.6,28,-30},fov=20,reference=false,lighting="night",clouds=false,
     purpose="Clear-sky lunar terminator and stable stars at fixed exposure."}
+for _,weapon in ipairs({"rifle","smg","pistol"}) do
+    for _,pose in ipairs({"hip","ads"}) do
+        shots[#shots+1]={id=weapon.."_"..pose,position={0,1.66,10},target={0,1.66,-8},fov=pose=="ads" and 58 or 80,
+            weapon=pose,weapon_id=weapon,reference=false,purpose="Generated weapon surfaces and readable sights."}
+    end
+end
+shots[#shots+1]={id="weapon_indoor",position={-14.5,1.805,-3.2},target={-6.5,1.805,0},fov=80,
+    weapon="hip",reference=false,purpose="Weapon indirect light follows the camera into a dark interior."}
+shots[#shots+1]={id="weapon_fire",position={0,1.66,10},target={0,1.66,-8},fov=80,
+    weapon="hip",firing=true,reference=false,purpose="Emissive feathered flash and isolated viewmodel coverage."}
+shots[#shots+1]={id="combat_effects",position={0,1.1,8.2},target={.1,.1,6.3},fov=60,
+    combat_fixture=true,reference=false,purpose="Soft smoke intersection, surface decals and world flash."}
+shots[#shots+1]={id="combat_glass",position={43.5,1.8,5.5},target={42,1.2,-2},fov=55,
+    laboratory=true,combat_fixture="glass",reference=false,purpose="Glass and smoke share depth sorting in front of, between and behind panes."}
 local function copy(t)
     if type(t)~="table" then return t end
     local result={};for k,v in pairs(t) do result[k]=copy(v) end;return result

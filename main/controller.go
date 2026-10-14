@@ -20,3 +20,5 @@ components { id: "audio_loop" component: "/audio/loop.factory" }
 components { id: "capture_mesh" component: "/render/laboratory.factory" }
 components { id: "glass_mesh" component: "/render/glass.factory" }
 components { id: "capture_glass" component: "/render/glass_lab.factory" }
+components { id: "combat_particle" component: "/weapons/particle.factory" }
+components { id: "weapon_flash" component: "/weapons/flash.factory" }

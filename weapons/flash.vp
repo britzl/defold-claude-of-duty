@@ -1,0 +1,7 @@
+attribute highp vec3 position;
+uniform highp mat4 world_view_proj;
+varying highp vec3 var_local;
+void main() {
+    var_local=position;
+    gl_Position=world_view_proj*vec4(position,1.0);
+}

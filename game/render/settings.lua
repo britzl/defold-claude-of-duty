@@ -17,7 +17,7 @@ function M.pipeline(adapter, half_float, requested)
         tone_mapper="agx_neutral",output="srgb",exposure_mode="fixed"}
 end
 function M.defaults()
-    return { lighting = "daylight", clouds = true, volumetric_fog = true, fog_shadows = true, reflections = true, glass = true, local_shadows = true, muzzle_lights = true, temporal_aa = true, weapon_aa = true, ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
+    return { combat_materials = true, combat_effects = true, soft_particles = true, impact_decals = true, lighting = "daylight", clouds = true, volumetric_fog = true, fog_shadows = true, reflections = true, glass = true, local_shadows = true, muzzle_lights = true, temporal_aa = true, weapon_aa = true, ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
         interior_lighting = true, environment_filter = true, environment_level = 0,
         bloom = true, weathering = true, micro_detail = true, parallax = true,
         exposure = 1, view = "scene", atlas_half = 0, atlas_page = 0 }

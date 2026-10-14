@@ -37,10 +37,10 @@ function M.new(ctx,mesh_factory,effect_factory)
         local model=geometry.weapon(id)
         a.models[id]=model
         for _,name in ipairs({"body","magazine","bolt","charge","left_hand","right_hand","reticle","flash"}) do
-            model.parts[name]=upload(a,model.parts[name],mesh_factory)
+            model.parts[name]=upload(a,model.parts[name],name=="flash" and "#weapon_flash" or mesh_factory)
             visible(model.parts[name],false)
         end
-        go.set(model.parts.flash.url,"tint",vmath.vector4(1,1,1,1))
+        go.set_scale(.14,model.parts.flash.id)
         go.set(model.parts.reticle.url,"tint",vmath.vector4(1,1,1,1))
     end
     -- Fixed resource budget for short-lived surface particles, tracers and cases.
@@ -66,13 +66,15 @@ function M.new(ctx,mesh_factory,effect_factory)
         local color=colors[hit.effect] or {.57,.57,.52}
         for i=1,3 do
             local n=hit.normal
-            effect(hit.point,{x=n.x*(.7+i*.3)+(i-2)*.4,y=n.y+1+i*.2,z=n.z*(.7+i*.3)},color,
+            local e=effect(hit.point,{x=n.x*(.7+i*.3)+(i-2)*.4,y=n.y+1+i*.2,z=n.z*(.7+i*.3)},color,
                 hit.effect=="sparks" and .018 or .035, .25+i*.04)
+            if hit.effect=="sparks" then go.set(e.url,"tint",vmath.vector4(color[1],color[2],color[3],1)) end
         end
     end)
     events.on(ctx.events,events.WEAPON_SHELL,a,function(_,shell)
         local e=effect(shell.position,shell.velocity,{.58,.42,.16},.014,.65)
         e.shell=true
+        go.set(e.url,"tint",vmath.vector4(.58,.42,.16,-1))
     end)
     events.on(ctx.events,events.BULLET_TRACER,a,function(_,shot)
         local delta={x=shot.to.x-shot.from.x,y=shot.to.y-shot.from.y,z=shot.to.z-shot.from.z}
@@ -80,16 +82,18 @@ function M.new(ctx,mesh_factory,effect_factory)
         if length<.01 then return end
         local e=effect(V.point(shot.from,delta,.5),{x=0,y=0,z=0},{.95,.78,.36},.008,.035)
         e.tracer=true;e.length=length
+        go.set(e.url,"tint",vmath.vector4(.95,.78,.36,1))
         local q=V.forward_rotation(delta)
         go.set_rotation(vmath.quat(q.x,q.y,q.z,q.w),e.id)
     end)
     return a
 end
-function M.update(a,ctx,dt,shown,capture_pose)
+function M.update(a,ctx,dt,shown,capture_pose,capture_weapon,capture_flash)
     local w=ctx.weapons
-    local equipped=capture_pose and "rifle" or w.equipped
+    local equipped=capture_pose and (capture_weapon or "rifle") or w.equipped
     local active=a.models[equipped]
-    local sample=capture_pose and pose.capture(active,capture_pose=="ads") or pose.pose(ctx,active)
+    local sample=capture_pose and pose.capture(active,capture_pose=="ads",equipped) or pose.pose(ctx,active)
+    if capture_flash then sample.parts.flash.visible=true end
     local q=rotation(sample.rotation)
     local root=vector(sample.position)
     for id,model in pairs(a.models) do
@@ -159,6 +163,9 @@ function M.query(registries,options)
         end
         return result
     end}
+end
+function M.reset(a)
+    for _,e in ipairs(a.effects) do e.life=0;e.previous_world=nil;visible(e,false) end
 end
 function M.final(a,ctx)
     events.off_owner(ctx.events,a)

@@ -4,10 +4,10 @@ local rig = require "game.ai.rig"
 local primitive = require "game.weapons.geometry"
 local V = require "game.weapons.math"
 local M = {}
-local cloth={.48,.43,.29,1}
-local gear={.29,.28,.19,0}
-local dark={.075,.083,.078,0}
-local skin={.54,.36,.24,0}
+local cloth={.48,.43,.29,6}
+local gear={.29,.28,.19,3}
+local dark={.075,.083,.078,5}
+local skin={.54,.36,.24,4}
 local function cross(a,b) return {x=a.y*b.z-a.z*b.y,y=a.z*b.x-a.x*b.z,z=a.x*b.y-a.y*b.x} end
 local function weights(b,first,last,a,c,w)
     for _=first,last do
@@ -84,7 +84,7 @@ function M.build()
     box(b,"Head",0,1.60,-.10,.165,.076,.042,gear)
     box(b,"Spine2",0,1.30,-.14,.32,.31,.062,gear)
     box(b,"Spine2",0,1.30,.137,.32,.31,.06,gear)
-    for i=-1,1 do box(b,"Spine2",i*.101,1.21,-.187,.086,.14,.054,{.36,.32,.21,0}) end
+    for i=-1,1 do box(b,"Spine2",i*.101,1.21,-.187,.086,.14,.054,{.36,.32,.21,3}) end
     box(b,"Hips",0,1.018,0,.38,.055,.30,dark)
     for _,side in ipairs({"R","L"}) do
         limb(b,"UpperArm"..side,"Forearm"..side,.075,.06,cloth)
@@ -100,9 +100,9 @@ function M.build()
     end
     -- Simplified carried carbine, rigidly skinned to the firing hand.
     local x=.115
-    box(b,"HandR",x,1.357,-.26,.062,.08,.30,dark,-.10)
-    box(b,"HandR",x,1.37,-.465,.061,.065,.23,gear,-.10)
-    box(b,"HandR",x,1.337,-.622,.021,.021,.18,dark,-.10)
+    box(b,"HandR",x,1.357,-.26,.062,.08,.30,primitive.colors.metal,-.10)
+    box(b,"HandR",x,1.37,-.465,.061,.065,.23,primitive.colors.polymer,-.10)
+    box(b,"HandR",x,1.337,-.622,.021,.021,.18,primitive.colors.steel,-.10)
     box(b,"HandR",x,1.384,.006,.066,.10,.22,dark,-.10)
     box(b,"HandR",x,1.255,-.25,.041,.16,.07,dark,-.16)
     box(b,"HandR",x,1.431,-.24,.041,.045,.058,dark)

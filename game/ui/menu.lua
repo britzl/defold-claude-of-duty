@@ -1,6 +1,6 @@
 local W = require "game.ui.widgets"
 local M = {}
-local tabs = { "audio", "display", "atmosphere", "controls" }
+local tabs = { "audio", "display", "atmosphere", "combat", "controls" }
 local specs = {
     audio = {
         {key="master",label="MASTER",kind="audio",min=0,max=1,step=.05},
@@ -31,6 +31,12 @@ local specs = {
         {key="fog",label="FOG",kind="renderer"},
         {key="volumetric_fog",label="VOLUMETRIC FOG",kind="renderer"},
         {key="fog_shadows",label="SHADOWED LIGHT SHAFTS",kind="renderer"},
+    },
+    combat = {
+        {key="combat_materials",label="WEAPON & SOLDIER DETAIL",kind="renderer"},
+        {key="combat_effects",label="SMOKE & MUZZLE FLASHES",kind="renderer"},
+        {key="soft_particles",label="SOFT PARTICLE INTERSECTIONS",kind="renderer"},
+        {key="impact_decals",label="IMPACT MARKS",kind="renderer"},
     },
     controls = {
         {key="sensitivity",label="MOUSE SENSITIVITY",kind="input",min=.25,max=3,step=.05},

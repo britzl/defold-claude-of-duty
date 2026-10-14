@@ -122,7 +122,7 @@ render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
     for _,target in pairs(bindings) do assert(target~=active,"render-target feedback loop") end
     if predicate=="viewmodel" then assert(not bindings.occlusion_texture,"Weapon sampled world AO") end
-    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture}
+    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture}
 end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
 dofile("render/game.render_script")
@@ -157,7 +157,7 @@ test("recipes, padded mip chains and filtered environment finish before the worl
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
-    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","fullscreen","viewmodel","fullscreen","fullscreen","fullscreen","fullscreen","glass","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
+    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","fullscreen","viewmodel","fullscreen","fullscreen","fullscreen","fullscreen","transparent","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
     assert(#draws==#expected,#draws.." != "..#expected)
     for i,name in ipairs(expected) do assert(draws[i].predicate==name,i.." "..draws[i].predicate) end
     assert(draws[1].material=="shadow" and draws[2].material=="shadow_skinned")
@@ -165,6 +165,26 @@ test("shadow, world, weapon, post and HUD execute in order without texture feedb
         and draws[15].target==self.targets.scene and draws[17].target==self.targets.weapon)
     assert(draws[26].target=="screen" and draws[26].material==nil)
     assert(next(bindings)==nil)
+end)
+test("flash resolves in linear light without target feedback and retains weapon coverage",function()
+    on_message(self,"renderer_weapon_flash",{active=true})
+    draws={};update(self)
+    local flash,resolve,aa
+    for _,d in ipairs(draws) do
+        if d.predicate=="viewmodel_flash" then flash=d end
+        if d.material=="weapon_composite" then resolve=d end
+        if d.material=="weapon_aa" then aa=d end
+    end
+    assert(flash and flash.target==self.targets.glass)
+    assert(resolve and resolve.target==self.targets.weapon_aa)
+    assert(aa and aa.target==self.targets.weapon)
+    on_message(self,"renderer_configure",{weapon_aa=false})
+    draws={};update(self)
+    for _,d in ipairs(draws) do if d.target=="screen" and d.predicate=="fullscreen" then
+        assert(d.weapon_texture==self.targets.weapon_aa)
+    end end
+    on_message(self,"renderer_weapon_flash",{active=false})
+    on_message(self,"renderer_configure",{weapon_aa=true})
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
@@ -189,10 +209,12 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     update(self);assert(self.shadow_frames==before+1 and self.bake_draws==atlas.draw_count)
 end)
 test("occlusion toggles skip work, diagnostics retain depth, and weapon never samples world AO",function()
-    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false,fog=false})
+    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false,fog=false,combat_effects=false})
     draws={};update(self)
     assert(self.prepass_draw_passes==0 and self.occlusion_draw_passes==0)
     for _,draw in ipairs(draws) do assert(draw.material~="prepass" and draw.material~="occlusion") end
+    on_message(self,"renderer_configure",{combat_effects=true});update(self)
+    assert(self.prepass_draw_passes==3,"Soft particles must retain opaque depth without other screen effects")
     on_message(self,"renderer_configure",{view="depth"});update(self)
     assert(self.prepass_draw_passes==3 and self.occlusion_draw_passes==0)
     on_message(self,"renderer_configure",{view="scene",ambient_occlusion=true});update(self)

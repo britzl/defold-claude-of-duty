@@ -1,5 +1,6 @@
 name: "glass"
 tags: "capture_glass"
+tags: "transparent_lab"
 vertex_program: "/render/glass.vp"
 fragment_program: "/render/glass.fp"
 vertex_space: VERTEX_SPACE_LOCAL

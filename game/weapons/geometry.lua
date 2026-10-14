@@ -2,10 +2,12 @@
 -- detail is deliberately bounded and merged into independently animated parts.
 local V = require "game.weapons.math"
 local M = {}
--- Vertex alpha is metalness; the weapon shader writes opaque coverage.
-M.colors={metal={.15,.18,.19,.8},steel={.29,.32,.34,1},dark={.025,.032,.035,0},
-    polymer={.085,.105,.10,0},tan={.33,.28,.18,0},skin={.50,.32,.22,0},glove={.22,.24,.18,0},
-    light={.85,.91,.78,0},red={1,.08,.02,0},flash={1,.72,.22,0}}
+-- Vertex alpha identifies the generated combat surface (not opacity).
+-- 0 steel, 1 coated metal, 2 polymer, 3 woven fabric, 4 skin, 5 rubber,
+-- 6 camouflage fabric, 7 brass. All opaque parts retain full coverage.
+M.colors={metal={.15,.18,.19,1},steel={.56,.59,.62,0},dark={.025,.032,.035,5},
+    polymer={.085,.105,.10,2},tan={.33,.28,.18,3},skin={.50,.32,.22,4},glove={.22,.24,.18,3},
+    light={.85,.91,.78,2},red={1,.08,.02,2},flash={1,.72,.22,2}}
 function M.batch() return {positions={},normals={},colors={},vertex_count=0,bounds={math.huge,math.huge,math.huge,-math.huge,-math.huge,-math.huge}} end
 local function vertex(b,p,n,color)
     for i=1,3 do
@@ -54,6 +56,14 @@ function M.tube(b,x,y,z,r,inner,length,color,segments)
         triangle(b,q,p,pi,{0,0,-1},color);triangle(b,q,pi,qi,{0,0,-1},color)
         triangle(b,u,t,ti,{0,0,1},color);triangle(b,u,ti,ui,{0,0,1},color)
     end
+end
+-- Unit quad; normals face local +Z. Shared by billboards and surface decals.
+function M.quad(b)
+    b=b or M.batch()
+    local n,c={0,0,1},{1,1,1,0}
+    triangle(b,{-.5,-.5,0},{.5,-.5,0},{.5,.5,0},n,c)
+    triangle(b,{-.5,-.5,0},{.5,.5,0},{-.5,.5,0},n,c)
+    return b
 end
 local function hand(batch,left)
     M.box(batch,0,0,0,.055,.07,.038,"glove",-.22)
@@ -125,9 +135,7 @@ function M.weapon(id)
         M.box(parts.magazine,0,-.13,-.087,mw+.007,.010,smg and .046 or .075,"dark")
     end
     hand(parts.left_hand,true);hand(parts.right_hand,false)
-    M.tube(parts.flash,0,0,0,.024,0,.06,"flash",6)
-    M.box(parts.flash,0,0,0,.095,.006,.006,"flash")
-    M.box(parts.flash,0,0,0,.006,.095,.006,"flash")
+    M.quad(parts.flash)
     return {parts=parts,muzzle={0,bore,muzzle},sight={0,sight,pistol and .012 or .006},
         left=pistol and {-.025,-.024,-.025} or {-.016,.006,smg and -.20 or -.28},right={.014,-.040,.024},
         magazine=pistol and {0,-.08,.02} or {0,-.09,-.075}}

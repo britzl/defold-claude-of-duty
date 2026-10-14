@@ -4,19 +4,17 @@ uniform highp vec4 aa_params;
 #include "/render/radiance.glsl"
 vec4 linear_texel(vec2 uv) {
     vec4 c=texture2D(source_texture,uv);
-    return vec4(decode_radiance(c.rgb)*c.a,c.a);
+    return vec4(decode_radiance(c.rgb),c.a);
 }
 vec4 sample_weapon(vec2 uv) {
+    // Decode premultiplied radiance before interpolation; retain the encoded
+    // path's dark-tone precision while filtering transparent flashes correctly.
     if(colour_pipeline.x<.5) {
-        // Decode each original texel BEFORE interpolation on the encoded path.
         vec2 p=aa_params.xy,base=floor(uv/p-.5),f=fract(uv/p-.5);
         return mix(mix(linear_texel((base+vec2(.5,.5))*p),linear_texel((base+vec2(1.5,.5))*p),f.x),
                    mix(linear_texel((base+vec2(.5,1.5))*p),linear_texel((base+vec2(1.5,1.5))*p),f.x),f.y);
     }
-    vec4 c=texture2D(source_texture,uv);
-    // Opaque geometry over a zero clear is already premultiplied. Keep it
-    // premultiplied while filtering, then divide once at the output.
-    return vec4(decode_radiance(c.rgb),c.a);
+    return linear_texel(uv);
 }
 float edge_value(vec4 c) { return max(c.a,dot(c.rgb,vec3(.2126,.7152,.0722))); }
 void main() {
@@ -36,5 +34,5 @@ void main() {
         vec4 b=a*.5+(sample_weapon(var_uv-direction*.5)+sample_weapon(var_uv+direction*.5))*.25;
         float l=edge_value(b);result=(l<low || l>high)?a:b;
     }
-    gl_FragColor=vec4(encode_radiance(result.rgb/max(result.a,.00001)),result.a);
+    gl_FragColor=vec4(encode_radiance(result.rgb),result.a);
 }
