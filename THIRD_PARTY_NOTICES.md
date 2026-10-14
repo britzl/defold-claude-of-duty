@@ -12,6 +12,11 @@ integer periodic lattices, wrapped board/coating/thread IDs, resolution-dependen
 noise filtering, defined descending ramps, linear data storage and geometry-anchored
 weathering/masks. All source attribution remains under the following licence.
 
+The coarse interior footprint gate in `render/lighting.glsl` and
+`game/world/interior.lua` adapts the approach in `src/render/materialpatch.js`
+and `src/render/index.js` from the same MIT-licensed project. The doorway and
+awning extensions, environment filtering and BRDF integration are local implementations.
+
 MIT License
 
 Copyright (c) 2026 mshumer

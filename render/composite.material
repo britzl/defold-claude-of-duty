@@ -11,3 +11,5 @@ samplers { name: "debug_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MO
 samplers { name: "environment_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_LINEAR filter_mag: FILTER_MODE_MAG_LINEAR }
 fragment_constants { name: "colour_pipeline" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
 fragment_constants { name: "atlas_window" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 1 w: 1 } }
+fragment_constants { name: "environment_layout" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "environment_debug" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }

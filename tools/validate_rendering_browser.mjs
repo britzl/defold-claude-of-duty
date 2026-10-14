@@ -23,7 +23,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const report={shots:{},errors:[]};let browser;
 try {
-  browser=await chromium.launch({headless:true,args:['--use-angle=metal','--ignore-gpu-blocklist','--force-color-profile=srgb','--mute-audio']});
+  browser=await chromium.launch({headless:true,executablePath:args.browser,args:['--use-angle=metal','--ignore-gpu-blocklist','--force-color-profile=srgb','--mute-audio']});
   const page=await browser.newPage({viewport:{width:1024,height:1066},deviceScaleFactor:1});
   // Observe the actual engine context and time submitted frames where the
   // browser exposes disjoint GPU timers. Absence is reported, never guessed.

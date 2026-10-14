@@ -75,7 +75,7 @@ function M.new(quality)
         end
         return jobs
     end
-    a.job_count=#a.jobs()+6;a.draw_count=a.job_count
+    a.job_count=#a.jobs()+1;a.draw_count=a.job_count
     for _,job in ipairs(a.jobs()) do
         if job.target~="scratch_a" and job.target~="scratch_b" then a.draw_count=a.draw_count+1 end
     end

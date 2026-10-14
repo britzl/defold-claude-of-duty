@@ -2,6 +2,7 @@
 -- weapon -> bloom -> shared tone mapping -> GUI. Every target is owned here.
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
+local daylight=require "game.render.daylight"
 local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local WORLD_CAMERA="main:/camera#camera"
@@ -111,10 +112,9 @@ local function bake_next(self)
                 render.disable_texture("height_texture")
             end
         else
-            local face=self.bake_step-#self.bake_jobs
-            render.set_render_target(self.targets.environment,{face=self.faces[face+1]})
-            render.set_viewport(0,0,settings.environment_size,settings.environment_size)
-            self.bake_constants.bake=vmath.vector4(face,0,0,0)
+            -- One complete pass preserves every atlas tile on discard-on-load GPUs.
+            render.set_render_target(self.targets.environment)
+            render.set_viewport(0,0,daylight.environment_width,daylight.environment_height)
             fullscreen(self,"environment",self.bake_constants)
         end
         self.bake_step=self.bake_step+1
@@ -130,7 +130,9 @@ local function report(self)
         ready=self.bake_step==atlas.job_count, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
         atlas_width=atlas.width,atlas_height=atlas.height,material_quality=atlas.quality,surface_count=#atlas.surfaces-1,
         detail_resolution=atlas.surfaces[atlas.detail_kind+1].size,
-        environment_faces=math.max(0,self.bake_step-#self.bake_jobs), environment_size=settings.environment_size,
+        environment_faces=self.bake_step==atlas.job_count and 6 or 0, environment_size=settings.environment_size,
+        environment_width=daylight.environment_width,environment_height=daylight.environment_height,
+        reflection_levels=daylight.reflection_levels,environment_samples=128,volume_count=self.volume_count,
         shadow_size=settings.shadow_size, shadow_frames=self.shadow_frames,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
         target_count=self.targets.scratch_a and 12 or 9,
@@ -159,6 +161,7 @@ function init(self)
     self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
     self.bake_jobs=atlas.jobs()
     self.light_count=0
+    self.volume_count=0
     self.lighting=render.constant_buffer()
     self.lighting.surface_rects=atlas.rects(vmath.vector4)
     self.bake_constants=render.constant_buffer()
@@ -173,8 +176,14 @@ function init(self)
     for _,name in ipairs({"light_positions","light_colours","light_minimums","light_maximums"}) do
         self.lighting[name]={vmath.vector4(),vmath.vector4(),vmath.vector4(),vmath.vector4()}
     end
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants}) do
+        for name,value in pairs(daylight.constants(vmath.vector4)) do constants[name]=value end
+    end
+    self.lighting.volume_data={}
+    for i=1,daylight.max_volumes*5 do self.lighting.volume_data[i]=vmath.vector4() end
     local centre=vmath.vector3(-1,2,-2)
-    local sun=vmath.normalize(vmath.vector3(-.6,.85,.4))
+    local d=daylight.sun_direction
+    local sun=vmath.normalize(vmath.vector3(d[1],d[2],d[3]))
     self.sun_view=vmath.matrix4_look_at(centre+sun*50,centre,vmath.vector3(0,1,0))
     local extent=settings.shadow_extent
     self.sun_projection=vmath.matrix4_orthographic(-extent,extent,-extent,extent,1,110)
@@ -186,9 +195,7 @@ function init(self)
         self.targets[name]=colour_target(atlas.width,atlas.height)
     end
     bake_scratch(self)
-    self.targets.environment=colour_target(settings.environment_size,settings.environment_size,false,false,true,self.radiance_format)
-    self.faces={G.CUBEMAP_FACE_POSITIVE_X,G.CUBEMAP_FACE_NEGATIVE_X,G.CUBEMAP_FACE_POSITIVE_Y,
-        G.CUBEMAP_FACE_NEGATIVE_Y,G.CUBEMAP_FACE_POSITIVE_Z,G.CUBEMAP_FACE_NEGATIVE_Z}
+    self.targets.environment=colour_target(daylight.environment_width,daylight.environment_height,false,false,false,self.radiance_format)
     resize(self)
     render.set_listener(function(_,event)
         if event==render.CONTEXT_EVENT_CONTEXT_RESTORED then
@@ -217,6 +224,8 @@ function update(self)
         self.lighting.features=vmath.vector4(o.shadows and 1 or 0,o.normal_maps and 1 or 0,
             o.local_lights and 1 or 0,o.fog and 1 or 0)
         self.lighting.shadow_params=vmath.vector4(1/settings.shadow_size,.0007,1,0)
+        self.lighting.lighting_features=vmath.vector4(o.interior_lighting and not self.capture.laboratory and 1 or 0,
+            o.environment_filter and 1 or 0,self.volume_count,0)
         self.lighting.lighting_transform=self.identity
         self.sky_constants.eye_position=eye
         self.sky_constants.inverse_view_proj=vmath.inv(projection*view)
@@ -303,6 +312,7 @@ function update(self)
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
         render.set_viewport(0,0,self.width,self.height)
         self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,settings.views[o.view],o.atlas_half)
+        self.post_constants.environment_debug=vmath.vector4(o.environment_level,0,0,0)
         local page=o.atlas_page-1
         self.post_constants.atlas_window=page<0 and vmath.vector4(0,0,1,1) or
             vmath.vector4((page%math.ceil(atlas.width/1024))*1024/atlas.width,
@@ -345,6 +355,17 @@ function on_message(self,id,message)
         self.capture=message
     elseif id==hash("renderer_configure") then
         self.options=settings.configure(self.options,message)
+        self.report=true
+    elseif id==hash("renderer_volumes") then
+        assert(#message.volumes<=daylight.max_volumes,"Indirect lighting volume budget exceeded")
+        self.volume_count=#message.volumes
+        for i=1,daylight.max_volumes do
+            local volume=message.volumes[i] or {}
+            for field_index,field in ipairs({"minimum","maximum","params","doorway","aperture"}) do
+                local v=volume[field] or {0,0,0,0}
+                self.lighting.volume_data[(i-1)*5+field_index]=vmath.vector4(v[1],v[2],v[3],v[4] or 0)
+            end
+        end
         self.report=true
     elseif id==hash("renderer_lights") then
         self.light_count=math.min(#message.lights,settings.max_lights)

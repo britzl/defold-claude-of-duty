@@ -31,7 +31,7 @@ test("each reduction reads a completed level and copies through independent scra
             assert(copy.source_rect.x==1 and copy.source_rect.y==1 and copy.rect.size==job.rect.size)
         end
     end
-    assert(#jobs+6==atlas.job_count)
+    assert(#jobs+1==atlas.job_count)
 end)
 test("reference recipes keep physical scale, relief and independent concrete",function()
     local materials=require "game.world.materials"

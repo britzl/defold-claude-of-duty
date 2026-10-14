@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 4, width = 1280, height = 720, settle_frames = 32,
+local M = { version = 5, width = 1280, height = 720, settle_frames = 32,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -64,7 +64,7 @@ function M.catalog()
     return {version=M.version, width=M.width, height=M.height, settle_frames=M.settle_frames,
         sweep_frames=M.sweep_frames, sweep_fps=M.sweep_fps, shots=copy(shots),
         world_clip={near=.1,far=500},
-        lighting={mode="fixed_daylight",sun_direction={-.6,.85,.4},exposure=1,
+        lighting={mode="fixed_daylight",sun_direction=copy(require("game.render.daylight").sun_direction),rig=require("game.render.daylight").snapshot(),exposure=1,
             reference_daylight_hour=16.5, matched_time_of_day=false},
         comparison="Adapted framing in the unrotated partial map; not cross-engine pixel equality."}
 end

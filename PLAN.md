@@ -181,8 +181,8 @@ For navigation, generate a layered walkable graph from the building descriptions
 **6. Generate materials on the GPU and develop the renderer in stages.**
 
 Initial renderer implemented: three GPU-baked material atlases cover plaster,
-concrete, asphalt, wood, metal and cloth; a six-face procedural sky environment is generated
-one face per frame. World, soldier and weapon share roughness/metalness lighting,
+concrete, asphalt, wood, metal and cloth; a six-face procedural sky environment
+was initially generated one face per frame (replaced by the filtered atlas in step 5). World, soldier and weapon share roughness/metalness lighting,
 sunlight, ambient/reflection terms and up to four bounded local lights. A 1024²
 sun shadow map uses the same animated soldier skinning as the colour pass.
 Height fog, quarter-resolution bloom, shared tone mapping and an isolated weapon
@@ -191,8 +191,9 @@ through the Automation Bridge. The 72 Lua tests, native macOS/Metal renderer and
 combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
 physical mobile validation is still outstanding. All fifteen planned surface recipes, material mip filtering and world weathering
 are now implemented (steps 3–4 below);
-environment filtering, local-light
-shadows, cascades, ambient occlusion and temporal effects remain later stages.
+Unified daylight, filtered environment lighting and interior attenuation are
+implemented in rendering step 5. Local-light shadows, cascades, ambient occlusion
+and temporal effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -374,6 +375,54 @@ other native backends and sustained-combat GPU budgets remain open.
 Step 2's WebGL/mobile floating-point HDR gate is also still
 open: these browser checks use its compatibility path. Kaigen runtime comparison
 remains unavailable because the local reference lacks its engine.
+
+Step 5 implementation is complete: one daylight configuration drives sunlight,
+shadow direction, sky, diffuse fill and environment reflections. A padded
+396 × 594 atlas holds six GGX reflection levels, cosine-convolved diffuse light
+and a two-channel integrated BRDF lookup, generated with deterministic 128-sample
+integration. Direct and indirect lighting share Smith GGX visibility; the solar
+disc is excluded from IBL to avoid counting direct sunlight twice. World,
+soldier and viewmodel use the same lighting in world coordinates.
+
+The two enterable building footprints and matching awnings supply four bounded
+indirect-light volumes, independently of the four selected room lights. Exterior
+wall faces and roofs retain outdoor lighting, while doorways admit a smooth,
+limited fill into the shops. Sky-lit fog follows the same enclosure, avoiding
+bright haze in dark rooms. Warm room/ground light and cool sky fill remain distinct.
+The interior floor is tuned to 0.18 for the current fixed exposure. This remains
+coarse volume-based visibility; local-light occlusion, GI and contact shadows are
+not part of this step. Laboratory captures disable production volumes.
+
+Medium HDR target storage at 1280 × 720 is 95.33 MiB steady / 118.52 MiB during
+baking, an increase of 1.61 MiB from step 4. Nine steady targets and the per-frame
+pass count are unchanged. Medium loading now uses 921 jobs / 1389 draws; the
+whole environment is baked in one pass so discard-on-load backends retain all
+tiles. Packed lighting uniforms keep Metal descriptor usage within its limit.
+
+Step 5 validation passes 140 Lua checks, the native renderer and HDR suites,
+and dedicated GPU checks of interior fill, unchanged bright doorway pixels,
+roughness filtering, BRDF endpoints, cube seams and exact feature restoration.
+The maximum sampled cube-edge difference is 0.51 of an 8-bit display value.
+All 31 existing native views match every RGB pixel across three independent
+launches. The laboratory, grazing-road and façade sweeps each contain 121 frames.
+The WebGL 2 compatibility path passes 57 stages plus map/feature/return pixel
+checks on Chromium / ANGLE Metal / Apple M3 Pro. Its resources were compiled
+locally and bundled with the existing cached debug engine.
+
+Before/after comparisons are in `captures/rendering/lighting-review`; adapted
+Three.js comparisons are in `captures/rendering/lighting-vs-threejs`. The final
+capture source fingerprint matches the implementation. `lighting-review/costs.json`
+records CPU/draw comparisons and short browser GPU samples: native street draws
+remain 158 and render-script median CPU remains 54 µs; WebGL street median GPU
+is 3.76 ms versus the prior 3.31 ms sample at 1024². These short, separate runs
+are diagnostic, not sustained-combat or mobile budgets. Dark interiors retain
+material detail around a brighter doorway; roughness rows broaden sky reflections
+without cube seams. Geometry and reference time-of-day differences remain.
+
+Physical mobile, other native backends, WebGL floating-point HDR and sustained
+GPU budgets remain open. Forced browser context recovery was not requalified
+in this step; the previous engine failure remains recorded. Step 6, stable
+cascaded sun shadows, is the next rendering improvement.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

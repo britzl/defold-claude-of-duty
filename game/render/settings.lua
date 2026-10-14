@@ -1,8 +1,9 @@
 -- Presentation settings only: never consume simulation RNG or alter gameplay.
 local atlas=require "game.render.surface_atlas"
-local M = { atlas_tile = atlas.scratch_size, surface_count = #atlas.surfaces, environment_size = 64,
+local daylight=require "game.render.daylight"
+local M = { atlas_tile = atlas.scratch_size, surface_count = #atlas.surfaces, environment_size = daylight.environment_size,
     shadow_size = 1024, shadow_extent = 32, radiance_range = 8, max_lights = 4 }
-M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6 }
+M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7 }
 -- A format constant alone does not prove renderability/filtering/blending.
 -- Enable the measured backend first; qualify WebGL/mobile before expanding it.
 function M.pipeline(adapter, half_float, requested)
@@ -15,6 +16,7 @@ function M.pipeline(adapter, half_float, requested)
 end
 function M.defaults()
     return { shadows = true, normal_maps = true, local_lights = true, fog = true,
+        interior_lighting = true, environment_filter = true, environment_level = 0,
         bloom = true, weathering = true, micro_detail = true, parallax = true,
         exposure = 1, view = "scene", atlas_half = 0, atlas_page = 0 }
 end
@@ -24,6 +26,8 @@ function M.configure(current, changes)
     for k,v in pairs(changes) do
         assert(current[k] ~= nil, "Unknown renderer setting: "..tostring(k))
         if k == "view" then assert(M.views[v], "Unknown renderer view")
+        elseif k == "environment_level" then
+            assert(type(v)=="number" and v==math.floor(v) and v>=0 and v<=7,"Environment level must be 0..7")
         elseif k == "atlas_page" then
             local pages=math.ceil(atlas.width/1024)*math.ceil(atlas.height/1024)
             assert(type(v)=="number" and v==math.floor(v) and v>=0 and v<=pages, "Invalid atlas page")
@@ -69,6 +73,6 @@ function M.target_bytes(w,h,hdr,baking)
     -- HDR radiance, RGBA8 data maps, conservative 32-bit depth; no driver overhead.
     local colour=hdr and 8 or 4
     return w*h*(colour+4)*2 + d.bloom_width*d.bloom_height*colour*2 + M.shadow_size^2*8
-        + atlas.width*atlas.height*4*3 + (baking and atlas.width*atlas.height*4+2*atlas.scratch_size^2*4 or 0) + M.environment_size^2*6*colour
+        + atlas.width*atlas.height*4*3 + (baking and atlas.width*atlas.height*4+2*atlas.scratch_size^2*4 or 0) + daylight.environment_width*daylight.environment_height*colour
 end
 return M

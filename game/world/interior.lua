@@ -155,6 +155,28 @@ function M.navigation(layout,b,nav,entry)
     end
 end
 
+function M.awning(layout,b)
+    return {x=b.x+b.side*(b.w/2+.85),y=layout.street.walk_height+2.95,z=b.door.z,
+        w=1.7,d=4.4,side=b.side}
+end
+
+-- Coarse indirect visibility, derived from the same shell/awning dimensions as
+-- geometry. Footprint feather distinguishes outer and inner wall faces. The
+-- roof terrace remains outdoors; floor slabs and every storey stay inside.
+function M.lighting_volumes(layout,b)
+    local base=layout.street.walk_height
+    local a=M.awning(layout,b)
+    return {
+        {id=b.id,minimum={b.x-b.w/2,base-layout.slab-.3,b.z-b.d/2},
+            maximum={b.x+b.w/2,base+b.floors*layout.storey-.06,b.z+b.d/2},
+            params={require("game.render.daylight").indirect[3],.06,layout.wall,1},
+            doorway={b.x+b.side*b.w/2,b.door.z,base,b.side},
+            aperture={b.door.width,b.door.height,3,0}},
+        {id=b.id.."/awning",minimum={a.x-a.w/2,base-.5,a.z-a.d/2},
+            maximum={a.x+a.w/2,a.y+.035,a.z+a.d/2},params={.45,.03,.25,0}},
+    }
+end
+
 function M.lights(layout,b)
     local base,storey,wall=layout.street.walk_height,layout.storey,layout.wall
     local x0,x1,z0,z1=b.x-b.w/2+wall,b.x+b.w/2-wall,b.z-b.d/2+wall,b.z+b.d/2-wall

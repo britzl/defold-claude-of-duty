@@ -165,7 +165,7 @@ function init(self)
             description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
             output_schema={type="object"}})
         automation_bridge.describe("command","renderer.configure",{
-            description="Set shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/hdr_probe. Presentation only.",
+            description="Set shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.validate_suppression",function()
@@ -410,6 +410,10 @@ function update(self, dt)
 end
 
 local function update_lights(self,camera)
+    if self.active_volumes~=self.ctx.world.lighting_volumes then
+        self.active_volumes=self.ctx.world.lighting_volumes
+        msg.post("@render:","renderer_volumes",{volumes=self.active_volumes})
+    end
     local lights_source=self.capture and self.capture.shot.laboratory and {} or self.ctx.world.lights
     local selected=renderer_settings.select_lights(lights_source,camera)
     local changed=not self.active_lights or #self.active_lights~=#selected

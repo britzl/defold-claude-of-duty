@@ -3,6 +3,7 @@ local mesh = require "game.world.mesh"
 local recipes = require "game.world.recipes"
 local interior = require "game.world.interior"
 local visible_faces = require "game.world.visible_faces"
+local daylight = require "game.render.daylight"
 local M = {}
 
 local function metadata(layout)
@@ -78,7 +79,8 @@ function M.new(layout, options)
         spawn = layout.spawn, spawn_points = { { id = "player", position = layout.spawn } },
         views = layout.views, layout = layout, seed = options.seed or layout.seed,
         batches = {}, colliders = {}, shapes = {}, navigation = metadata(layout),
-        lights = { { kind = "sun", direction = { x = -0.6, y = 0.85, z = 0.4 } } },
+        lights = { { kind = "sun", direction = { x = daylight.sun_direction[1], y = daylight.sun_direction[2], z = daylight.sun_direction[3] } } },
+        lighting_volumes = {},
         cover = {}, minimap = {}, ready = false, phase = "geometry", jobs_done = 0,
         stats = { boxes = 0, vertices = 0, mesh_bytes = 0, batches = 0, colliders = 0 },
         batch_lookup = {},
@@ -90,8 +92,10 @@ function M.new(layout, options)
     for _, b in ipairs(layout.buildings) do
         if b.room then
             for _, light in ipairs(interior.lights(layout,b)) do world.lights[#world.lights+1]=light end
+            for _, volume in ipairs(interior.lighting_volumes(layout,b)) do world.lighting_volumes[#world.lighting_volumes+1]=volume end
         end
     end
+    assert(#world.lighting_volumes<=daylight.max_volumes,"Indirect lighting volume budget exceeded")
     world.decoration_rng = rng.new(world.seed, "decoration")
     world.spawn_rng = rng.new(world.seed, "spawns")
     world.weapon_rng = rng.new(world.seed, "weapons")

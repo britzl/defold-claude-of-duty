@@ -11,6 +11,12 @@ function M.new()
     for _,pair in ipairs({{"weathering_facade","weathering"},{"micro_detail","micro_detail"},{"parallax_tile","parallax"}}) do
         steps[#steps+1]={name=pair[1],id=pair[1].."_disabled",changes={[pair[2]]=false}}
     end
+    for _,step in ipairs({
+        {name="interior",id="interior_ungated",changes={interior_lighting=false}},
+        {name="laboratory",id="laboratory_unfiltered",changes={environment_filter=false}},
+        {name="laboratory",id="laboratory_no_volumes",changes={interior_lighting=false}},
+        {name="laboratory",id="environment_atlas",changes={view="environment_atlas"}},
+    }) do steps[#steps+1]=step end
     for _,view in ipairs({"albedo","normals","material"}) do
         for page=1,math.ceil(atlas.width/1024)*math.ceil(atlas.height/1024) do
             steps[#steps+1]={name="laboratory",id=view.."_page_"..page,changes={view=view,atlas_page=page},page=page,view=view}

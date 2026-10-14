@@ -2,6 +2,7 @@
 -- in renderer_smoke.py and run against Defold itself.
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
+local daylight=require "game.render.daylight"
 local tests=0
 local function test(name,fn) fn();tests=tests+1;print("PASS "..name) end
 test("settings reject unknown, mistyped and nonfinite values atomically",function()
@@ -16,7 +17,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==1920*1280*8*2+480*320*4*2+1024^2*8+atlas.width*atlas.height*12+64^2*6*4)
+    assert(settings.target_bytes(1920,1280)==1920*1280*8*2+480*320*4*2+1024^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -26,7 +27,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
     assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
     assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
-    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==7931904)
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==8774496)
 end)
 
 test("camera light selection covers both buildings and every floor within four slots",function()
@@ -41,6 +42,39 @@ test("camera light selection covers both buildings and every floor within four s
             for i,l in ipairs(selected) do assert(l==again[i]) end
         end
     end
+end)
+
+test("indirect volumes cover every storey but exclude exterior walls and roof terraces",function()
+    local layout=require "game.world.layout"
+    local world=require("game.world.generator").new(layout)
+    assert(#world.lighting_volumes==4 and #world.lighting_volumes<=daylight.max_volumes)
+    local function contains(v,p,inset)
+        for i=1,3 do if p[i]<v.minimum[i]+inset or p[i]>v.maximum[i]-inset then return false end end
+        return true
+    end
+    for _,b in ipairs(layout.buildings) do if b.room then
+        local volume
+        for _,v in ipairs(world.lighting_volumes) do if v.id==b.id then volume=v end end
+        assert(volume)
+        for floor=0,b.floors-1 do
+            local y=layout.street.walk_height+floor*layout.storey
+            assert(contains(volume,{b.x,y,b.z},volume.params[3]))
+            assert(contains(volume,{b.x+b.side*(b.w/2-layout.wall),y+1,b.z},volume.params[3]-.00001))
+            assert(not contains(volume,{b.x+b.side*b.w/2,y+1,b.z},volume.params[2]))
+        end
+        assert(not contains(volume,{b.x,layout.street.walk_height+b.floors*layout.storey,b.z},0))
+        assert(volume.doorway[1]==b.x+b.side*b.w/2 and volume.aperture[1]==b.door.width)
+        assert(volume.params[1]==daylight.indirect[3])
+    end end
+end)
+test("capture lighting metadata and world sun come from the same daylight rig",function()
+    local catalog=require("game.render.capture").catalog()
+    local sun=require("game.world.generator").new(require "game.world.layout").lights[1].direction
+    assert(sun.x==catalog.lighting.sun_direction[1] and sun.y==catalog.lighting.sun_direction[2])
+    assert(catalog.lighting.rig.sun_radiance[1]==daylight.sun_radiance[1])
+    catalog.lighting.rig.sun_radiance[1]=999
+    assert(daylight.sun_radiance[1]~=999)
+    for _,bad in ipairs({-1,8,.5,0/0}) do assert(not pcall(settings.configure,settings.defaults(),{environment_level=bad})) end
 end)
 
 -- The stub records resource ownership and pass inputs; matrix maths is tested
@@ -91,7 +125,7 @@ end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
 dofile("render/game.render_script")
 local self={}
-test("recipes, padded mip chains and cube faces finish before the world draws",function()
+test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
     assert(#targets==12)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
@@ -113,7 +147,7 @@ test("recipes, padded mip chains and cube faces finish before the world draws",f
         if draw.material=="surface_filter" then filters=filters+1 end
         if draw.material=="environment" then cube=cube+1 end
     end
-    assert(recipes==#atlas.surfaces*2 and filters==atlas.draw_count-#atlas.surfaces*2-6 and cube==6)
+    assert(recipes==#atlas.surfaces*2 and filters==atlas.draw_count-#atlas.surfaces*2-1 and cube==1)
     assert(self.shadow_frames==1)
     update(self)
     assert(self.targets.scratch_a==nil and self.targets.atlas_spare==nil)
@@ -158,6 +192,21 @@ test("capture isolates the laboratory, hides HUD/actors, and restores ordinary p
     on_message(self,"capture_configure",{active=false,laboratory=false})
     draws={};update(self)
     assert(draws[2].predicate=="soldier_shadow" and draws[#draws-1].predicate=="gui")
+end)
+test("volume updates clear stale slots and laboratory capture isolates world volumes",function()
+    local volumes=require("game.world.generator").new(require "game.world.layout").lighting_volumes
+    on_message(self,"renderer_volumes",{volumes=volumes})
+    update(self)
+    assert(self.volume_count==4 and #self.lighting.volume_data==40)
+    assert(self.lighting.lighting_features.args[1]==1 and self.lighting.lighting_features.args[3]==4)
+    on_message(self,"capture_configure",{active=true,laboratory=true});update(self)
+    assert(self.lighting.lighting_features.args[1]==0)
+    on_message(self,"capture_configure",{active=false,laboratory=false});update(self)
+    assert(self.lighting.lighting_features.args[1]==1)
+    on_message(self,"renderer_volumes",{volumes={volumes[1]}})
+    assert(self.volume_count==1 and self.lighting.volume_data[6].args[1]==0)
+    on_message(self,"renderer_configure",{interior_lighting=false,environment_filter=false});update(self)
+    assert(self.lighting.lighting_features.args[1]==0 and self.lighting.lighting_features.args[2]==0)
 end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)

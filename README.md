@@ -763,14 +763,42 @@ Mesh contact occlusion combines with baked cavities using their maximum, rather
 than multiplying them and darkening a cavity twice.
 
 Loading remains budgeted: expensive recipe draws run individually and up to eight
-copy/filter/environment jobs run per frame. Defold's discard-on-load targets need
+copy/filter jobs run per frame. The environment is one complete 128-sample bake
+pass at the end of loading; it is never rebuilt during normal play. Defold's discard-on-load targets need
 full-atlas preservation before partial updates. The two scratch targets and spare
 atlas are released after queued bake draws finish: twelve targets during loading,
 nine in normal play. Resize/restart do not rebake. The context callback schedules
 a map rebake; see the browser recovery limitation below. No material or weather generation consumes gameplay RNG.
 
-World geometry, the soldier and weapons share GGX direct lighting, ambient light,
-approximate sky reflections and up to four authored point lights. The nearest
+Rendering step 5 uses `game/render/daylight.lua` as the single linear-light rig
+for the direct sun, shadow direction, visible sky, diffuse environment and
+reflections. World geometry, soldiers and camera-transformed weapons share GGX
+lighting with matching Smith visibility. The visible solar disc is excluded from
+the environment convolution because the direct sun already supplies its highlight.
+
+The runtime-generated 396 × 594 environment atlas contains six 64² cube faces
+with one-texel direction gutters per tile. Its rows hold the visible sky, six GGX
+roughness levels (0..1), cosine-convolved diffuse irradiance divided by pi, and a
+linear two-channel integrated BRDF lookup. Deterministic 128-sample Hammersley
+integration runs at load; shading interpolates adjacent roughness levels and
+uses the split-sum response. This follows the standard IBL derivation described
+in [Filament's lighting reference](https://google.github.io/filament/main/filament.html#lighting/imagebasedlights).
+Explicit tiles avoid backend-specific writable mip attachments and keep the
+existing sampler and target counts. The BRDF row is data, never radiance-encoded.
+
+Generated building footprints attenuate indirect diffuse, specular and sky-lit
+fog throughout both enterable buildings, including their upper floors. A wall
+feather preserves the exterior face; the roof surface stays outdoors. Doorway
+fill falls off smoothly into the shop. Two matching awning volumes reduce sky
+fill under the canopies while preserving their open sides. The deep-interior
+floor is tuned to 0.18 for this renderer's fixed exposure; closed upper windows
+admit no additional sky. Cooler sky fill, warm ground bounce and bounded room
+lights remain distinct. These are coarse authored visibility volumes, not GI or
+per-prop occlusion; GTAO/contact shadows remain step 7. The eight-volume limit
+is checked explicitly and is independent of room-light selection. The laboratory
+ignores world volumes so its overlapping test geometry remains neutral.
+
+Up to four authored point lights remain active. The nearest
 room bounds to the displayed camera select those four lights from the eleven
 interior lights, with stable ties; uploads occur when that selection changes.
 This also follows inspection cameras and retains the shader's four-light budget.
@@ -803,8 +831,7 @@ float renderability, filtering and blending are qualified there. The presence of
 `[render]` (or use engine argument `--config=render.hdr=rgba8`) to force that path
 on Metal; the default is `auto`. Both paths share AgX and sRGB conversion.
 `renderer.snapshot.pipeline` records the selected format, backend and reason.
-Environment reflections currently use
-an analytic broadening approximation rather than prefiltered environment mipmaps. `game.project` sets the default
+`game.project` sets the default
 GLSL ES float precision to `highp` for noise, packed shadows and lighting. Using
 the project setting also keeps precision declarations ahead of Defold's generated
 fragment output in WebGL shaders.
@@ -813,10 +840,12 @@ At the 1280 × 720 capture size, estimated HDR target storage is:
 
 | Preset | Atlas size | Steady / bake peak (MiB) | Bake jobs / draws |
 | --- | --- | ---: | ---: |
-| Low | 1024 × 1368 | 46.19 / 52.04 | 830 / 1250 |
-| Medium | 2048 × 2712 | 93.72 / 116.91 | 926 / 1394 |
-| High | 4096 × 5408 | 283.66 / 376.16 | 1022 / 1538 |
+| Low | 1024 × 1368 | 47.80 / 53.64 | 825 / 1245 |
+| Medium | 2048 × 2712 | 95.33 / 118.52 | 921 / 1389 |
+| High | 4096 × 5408 | 285.27 / 377.77 | 1017 / 1533 |
 
+The environment adds 1.61 MiB on HDR (0.80 MiB on the compatibility path)
+relative to step 4. Steady draw passes and nine-target ownership are unchanged.
 The previous six-recipe implementation used 102.49 / 134.60 MiB at this size.
 These are allocation estimates including conservative 32-bit depth, excluding
 meshes and driver overhead; they are not measured process peaks. The world now
@@ -825,12 +854,16 @@ same 190 colliders. Resize affects only four screen-sized targets; zero-sized
 windows skip drawing and finalization releases owned targets.
 
 `renderer.snapshot` reports bake jobs/draws, current/peak target bytes, local-light count,
-shadow frames and active settings. `renderer.configure` accepts booleans
+shadow frames, environment dimensions/levels/sample count, volume count and active settings. `renderer.configure` accepts booleans
 `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
-`micro_detail`, `parallax`; numeric `exposure` in
+`micro_detail`, `parallax`, `interior_lighting`, `environment_filter`; numeric `exposure` in
 0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
-`environment` or `hdr_probe`. The last view renders diagnostic HDR stripes into
+`environment`, `environment_atlas` or `hdr_probe`. The last view renders diagnostic HDR stripes into
 the actual scene/weapon targets and displays transfer/filter/blend samples.
+`environment_level` chooses the equirectangular debug row: 0 is visible sky,
+1..6 are specular roughness levels and 7 is diffuse. `environment_atlas` shows
+all tiles and the raw BRDF row. `environment_filter=false` uses the sharpest
+reflection level for A/B checks; `interior_lighting=false` bypasses volume gates.
 `atlas_half` retains the legacy half-atlas view. `atlas_page` selects 1024²
 windows (1-based, row-major from the bottom left; 0 restores the full atlas),
 allowing exact texel inspection within desktop window-size limits.
@@ -848,6 +881,7 @@ grazing-road and façade sweeps. Repeated-launch comparisons use every RGB pixel
 ```sh
 PYTHONPATH=automation-bridge-python python3 tests/materials_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weathering_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/lighting_smoke.py
 # After a current native editor build; launches its own low/high engines:
 PYTHONPATH=automation-bridge-python python3 tests/material_presets_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/render_baseline.py --launches 3 --motion --profile
@@ -856,15 +890,19 @@ PYTHONPATH=automation-bridge-python python3 tests/render_baseline.py --launches 
 For WebGL, bundle debug `wasm-web` with `--settings tests/rendering_browser.project`.
 Then run `tools/validate_rendering_browser.mjs --bundle=/path/to/bundle` with
 Playwright installed (`PLAYWRIGHT_MODULE` can specify its module path), followed
-by `python3 tests/rendering_browser_pixels.py`. The fixture exercises all recipes,
-feature toggles, exact atlas pages and camera return.
+by `PYTHONPATH=automation-bridge-python python3 tests/rendering_browser_pixels.py`.
+Both tools accept `--output` for a separate capture directory; the browser harness
+also accepts `--browser=/path/to/chromium` to reuse an installed executable. The fixture exercises all recipes,
+feature toggles, exact atlas pages, interior gating, reflection filtering, laboratory
+volume isolation and camera return.
 The browser harness records the actual GPU/backend and disjoint timer queries
 when available, including short samples per shot. The browser still uses the
 encoded RGBA8 compatibility pipeline; this does not qualify floating-point HDR.
 
-Forced WebGL context recovery remains unsupported in this debug bundle:
-restoring it aborts in `OpenGLSetRenderTarget` with
-`GL_FRAMEBUFFER_UNSUPPORTED` before generated resources can be recovered. The
+The previous step 3–4 debug bundle failed forced WebGL context recovery:
+restoration aborted in `OpenGLSetRenderTarget` with
+`GL_FRAMEBUFFER_UNSUPPORTED` before generated resources could be recovered.
+Step 5 does not requalify forced context recovery. The
 separate `context-loss-report.json` retains the failed qualification; reproduce
 with `--context-loss=1`. Normal browser captures pass without injecting context
 loss. The Lua rebake scheduling test is not proof of real context recovery.
@@ -879,6 +917,29 @@ across three independent engine launches; the laboratory, grazing-road and faça
 sweeps each contain 121 frames. Local comparisons, timing samples and platform
 limits are recorded in
 `captures/rendering/surface-weathering-review/report.md`.
+
+
+Step 5 validation passes 140 Lua checks, native rendering/HDR suites and
+`tests/lighting_smoke.py`. GPU assertions cover dark-room attenuation with an
+unchanged bright doorway, laboratory isolation, filter contributions, raw BRDF
+endpoints, all cube edges and exact A/B restoration. Sampled cube seams differ
+by at most 0.51 of an 8-bit display value. All 31 existing views are pixel-identical
+across three native launches; all three 121-frame sweeps are recorded. The
+57-stage WebGL run also passes map, lighting-toggle and exact camera-return
+checks on Chromium / ANGLE Metal / Apple M3 Pro.
+
+Local artifacts from this increment:
+
+- `captures/rendering/lighting-final`: final stills, motion samples, source fingerprints and profiles.
+- `captures/rendering/lighting-review`: labelled step-4/step-5 comparisons and `costs.json`.
+- `captures/rendering/lighting-vs-threejs`: adapted reference comparisons, with geometry/time-of-day differences retained.
+- `captures/rendering/lighting-validation/report.json`: native lighting pixel gates.
+- `captures/rendering/lighting-browser`: WebGL images, GPU queries, pixel validation and local-build provenance.
+
+Native street draws remain 158 and render-script median CPU remains 54 µs.
+The short 1024² browser street sample changes from 3.31 to 3.76 ms median GPU;
+interior/laboratory medians are 3.13/3.55 ms. Separate-run timing samples include
+whole-frame work and noise; sustained combat and mobile qualification remain open.
 
 
 ## Generated audio

@@ -3,16 +3,21 @@ uniform highp sampler2D scene_texture;
 uniform highp sampler2D weapon_texture;
 uniform highp sampler2D bloom_texture;
 uniform lowp sampler2D debug_texture;
-uniform highp samplerCube environment_texture;
+uniform highp vec4 environment_debug;
 uniform highp vec4 atlas_window;
 uniform highp vec4 post; // exposure, bloom strength, debug view, atlas half (0=all,1=lower,2=upper)
 #include "/render/radiance.glsl"
 #include "/render/agx.glsl"
+#include "/render/environment_sampling.glsl"
 vec3 tone_map(vec3 c) {
     return display_colour(agx_neutral(c*post.x));
 }
 void main() {
-    if (post.z>5.5) {
+    if (post.z>6.5) {
+        vec3 value=texture2D(environment_texture,var_uv).rgb;
+        bool lut=var_uv.y>(environment_layout.w-1.0)/environment_layout.w;
+        gl_FragColor=vec4(lut?value:tone_map(decode_radiance(value)),1);
+    } else if (post.z>5.5) {
         // Bottom: radiance / 64. Middle: shared AgX. Top: transfer functions,
         // linear filtering across 0.18/1, hardware blending, layer mix, alpha.
         vec3 source=decode_radiance(texture2D(scene_texture,var_uv).rgb);
@@ -34,7 +39,7 @@ void main() {
         float longitude=(var_uv.x*2.0-1.0)*3.14159265;
         float latitude=(var_uv.y-0.5)*3.14159265;
         vec3 d=vec3(cos(latitude)*sin(longitude),sin(latitude),cos(latitude)*cos(longitude));
-        gl_FragColor=vec4(tone_map(decode_radiance(textureCube(environment_texture,d).rgb)),1.0);
+        gl_FragColor=vec4(tone_map(environment_row(d,environment_debug.x)),1.0);
     } else if (post.z>0.5) {
         vec2 uv=atlas_window.xy+var_uv*atlas_window.zw;
         if(post.z<3.5 && post.w>0.5) uv.y=uv.y*0.5+(post.w>1.5?0.5:0.0);

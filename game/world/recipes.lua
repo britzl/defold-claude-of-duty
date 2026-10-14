@@ -61,7 +61,8 @@ local function building(layout, b)
         for i = 1, 3 do
             box(b.id .. "/shelf/" .. i, "wood", x0 + shelves.x * b.w, base + i * 0.6, z0 + shelves.z * b.d, shelves.w, 0.09, shelves.d)
         end
-        awning(b.id .. "/awning", facade + b.side * 0.85, base + 2.95, door.z, 1.7, 4.4, b.side)
+        local a=interior.awning(layout,b)
+        awning(b.id .. "/awning",a.x,a.y,a.z,a.w,a.d,a.side)
         for _, sign in ipairs({ -1, 1 }) do
             box(b.id .. "/door_frame/" .. sign, "wood", facade + b.side * 0.08, base + door.height / 2,
                 door.z + sign * (door.width / 2 + 0.07), 0.16, door.height, 0.14)
