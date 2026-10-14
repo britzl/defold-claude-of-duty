@@ -2,6 +2,8 @@ local atlas=require "game.render.surface_atlas"
 local tests=0
 local function test(name,fn) fn();tests=tests+1;print("PASS "..name) end
 test("every mip and wrapped border fits without overlapping another material",function()
+    for _,quality in ipairs({"low","medium","high"}) do
+    local atlas=atlas.new(quality)
     local all={}
     for _,s in ipairs(atlas.surfaces) do
         assert(s.rects[1].size==s.size and s.rects[#s.rects].size==1)
@@ -15,7 +17,8 @@ test("every mip and wrapped border fits without overlapping another material",fu
             all[#all+1]=r
         end
     end
-    assert(#all==62)
+    assert(#all==#atlas.surfaces*(atlas.surfaces[1].last_level+1)-4)
+    end
 end)
 test("each reduction reads a completed level and copies through independent scratch",function()
     local jobs=atlas.jobs()
@@ -35,7 +38,7 @@ test("reference recipes keep physical scale, relief and independent concrete",fu
     assert(materials.concrete.kind~=materials.plaster_sand.kind)
     for _,entry in ipairs({{0,2.2,.06},{1,3,.075},{2,2,.038},{5,2.5,.09}}) do
         local s=atlas.surfaces[entry[1]+1]
-        assert(s.size==1024 and s.metres==entry[2] and s.relief==entry[3])
+        assert(s.size==512 and s.metres==entry[2] and s.relief==entry[3])
     end
 end)
 print(tests.." surface atlas tests passed")

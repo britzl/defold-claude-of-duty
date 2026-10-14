@@ -18,6 +18,7 @@ test("laboratory normals, winding, bounds and roughness range are valid",functio
     local spheres=0
     for _,b in ipairs(batches) do
         assert(#b.positions==b.vertex_count*3 and #b.colors==b.vertex_count*4)
+        assert(#b.edges==b.vertex_count*4 and #b.masks==b.vertex_count*4)
         for i=1,#b.positions,3 do
             local n=b.normals
             assert(math.abs(n[i]^2+n[i+1]^2+n[i+2]^2-1)<1e-6)
@@ -34,7 +35,7 @@ test("laboratory normals, winding, bounds and roughness range are valid",functio
             end
         end
     end
-    assert(spheres==10 and #batches==17)
+    assert(spheres==10 and #batches==lab.batch_count)
 end)
 test("capture weapon poses ignore live movement, clock and recoil",function()
     local pose=require "game.weapons.viewmodel"

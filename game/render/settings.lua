@@ -1,6 +1,6 @@
 -- Presentation settings only: never consume simulation RNG or alter gameplay.
 local atlas=require "game.render.surface_atlas"
-local M = { atlas_tile = 1024, surface_count = 6, environment_size = 64,
+local M = { atlas_tile = atlas.scratch_size, surface_count = #atlas.surfaces, environment_size = 64,
     shadow_size = 1024, shadow_extent = 32, radiance_range = 8, max_lights = 4 }
 M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6 }
 -- A format constant alone does not prove renderability/filtering/blending.
@@ -15,7 +15,8 @@ function M.pipeline(adapter, half_float, requested)
 end
 function M.defaults()
     return { shadows = true, normal_maps = true, local_lights = true, fog = true,
-        bloom = true, exposure = 1, view = "scene", atlas_half = 0 }
+        bloom = true, weathering = true, micro_detail = true, parallax = true,
+        exposure = 1, view = "scene", atlas_half = 0, atlas_page = 0 }
 end
 function M.configure(current, changes)
     local result = {}
@@ -23,6 +24,9 @@ function M.configure(current, changes)
     for k,v in pairs(changes) do
         assert(current[k] ~= nil, "Unknown renderer setting: "..tostring(k))
         if k == "view" then assert(M.views[v], "Unknown renderer view")
+        elseif k == "atlas_page" then
+            local pages=math.ceil(atlas.width/1024)*math.ceil(atlas.height/1024)
+            assert(type(v)=="number" and v==math.floor(v) and v>=0 and v<=pages, "Invalid atlas page")
         elseif k == "atlas_half" then
             assert(type(v)=="number" and v==math.floor(v) and v>=0 and v<=2, "Atlas half must be 0, 1 or 2")
         elseif k == "exposure" then

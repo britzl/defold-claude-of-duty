@@ -35,7 +35,7 @@ test("changing loading budget does not change meshes, bounds or collider placeme
     assert(#a.batches == #b.batches and #a.colliders == #b.colliders)
     for i, batch in ipairs(a.batches) do
         local other = b.batches[i]
-        for _, stream in ipairs({ "positions", "normals", "colors", "bounds" }) do
+        for _, stream in ipairs({ "positions", "normals", "colors", "edges", "masks", "bounds" }) do
             assert(#batch[stream] == #other[stream])
             for j, value in ipairs(batch[stream]) do assert(value == other[stream][j]) end
         end
@@ -106,7 +106,7 @@ test("structural solids share visual dimensions while trim has no individual col
         assert(surfaces[collider.surface], "Unknown collision surface: "..collider.surface)
     end
     assert(#world.colliders < #world.shapes / 2)
-    assert(world.stats.mesh_bytes == world.stats.vertices * 40)
+    assert(world.stats.mesh_bytes == world.stats.vertices * 72)
     assert(#world.batches < #world.shapes / 4)
 end)
 
@@ -361,7 +361,7 @@ test("cover positions have support and clearance; closed shopfronts face the str
     end
     -- Conforming clipped edges remove depth ties; the bounded extra vertices
     -- raise streams to 1.39 MiB while retaining the same material/chunk batches.
-    assert(world.stats.batches<100 and world.stats.mesh_bytes<1.5*1024*1024)
+    assert(world.stats.batches<100 and world.stats.mesh_bytes<3*1024*1024)
     assert(#world.minimap<=require("game.ui.hud").map_limit)
 end)
 

@@ -49,14 +49,14 @@ local function floor_geometry(layout, b, level, box)
     local x0, x1, z0, z1 = b.x-b.w/2, b.x+b.w/2, b.z-b.d/2, b.z+b.d/2
     local prefix = level == 1 and b.id .. "/upper/" or node_prefix
     for _, r in ipairs(s.slabs) do
-        box(prefix.."floor/"..r.id,"concrete",(r.x0+r.x1)/2,s.upper-slab/2,(r.z0+r.z1)/2,
+        box(prefix.."floor/"..r.id,"concrete_floor",(r.x0+r.x1)/2,s.upper-slab/2,(r.z0+r.z1)/2,
             r.x1-r.x0,slab,r.z1-r.z0,"concrete")
     end
     for i=1,s.steps do
         local h = i*s.rise
         -- Upper flights use thin treads so the flight below retains headroom.
         local thickness = level == 1 and h or slab
-        box(node_prefix.."stair/"..i,"concrete",s.x,s.base+h-thickness/2,s.start+s.direction*(i-.5)*s.tread,
+        box(node_prefix.."stair/"..i,"concrete_floor",s.x,s.base+h-thickness/2,s.start+s.direction*(i-.5)*s.tread,
             s.width,thickness,s.tread,"concrete")
     end
     -- Solid guards surround the opening on three sides; the upper landing stays open.
@@ -74,7 +74,7 @@ local function floor_geometry(layout, b, level, box)
         box(prefix..side[1],b.material,b.x,s.upper+wall_height/2,side[2],b.w-2*wall,wall_height,wall,"plaster")
     end
     if level == b.floors-1 then
-        box(b.id.."/roof","concrete",b.x,s.upper+storey-slab/2,b.z,b.w,slab,b.d,"concrete")
+        box(b.id.."/roof","concrete_floor",b.x,s.upper+storey-slab/2,b.z,b.w,slab,b.d,"concrete")
     end
     -- Split each partition around a full-height open doorway with a lintel.
     local function partition(id, axis, fixed, lo, hi, door, width)

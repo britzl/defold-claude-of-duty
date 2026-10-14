@@ -113,7 +113,7 @@ test("recipes, padded mip chains and cube faces finish before the world draws",f
         if draw.material=="surface_filter" then filters=filters+1 end
         if draw.material=="environment" then cube=cube+1 end
     end
-    assert(recipes==12 and filters==540 and cube==6)
+    assert(recipes==#atlas.surfaces*2 and filters==atlas.draw_count-#atlas.surfaces*2-6 and cube==6)
     assert(self.shadow_frames==1)
     update(self)
     assert(self.targets.scratch_a==nil and self.targets.atlas_spare==nil)

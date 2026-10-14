@@ -43,7 +43,7 @@ local function building(layout, b)
         local front = b.x+b.side*(b.w/2-wall/2)
         local facade = b.x+b.side*b.w/2
         -- Split the street-facing wall around a true doorway on either side.
-        box(b.id .. "/floor", "concrete", b.x, base - slab / 2, b.z, b.w, slab, b.d, "concrete")
+        box(b.id .. "/floor", "concrete_floor", b.x, base - slab / 2, b.z, b.w, slab, b.d, "concrete")
         box(b.id .. (b.side == 1 and "/west" or "/east"), "plaster_inside", b.x-b.side*(b.w/2-wall/2), base + wall_height / 2, b.z, wall, wall_height, b.d, "plaster")
         box(b.id .. "/north", b.material, b.x, base + wall_height / 2, z1 - wall / 2, b.w-2*wall, wall_height, wall, "plaster")
         box(b.id .. "/south", b.material, b.x, base + wall_height / 2, z0 + wall / 2, b.w-2*wall, wall_height, wall, "plaster")
@@ -57,7 +57,7 @@ local function building(layout, b)
         local counter, shelves = b.counter, b.shelves
         local counter_x, counter_z = x0 + counter.x * b.w, z0 + counter.z * b.d
         box(b.id .. "/counter", "wood", counter_x, base + 0.45, counter_z, counter.w, 0.9, counter.d, "wood")
-        box(b.id .. "/counter_top", "trim", counter_x, base + 0.93, counter_z, counter.w + 0.1, 0.06, counter.d + 0.1)
+        box(b.id .. "/counter_top", "tile", counter_x, base + 0.93, counter_z, counter.w + 0.1, 0.06, counter.d + 0.1)
         for i = 1, 3 do
             box(b.id .. "/shelf/" .. i, "wood", x0 + shelves.x * b.w, base + i * 0.6, z0 + shelves.z * b.d, shelves.w, 0.09, shelves.d)
         end
@@ -73,7 +73,7 @@ local function building(layout, b)
         local front, bays = b.x+b.side*b.w/2, math.max(1,math.floor(b.d/4))
         for i = 1, bays do
             local z = z0 + (i-.5)*b.d/bays
-            box(b.id .. "/shop/" .. i, "metal", front+b.side*.025, base + 1.25, z, 0.06, 2.5, 2.9)
+            box(b.id .. "/shop/" .. i, "metal_painted", front+b.side*.025, base + 1.25, z, 0.06, 2.5, 2.9)
             for j = 1, 10 do
                 box(b.id .. "/slat/" .. i .. "/" .. j, "shutters", front+b.side*.065, base + j * 0.23, z, 0.06, 0.035, 2.85)
             end
@@ -106,7 +106,7 @@ function M.generate(layout, detail)
         box("road/" .. z, "asphalt", 0, -0.15, z + depth / 2, 2 * s.half_width, 0.3, depth, "concrete")
         for _, side in ipairs({ -1, 1 }) do
             local width = s.kerb - s.half_width
-            box("walk/" .. side .. "/" .. z, "concrete", side * (s.half_width + width / 2),
+            box("walk/" .. side .. "/" .. z, "concrete_floor", side * (s.half_width + width / 2),
                 s.walk_height / 2 - 0.1, z + depth / 2, width, s.walk_height + 0.2, depth, "concrete")
         end
     end
@@ -120,7 +120,7 @@ function M.generate(layout, detail)
     end
     for _, b in ipairs(layout.buildings) do building(layout, b) end
     for _, wall in ipairs(layout.walls or {}) do
-        box("boundary/"..wall.id,"plaster_sand",wall.x,wall.h/2,wall.z,wall.w,wall.h,wall.d,"plaster")
+        box("boundary/"..wall.id,"brick",wall.x,wall.h/2,wall.z,wall.w,wall.h,wall.d,"plaster")
     end
     for i, stall in ipairs(layout.stalls) do
         local id = "stall/" .. i
@@ -141,7 +141,7 @@ function M.generate(layout, detail)
         box("crate/" .. i, "wood", crate.x, base + 0.5, crate.z, 0.95, 1, 0.95, "wood", cover)
         if detail then
             for _, sign in ipairs({ -1, 1 }) do
-                box("crate/" .. i .. "/strap/" .. sign, "metal", crate.x, base + 0.5, crate.z + sign * 0.32, 0.97, 1.02, 0.055)
+                box("crate/" .. i .. "/strap/" .. sign, "metal_rust", crate.x, base + 0.5, crate.z + sign * 0.32, 0.97, 1.02, 0.055)
             end
         end
     end

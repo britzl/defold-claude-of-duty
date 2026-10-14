@@ -133,6 +133,9 @@ function init(self)
     if sys.get_config_int("suppression_validation.enabled",0)==1 then
         self.suppression_validation=require("tests.suppression_scenario").new()
     end
+    if sys.get_config_int("rendering_validation.enabled",0)==1 then
+        self.rendering_validation=require("tests.rendering_browser").new()
+    end
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -162,7 +165,7 @@ function init(self)
             description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
             output_schema={type="object"}})
         automation_bridge.describe("command","renderer.configure",{
-            description="Set shadows/normal_maps/local_lights/fog/bloom booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/hdr_probe. Presentation only.",
+            description="Set shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/hdr_probe. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.validate_suppression",function()
@@ -391,6 +394,7 @@ function fixed_update(self, dt)
 end
 
 function update(self, dt)
+    if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then return end
     runtime.update(self.ctx, dt)
     if self.squad_validation then

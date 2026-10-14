@@ -166,9 +166,10 @@ void plaster_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
 }
 
 
-void concrete_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+void concrete_surface(vec2 uv, float floor_variant, out vec3 alb, out float h, out float rough, out float metal, out float ao){
   const vec2 P = vec2(8.0);
-  vec2 p = uv * P + 11.0 * 13.7;
+  float seed=mix(11.0,47.0,floor_variant);
+  vec2 p = uv * P + seed * 13.7;
 
   // ---- base tone: pour variation, wet/dry patches, cement bloom ----
   float macro = owFbm01(p * 0.5, P * 0.5, 4, 0.58);
@@ -232,8 +233,8 @@ void concrete_surface(vec2 uv, out vec3 alb, out float h, out float rough, out f
 
   // 1.0 = board-formed wall (1) vs poured slab (0)
   // 0.0 = saw-cut control joints, for floors
-  float formAmt = 1.0;
-  float jointAmt = 0.0;
+  float formAmt = 1.0-floor_variant;
+  float jointAmt = floor_variant;
 
   // ---- formwork: horizontal board lines + tie-rod holes ----
   float boards = uv.y * 4.0;
@@ -242,7 +243,7 @@ void concrete_surface(vec2 uv, out vec3 alb, out float h, out float rough, out f
   float seam = (1.0 - surface_ramp(0.0, 0.030, bf)) + (1.0 - surface_ramp(0.0, 0.030, 1.0 - bf));
   seam = clamp(seam, 0.0, 1.0);
   // Boards are never perfectly aligned: each course steps a fraction of a mm.
-  float boardStep = (owHash11(mod(bi,4.0) + 11.0) - 0.5) * 0.028 * formAmt;
+  float boardStep = (owHash11(mod(bi,4.0) + seed) - 0.5) * 0.028 * formAmt;
   h += boardStep;
   h -= seam * 0.055 * formAmt;
   ao -= seam * 0.40 * formAmt;
@@ -253,7 +254,7 @@ void concrete_surface(vec2 uv, out vec3 alb, out float h, out float rough, out f
 
   // tie holes, plugged, one every other board
   vec2 tf = fract(vec2(uv.x * 3.0, boards * 0.5)) - 0.5;
-  float tieRnd = owHash12(mod(floor(vec2(uv.x * 3.0, boards * 0.5)),vec2(3.0,2.0)) + 11.0);
+  float tieRnd = owHash12(mod(floor(vec2(uv.x * 3.0, boards * 0.5)),vec2(3.0,2.0)) + seed);
   float tie = surface_ramp(0.085, 0.05, length(tf * vec2(1.0, 2.0))) * step(0.45, tieRnd) * formAmt;
   h -= tie * 0.10;
   ao -= tie * 0.5;
@@ -549,49 +550,827 @@ void wood_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float
 // asphalt aggregate, wood fibres, worn metal and woven cloth. Periodic noise
 // keeps opposite edges continuous; frequencies stay below the bake's Nyquist.
 float surface_hash(vec2 p) { return owHash12(p); }
-float periodic_noise(vec2 uv, vec2 cells)
-{
-    vec2 p=uv*cells, i=floor(p), f=fract(p);
-    f=f*f*(3.0-2.0*f);
-    return mix(mix(surface_hash(mod(i,cells)),surface_hash(mod(i+vec2(1,0),cells)),f.x),
-        mix(surface_hash(mod(i+vec2(0,1),cells)),surface_hash(mod(i+vec2(1,1),cells)),f.x),f.y);
+
+vec3 owRustColour(float t, float grain){
+  // young rust is orange, mature rust is dark red-brown, old rust is near-black
+  vec3 c1 = owSRGB(vec3(0.560, 0.290, 0.110));   // fresh orange
+  vec3 c2 = owSRGB(vec3(0.380, 0.180, 0.085));   // mid
+  vec3 c3 = owSRGB(vec3(0.190, 0.100, 0.060));   // mature
+  vec3 c4 = owSRGB(vec3(0.640, 0.400, 0.190));   // powdery bloom
+  vec3 c = mix(c1, c2, surface_ramp(0.15, 0.6, t));
+  c = mix(c, c3, surface_ramp(0.55, 1.0, t));
+  c = mix(c, c4, surface_ramp(0.55, 0.95, grain) * 0.45);
+  return c * (0.82 + 0.36 * grain);
 }
-void legacy_surface(vec2 uv, float kind, out vec3 albedo, out float height, out vec3 packed)
-{
-    float macro=periodic_noise(uv,vec2(4.0));
-    float fine=periodic_noise(uv,vec2(48.0));
-    float mid=periodic_noise(uv,vec2(16.0));
-    float variation=0.78+0.22*macro+0.05*fine;
-    float roughness=0.82+0.12*fine, metal=0.0, ao=1.0;
-    height=0.45+0.16*mid+0.045*fine;
-    if (kind>0.5 && kind<1.5) {
-        float aggregate=surface_ramp(0.45,0.73,fine);
-        height=0.4+aggregate*0.18+mid*0.045;
-        variation=0.72+macro*0.20+aggregate*0.08;
-        roughness=0.74+0.20*mid;
-        ao=0.88+0.12*aggregate;
-    } else if (kind>1.5 && kind<2.5) {
-        float grain=periodic_noise(uv,vec2(48.0,4.0));
-        float rings=sin(uv.x*75.398+periodic_noise(uv,vec2(4.0))*3.0)*0.5+0.5;
-        height=0.42+grain*0.12+rings*0.035;
-        variation=0.64+grain*0.25+rings*0.10;
-        roughness=0.64+0.22*grain;
-        ao=0.88+0.12*grain;
-    } else if (kind>2.5 && kind<3.5) {
-        float scratch=periodic_noise(uv,vec2(4.0,64.0));
-        float rust=surface_ramp(0.63,0.84,macro);
-        height=0.5+scratch*0.012+rust*0.10;
-        variation=0.82+scratch*0.14-rust*0.20;
-        roughness=mix(0.28+0.16*scratch,0.88,rust);
-        metal=1.0-rust;
-    } else if (kind>3.5) {
-        float weave=sin(uv.x*201.062)*sin(uv.y*201.062)*0.5+0.5;
-        height=0.5+weave*0.04;
-        variation=0.84+macro*0.12+weave*0.04;
-        roughness=0.94;
-    }
-    albedo=vec3(variation);
-    packed=vec3(roughness,metal,ao);
+
+
+void metal_brushed_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 83.0 * 15.1;
+
+  // brushing runs along X: heavy shear so the noise stretches into fibres
+  vec2 bp = owShear(p, 0.0, 64.0);
+  vec2 BP = owShearPer(P, 64.0);
+  float brush1 = owFbm01(bp * 2.0, BP * 2.0, 4, 0.5);
+  float brush2 = owFbm01(bp * 8.0 + 3.0, BP * 8.0, 3, 0.5);
+  float brush3 = owFbm01(owShear(p * 4.0, 0.0, 24.0), owShearPer(P * 4.0, 24.0), 3, 0.5);
+  float brush = brush1 * 0.5 + brush2 * 0.32 + brush3 * 0.18;
+
+  float macro = owFbm01(p * 0.9, P * 0.9, 3, 0.6);
+
+  vec3 c = owSRGB(vec3(0.560, 0.565, 0.575));
+  c *= 0.93 + 0.13 * brush;
+  c *= 0.97 + 0.06 * macro;
+
+  metal = 1.0;
+  rough = 0.22 + brush * 0.24 + (macro - 0.5) * 0.06;
+  h = 0.78 + (brush - 0.5) * 0.012;
+  ao = 1.0;
+
+  // deeper score lines
+  float score = owScratches(p * 1.0, P, 40.0, 0.0, 0.60);
+  rough += score * 0.22;
+  h -= score * 0.006;
+  c *= 1.0 - score * 0.05;
+
+  // cross scratches from handling
+  float cross = owScratches(p * 3.0, P * 3.0, 8.0, 3.0, 0.70) * 0.7;
+  rough += cross * 0.20;
+  h -= cross * 0.004;
+
+  // dents: shallow, wide, they break the reflection
+  float dent = owFbm01(p * 3.0 + 7.0, P * 3.0, 3, 0.6);
+  h += (dent - 0.5) * 0.05;
+
+  // fingerprints and grease smudges — the thing that sells brushed metal
+  float smudge = surface_ramp(0.58, 0.86, owFbm01(owWarp(p * 2.2 + 19.0, P * 2.2, 0.7, 3), P * 2.2, 4, 0.55));
+  rough += smudge * 0.22;
+  c *= 1.0 - smudge * 0.06;
+  metal -= smudge * 0.10;
+
+  // grime settling in
+  float grime = surface_ramp(0.66, 0.95, owFbm01(p * 5.0, P * 5.0, 4, 0.55));
+  c = mix(c, owSRGB(vec3(0.180, 0.175, 0.165)), grime * 0.35);
+  rough += grime * 0.18;
+  metal -= grime * 0.35;
+
+  alb = clamp(c, vec3(0.02), vec3(0.88));
+  rough = clamp(rough, 0.08, 0.95);
+  metal = clamp(metal, 0.0, 1.0);
+  ao = clamp(ao, 0.4, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void fabric_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  const float THREADS = 96.0;
+  vec2 p = uv * P + 43.0 * 3.9;
+
+  // ---- plain weave: warp over weft on alternating cells ----
+  vec2 t = uv * THREADS;
+  vec2 cell = floor(t);
+  vec2 f = fract(t) - 0.5;
+  float over = mod(cell.x + cell.y, 2.0);   // 0 -> warp on top, 1 -> weft on top
+
+  float warpProfile = cos(f.x * 3.14159) ;
+  float weftProfile = cos(f.y * 3.14159);
+  float top = mix(warpProfile, weftProfile, over);
+  float bot = mix(weftProfile, warpProfile, over) * 0.45;
+  float weave = max(top, bot);
+  float threadId = owHash12(mod(cell,vec2(THREADS)) + 43.0);
+
+  // ---- fuzz and slubs ----
+  float fuzz = owFbm01(p * 12.0, P * 12.0, 3, 0.55);
+  float slub = owFbm01(p * 14.0, P * 14.0, 4, 0.5);
+  float macro = owFbm01(p * 1.2, P * 1.2, 4, 0.6);
+
+  vec3 cA = vec3(0.72);
+  vec3 cB = vec3(0.48);
+  vec3 c = mix(cA, cB, threadId * 0.6 + slub * 0.4);
+  c *= 0.865 + 0.215 * (weave * 0.5 + 0.5);
+  c *= 0.960 + 0.075 * fuzz;
+  c *= 0.90 + 0.20 * macro;
+
+  h = 0.55 + weave * 0.30 + (fuzz - 0.5) * 0.03 + (slub - 0.5) * 0.05;
+  rough = 0.86 + (1.0 - weave) * 0.08 + (fuzz - 0.5) * 0.06;
+  metal = 0.0;
+  ao = mix(0.82, 1.0, surface_ramp(-0.4, 0.9, weave));
+
+  // ---- drape folds ---------------------------------------------------------
+  // Cloth under tension gathers into soft parallel ridges roughly a hand's width
+  // apart, wandering as they run. At the 0.26 m mapping the awnings use, 2.6
+  // cycles across the tile is a ~10 cm fold. A weave alone reads as printed
+  // canvas; the fold field is what gives a canopy its shape between its poles.
+  float foldC = uv.y * 3.0 + uv.x + owFbm01(p * 0.9, P * 0.9, 3, 0.62) * 2.2;
+  float foldT = abs(fract(foldC) - 0.5) * 2.0;          // 0 at crest, 1 in trough
+  float crest = 1.0 - foldT;
+  float foldR = owHash11(mod(floor(foldC),1.0) * 2.13 + 43.0);
+  float fold = crest * crest * (0.55 + 0.75 * foldR);
+  h += (fold - 0.30) * 0.115;
+  c *= 0.895 + 0.21 * fold;
+  ao -= (1.0 - crest) * 0.14;
+  // the crease line itself is polished by handling and holds the dust
+  float creaseLine = 1.0 - surface_ramp(0.0, 0.10, foldT);
+  rough -= creaseLine * 0.06;
+  c *= 1.0 + creaseLine * 0.05;
+
+  // ---- wear: threadbare patches, fraying, pulled threads ----
+  float wearField = surface_ramp(0.58, 0.82, owFbm01(owWarp(p * 2.0, P * 2.0, 0.8, 3), P * 2.0, 4, 0.55));
+  c = mix(c, c * 1.35 + 0.02, wearField * 0.5);
+  rough += wearField * 0.06;
+  h -= wearField * 0.05;
+
+  float pulled = owScratches(p * 3.0, P * 3.0, 18.0, 1.0, 0.68);
+  h += pulled * 0.05;
+  c *= 1.0 - pulled * 0.10;
+
+  // ---- stains and dust ----
+  float stain = surface_ramp(0.55, 0.9, owFbm01(owWarp(p * 1.5 + 7.0, P * 1.5, 1.0, 3), P * 1.5, 5, 0.6));
+  c = mix(c, c * 0.42 + owSRGB(vec3(0.09, 0.08, 0.06)), stain * 0.55);
+  rough += stain * 0.05;
+
+  float dust = surface_ramp(0.4, 0.85, owFbm01(p * 6.0, P * 6.0, 4, 0.5));
+  c = mix(c, owSRGB(vec3(0.400, 0.375, 0.335)), dust * 0.14);
+
+  alb = clamp(c, vec3(0.02), vec3(0.85));
+  rough = clamp(rough, 0.5, 0.99);
+  ao = clamp(ao, 0.25, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void brick_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  const float COLS = 6.0;     // bricks across the tile
+  const float ROWS = 18.0;    // courses up the tile
+  vec2 p = uv * P + 23.0 * 9.1;
+
+  // ---------------- brick lattice, running bond ----------------
+  float rowF = uv.y * ROWS;
+  float row = floor(rowF);
+  float colF = uv.x * COLS + mod(row, 2.0) * 0.5;
+  float col = floor(colF);
+  vec2 id = vec2(mod(col, COLS), mod(row, ROWS));
+  vec2 f = vec2(fract(colF), fract(rowF));
+
+  vec4 rnd = owHash42(id + 23.0 * 3.0);
+  vec4 rnd2 = owHash42(id * 1.37 + 21.0 + 23.0);
+  vec4 rnd3 = owHash42(id * 0.73 + 7.7 + 23.0 * 1.9);
+
+  // Bricks are laid by hand: each one is a hair off square.
+  vec2 jitter = (rnd.xy - 0.5) * vec2(0.012, 0.030);
+  vec2 fj = f + jitter;
+
+  // joint thickness (10mm of a 225mm x 75mm course). The joint is *raked*: a
+  // flat mortar bed with a hard arris at the brick edge. Ramping across the
+  // whole joint width is what makes mortar read as a painted line.
+  const float JX = 0.048, JY = 0.135;
+  float dxj = min(fj.x, 1.0 - fj.x);
+  float dyj = min(fj.y, 1.0 - fj.y);
+  float shoulder = 0.74 + 0.16 * rnd3.w;    // some joints struck flush, some sharp
+  float ex = surface_ramp(JX * shoulder, JX * 1.02, dxj);
+  float ey = surface_ramp(JY * shoulder, JY * 1.02, dyj);
+  float face = min(ex, ey);                 // 1 = brick face, 0 = mortar
+
+  // per-brick surface coords so the face texture never repeats
+  vec2 bp = vec2(fj.x, fj.y) * vec2(3.0, 1.0) + rnd.zw * 17.0;
+  vec2 BP = vec2(24.0);
+
+  // ---------------- mortar ----------------
+  float mSand = owFbm01(p * 20.0, P * 20.0, 4, 0.5);
+  vec4 mGrain = owWorley(p * 24.0, P * 24.0, 1.0);
+  float mortarRough = owFbm01(p * 20.0, P * 20.0, 4, 0.55);
+  vec3 mortarCol = mix(owSRGB(vec3(0.400, 0.388, 0.362)), owSRGB(vec3(0.278, 0.272, 0.260)),
+                       surface_ramp(0.3, 0.8, mortarRough));
+  mortarCol *= 0.84 + 0.32 * mSand;
+  mortarCol *= 0.88 + 0.24 * owFbm01(p * 6.0, P * 6.0, 4, 0.6);
+  mortarCol = mix(mortarCol, owSRGB(vec3(0.235, 0.228, 0.215)), surface_ramp(0.5, 0.06, mGrain.x) * 0.40);
+  mortarCol = mix(mortarCol, owSRGB(vec3(0.520, 0.505, 0.470)), surface_ramp(0.30, 0.02, owWorley(p * 25.0 + 4.0, P * 25.0, 1.0).x) * 0.35);
+
+  // some joints are struck flush, some are raked deep, some crumbled out.
+  // 0.10-0.15 of a 0.055 m relief = 5-8 mm of real recess.
+  float jointDepth = 0.10 + 0.05 * owFbm01(p * 1.2, P * 1.2, 3, 0.5);
+  float crumble = surface_ramp(0.62, 0.86, owFbm01(p * 9.0 + 4.0, P * 9.0, 4, 0.5));
+  jointDepth += crumble * 0.09;
+  // the mortar bed itself is not flat — it holds the trowel's sand texture
+  float mortarH = -(mSand - 0.5) * 0.018 - surface_ramp(0.5, 0.0, mGrain.x) * 0.012;
+
+  // ---------------- brick face ----------------
+  float faceN = owFbm01(bp * 2.2, BP, 5, 0.5);
+  float faceFine = owFbm01(bp * 5.0, BP * 2.0, 4, 0.5);
+  vec4 facePore = owWorley(bp * 7.0, BP * 3.5, 1.0);
+  // Pits cluster instead of forming an even dot grid, and their size varies.
+  float poreCluster = surface_ramp(0.42, 0.78, owFbm01(bp * 3.0 + 8.0, BP * 1.5, 4, 0.55));
+  float pore = surface_ramp(0.26 + 0.16 * facePore.z, 0.0, facePore.x) * step(0.55, facePore.w) * poreCluster;
+
+  // Colour families: red stock, dark burnt header, pale sand-lime, brown.
+  vec3 cA = owSRGB(vec3(0.430, 0.238, 0.183));   // red stock
+  vec3 cB = owSRGB(vec3(0.318, 0.183, 0.150));   // deep red
+  vec3 cC = owSRGB(vec3(0.196, 0.132, 0.120));   // burnt header
+  vec3 cD = owSRGB(vec3(0.492, 0.392, 0.300));   // sandy
+  vec3 cE = owSRGB(vec3(0.372, 0.288, 0.218));   // brown
+
+  vec3 brick = mix(cA, cB, rnd.z);
+  brick = mix(brick, cC, step(0.90, rnd.w) * 0.70);
+  brick = mix(brick, cD, step(0.94, rnd2.x) * 0.62);
+  brick = mix(brick, cE, step(0.55, rnd2.y) * 0.50);
+  // every brick came out of the kiln a different shade: +/-12% per brick
+  brick *= 0.88 + 0.24 * rnd3.x;
+  // within-brick banding from the extrusion
+  brick *= 0.86 + 0.28 * faceN;
+  // fine sand grain across the face — this is what reads at 0.5 m
+  // bp is per-brick, and a brick is only ~170 texels wide, so bp*26 was 78
+  // cycles across it — 2.2 texels a cycle. This is the band that has to still
+  // be there at 0.5 m, so it is authored at 7 texels and given more contrast.
+  float faceGrain = owFbm01(bp * 8.0, BP * 4.0, 4, 0.55);
+  brick *= 0.87 + 0.26 * faceGrain;
+  brick = mix(brick, brick * 1.22, surface_ramp(0.55, 0.9, faceFine) * 0.5);
+  // dark iron spots and sand inclusions
+  brick = mix(brick, brick * 0.62, pore * 0.85);
+  brick = mix(brick, brick * 0.72, surface_ramp(0.34, 0.0, facePore.x) * step(0.86, facePore.z));
+  brick = mix(brick, owSRGB(vec3(0.62, 0.58, 0.50)), surface_ramp(0.86, 0.98, faceFine) * 0.35);
+
+  float faceH = 0.72 + (faceN - 0.5) * 0.05 + (faceFine - 0.5) * 0.025
+              + (rnd2.z - 0.5) * 0.05;               // each brick sits proud/shy
+  faceH -= pore * 0.075;
+
+  // Broken arrises: ~5% of the edge length is knocked off, deep enough to
+  // catch a shadow, showing pale raw clay under the fired skin.
+  float edgeD = min(dxj / JX, dyj / JY);
+  float chipNoise = owFbm01(bp * 6.0 + 3.0, BP * 3.0, 4, 0.5);
+  float chip = surface_ramp(1.7, 0.30, edgeD) * surface_ramp(0.60, 0.80, chipNoise) * step(0.66, rnd3.z);
+  faceH -= chip * 0.17;
+  brick = mix(brick, brick * 0.72 + owSRGB(vec3(0.20, 0.13, 0.09)), chip * 0.65);
+
+  // ---------------- combine face + mortar ----------------
+  // face is already a shaped profile, so no second smoothstep here: that is
+  // what used to smear the arris across the full joint width.
+  float m = face;
+  h = mix(0.72 - jointDepth + mortarH, faceH, m);
+  vec3 c = mix(mortarCol, brick, m);
+  // every brick came out of the kiln with a slightly different skin
+  float brickRough = 0.58 + 0.32 * rnd2.z + (rnd3.y - 0.5) * 0.20;
+  rough = mix(0.88 + 0.10 * mSand + 0.06 * (mortarRough - 0.5),
+              brickRough + 0.14 * faceN + 0.10 * (faceGrain - 0.5) + chip * 0.14, m);
+  ao = mix(0.34, 1.0, surface_ramp(0.0, 0.75, face));
+  ao -= chip * 0.30;
+  metal = 0.0;
+
+  // mortar smeared over the brick edge by the trowel
+  float smear = surface_ramp(0.5, 1.0, 1.0 - face) * surface_ramp(0.55, 0.9, owFbm01(p * 14.0, P * 14.0, 4, 0.5));
+  c = mix(c, mortarCol * 1.05, smear * 0.5);
+
+  // ---------------- weathering over the whole wall ----------------
+  // The 0.1-1 m band — see the long note in PLASTER.
+  float soilB = owFbm01(owWarp(p * 1.8 + 27.0, P * 1.8, 0.6, 3), P * 1.8, 4, 0.58);
+  soilB = clamp((soilB - 0.5) * 2.5 + 0.5, 0.0, 1.0);
+  c *= 0.845 + 0.33 * soilB;
+
+  // efflorescence: salt bloom, strongest around joints
+  float efflo = surface_ramp(0.62, 0.96, owFbm01(owWarp(p * 2.6, P * 2.6, 0.8, 3), P * 2.6, 4, 0.5));
+  efflo *= mix(1.0, 0.35, m);
+  c = mix(c, owSRGB(vec3(0.66, 0.652, 0.632)), efflo * 0.5);
+  rough += efflo * 0.10;
+
+  // soot / rain runoff — short, shallow and only ~3:1 stretched; the long runs
+  // are added at runtime where a real ledge sheds water.
+  float streak = owFbm01(vec2(p.x * 7.0, p.y * 2.3), vec2(P.x * 7.0, P.y * 2.0), 5, 0.55);
+  float runoff = surface_ramp(0.50, 0.92, streak);
+  c *= 1.0 - runoff * 0.16;
+
+  // hairline cracks stepping through the joints
+  float crack = owCracks(p * 2.2, P * 2.2, 0.85, 0.038, 0.58);
+  h -= crack * 0.10;
+  ao -= crack * 0.45;
+  c = mix(c, c * 0.35, crack * 0.7);
+
+  // dirt in every crevice
+  float cavity = 1.0 - surface_ramp(0.50, 0.74, h);
+  c = mix(c, owSRGB(vec3(0.16, 0.15, 0.14)), cavity * 0.32);
+
+  alb = clamp(c, vec3(0.02), vec3(0.85));
+  rough = clamp(rough, 0.35, 0.99);
+  ao = clamp(ao, 0.12, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void tile_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  const float N = 6.0;
+  vec2 p = uv * P + 31.0 * 4.4;
+
+  vec2 tp = uv * N;
+  vec2 id = mod(floor(tp),vec2(N));
+  vec2 f = fract(tp);
+  vec4 rnd = owHash42(id + 31.0);
+
+  // Flat grout bed with a hard arris at the tile edge: a full-width ramp is
+  // what makes a joint read as a drawn line instead of a recess.
+  const float J = 0.045;
+  float dxj = min(f.x, 1.0 - f.x);
+  float dyj = min(f.y, 1.0 - f.y);
+  float ex = surface_ramp(J * 0.70, J * 1.02, dxj);
+  float ey = surface_ramp(J * 0.70, J * 1.02, dyj);
+  float face = min(ex, ey);
+
+  float glaze = owFbm01(f * 6.0 + rnd.xy * 21.0, vec2(48.0), 4, 0.5);
+  vec3 cTile = mix(owSRGB(vec3(0.700, 0.690, 0.660)), owSRGB(vec3(0.470, 0.500, 0.505)), rnd.z * 0.7);
+  cTile *= 0.93 + 0.13 * glaze;
+  cTile *= 0.92 + 0.16 * rnd.y;                                 // per-tile batch shade
+
+  float grout = owFbm01(p * 20.0, P * 20.0, 4, 0.5);
+  vec3 cGrout = owSRGB(vec3(0.400, 0.385, 0.360)) * (0.85 + 0.3 * grout);
+  cGrout = mix(cGrout, owSRGB(vec3(0.13, 0.13, 0.12)), 0.45);   // grout is always filthy
+
+  float m = face;
+  // 0.06 of a 0.03 m relief = 1.8 mm of grout recess.
+  h = mix(0.76 - (grout - 0.5) * 0.02, 0.82 + (rnd.w - 0.5) * 0.04, m);
+  vec3 c = mix(cGrout, cTile, m);
+  // glazed tile has to stay glossy enough to actually catch a highlight
+  rough = mix(0.92, 0.20 + 0.22 * glaze + (rnd.z - 0.5) * 0.14, m);
+  ao = mix(0.40, 1.0, surface_ramp(0.0, 0.8, face));
+  metal = 0.0;
+
+  // chipped / cracked / missing tiles
+  float broken = step(0.90, rnd.x);
+  float crack = owCracks(f * 3.0 + rnd.yz * 9.0, vec2(24.0), 0.85, 0.04, 0.45) * m;
+  c = mix(c, c * 0.3, crack * 0.8);
+  h -= crack * 0.08;
+  ao -= crack * 0.5;
+  vec3 sub = owSRGB(vec3(0.330, 0.300, 0.270));
+  c = mix(c, sub, broken * m * 0.9);
+  h -= broken * m * 0.14;
+  rough = mix(rough, 0.95, broken * m);
+
+  // scuffs and traffic wear
+  float wear = surface_ramp(0.45, 0.95, owFbm01(p * 2.0, P * 2.0, 4, 0.55));
+  rough += wear * 0.20 * m;
+  c *= 1.0 - wear * 0.12;
+
+  float cavity = 1.0 - surface_ramp(0.68, 0.80, h);
+  c = mix(c, owSRGB(vec3(0.14, 0.13, 0.12)), cavity * 0.35);
+
+  alb = clamp(c, vec3(0.02), vec3(0.85));
+  rough = clamp(rough, 0.12, 0.95);
+  ao = clamp(ao, 0.15, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void dirt_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 13.0 * 3.4;
+
+  float macro = owFbm01(p * 0.6, P * 0.6, 4, 0.62);
+  float clump = owBillow(owWarp(p * 3.0, P * 3.0, 0.6, 3), P * 3.0, 5, 0.55);
+  float fine  = owFbm01(p * 14.0, P * 14.0, 4, 0.5);
+  float micro = owFbm01(p * 22.0, P * 22.0, 3, 0.5);
+
+  vec3 cDry  = owSRGB(vec3(0.430, 0.350, 0.255));
+  vec3 cWet  = owSRGB(vec3(0.185, 0.140, 0.100));
+  vec3 cPale = owSRGB(vec3(0.560, 0.490, 0.385));
+  vec3 c = mix(cDry, cPale, surface_ramp(0.45, 0.9, macro));
+  c = mix(c, cWet, surface_ramp(0.55, 0.15, macro) * 0.8);
+  // Halved high-frequency albedo contrast; the read moves into height/roughness.
+  c *= 0.94 + 0.11 * fine;
+  c *= 0.975 + 0.05 * micro;
+
+  h = 0.55 + (macro - 0.5) * 0.14 + (clump - 0.5) * 0.16 + (fine - 0.5) * 0.075;
+  rough = 0.88 + (fine - 0.5) * 0.14 + (micro - 0.5) * 0.10;
+  metal = 0.0;
+  ao = 1.0;
+
+  // dried mud cracks in the flat pans
+  float pan = surface_ramp(0.35, 0.65, macro);
+  float mud = owCracks(p * 2.4, P * 2.4, 0.85, 0.045, 0.35) * pan;
+  h -= mud * 0.16;
+  ao -= mud * 0.32;
+  c = mix(c, cWet * 0.7, mud * 0.75);
+  // the mud plates curl up at their edges
+  float plateLift = surface_ramp(0.10, 0.0, mud) * pan;
+  h += plateLift * 0.01;
+
+  // stones of two grades
+  vec4 st = owWorley(p * 11.0, P * 11.0, 1.0);
+  float stone = surface_ramp(0.30, 0.11, st.x) * step(0.62, st.w);
+  vec3 scol = mix(owSRGB(vec3(0.330, 0.315, 0.295)), owSRGB(vec3(0.600, 0.575, 0.540)), st.z);
+  c = mix(c, scol, stone * 0.6);
+  h += stone * 0.085;
+  rough = mix(rough, 0.52 + 0.28 * st.z, stone * 0.8);
+  ao -= surface_ramp(0.36, 0.28, st.x) * step(0.62, st.w) * 0.10;
+
+  vec4 grit = owWorley(p * 22.0, P * 22.0, 1.0);
+  float gritM = surface_ramp(0.26, 0.08, grit.x) * step(0.55, grit.w);
+  c = mix(c, mix(scol, cPale, grit.z), gritM * 0.4);
+  h += gritM * 0.015;
+
+  // dead grass / organic litter
+  float litter = surface_ramp(0.70, 0.86, owFbm01(owShear(p * 8.0, 1.0, 5.0), owShearPer(P * 8.0, 5.0), 4, 0.5));
+  litter *= surface_ramp(0.4, 0.8, macro);
+  c = mix(c, owSRGB(vec3(0.330, 0.290, 0.160)), litter * 0.5);
+  h += litter * 0.012;
+  rough += litter * 0.05;
+
+  // sparse moss in the damp low spots
+  float moss = surface_ramp(0.74, 0.92, owFbm01(p * 4.5 + 19.0, P * 4.5, 5, 0.6)) * surface_ramp(0.5, 0.1, macro);
+  c = mix(c, owSRGB(vec3(0.150, 0.185, 0.105)), moss * 0.65);
+
+  float cavity = 1.0 - surface_ramp(0.40, 0.70, h);
+  ao -= cavity * 0.14;
+
+  alb = clamp(c, vec3(0.02), vec3(0.72));
+  rough = clamp(rough, 0.45, 0.99);
+  ao = clamp(ao, 0.72, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void gravel_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 57.0 * 2.7;
+
+  float bed = owFbm01(p * 1.3, P * 1.3, 4, 0.55);
+
+  /**
+   * This is the street. Not a bed of loose chippings — compacted dust and grit
+   * with aggregate part-buried in it, which is what a Levantine back street
+   * actually is, and much more importantly it is what stops twelve metres of
+   * road reading as dither.
+   *
+   * Two things were wrong before. (1) The finest grade was 208 cells across a
+   * 512 bake — 2.5 texels, i.e. white noise, and the "grain" band on top of it
+   * was 480 cells across 512, literally sub-texel. (2) The interstitial dust
+   * was authored at 0.29 while the stone tops ran to 0.62 and then the runtime
+   * cavity-grime layer pushed the (low) bed down another 17% toward black. A
+   * 2.5:1 albedo step at a 10 mm period across the whole frame is the textbook
+   * recipe for salt-and-pepper. So: three grades at 34/19/9 mm (5.9 texels at
+   * the worst), stones separated from the bed by RELIEF and ROUGHNESS rather
+   * than by value, and a bed sitting mid-height so the cavity term leaves it
+   * alone.
+   */
+  vec4 a = owWorley(p * 5.5, P * 5.5, 1.0);
+  vec4 b = owWorley(p * 10.0 + 5.0, P * 10.0, 1.0);
+  vec4 cSm = owWorley(p * 21.0 + 11.0, P * 21.0, 1.0);
+
+  // Sparse: most of what you see is the compacted bed, with stones IN it. The
+  // old coverage was ~80% at every grade, which is a shingle beach; a used
+  // road shows perhaps a quarter of its aggregate.
+  float sA = surface_ramp(0.36, 0.10, a.x) * step(0.44, a.w);
+  float sB = surface_ramp(0.30, 0.08, b.x) * step(0.62, b.w);
+  float sC = surface_ramp(0.24, 0.06, cSm.x) * step(0.74, cSm.w);
+
+  // The stones live in the height field: raised relief so each one catches the
+  // sun on one side and shadows on the other. Half-buried, not tipped out on
+  // the surface — the peak-to-trough is only a few mm at world scale.
+  float ha = sA * 0.15 * (0.5 + a.z);
+  float hb = sB * 0.09 * (0.5 + b.z);
+  float hc = sC * 0.025;
+  h = 0.54 + (bed - 0.5) * 0.11 + max(max(ha, hb), hc) + 0.22 * (ha + hb);
+
+  /**
+   * The stone palette has to straddle the bed value, not sit above it. With
+   * the bed at 0.35 and the stones running 0.29-0.51 every dark stone hid in
+   * the dust and only the pale ones showed, which is why the road read as
+   * white confetti scattered on grey rather than as aggregate. Half the
+   * stones are now darker than the bed and half lighter.
+   */
+  vec3 s1 = owSRGB(vec3(0.372, 0.356, 0.332));
+  vec3 s2 = owSRGB(vec3(0.232, 0.220, 0.208));
+  vec3 s3 = owSRGB(vec3(0.462, 0.438, 0.400));
+  vec3 s4 = owSRGB(vec3(0.352, 0.276, 0.220));
+  vec3 top = mix(s1, s2, a.z);
+  top = mix(top, s3, step(0.78, a.w));
+  top = mix(top, s4, step(0.90, b.w) * 0.7);
+
+  // The bed is dust, and it is only a few percent off the stones sitting in it.
+  vec3 cBed = owSRGB(vec3(0.362, 0.336, 0.294));
+  vec3 c = mix(cBed, top, clamp(sA * 0.70 + sB * 0.42 + sC * 0.16, 0.0, 1.0));
+  // ~9 mm grain, 4.9 texels wide: a texture, not a dither.
+  float grain = owFbm01(p * 13.0, P * 13.0, 4, 0.5);
+  c *= 0.965 + 0.07 * grain;
+
+  // Per-stone gloss: wet-worn pebbles glint, the dust between them does not.
+  // This, not albedo, is what separates a stone from the dust around it.
+  // Per-stone gloss, but only a little of it. Under a bright sky the IBL
+  // specular lobe is a big part of what a shaded ground plane returns, so a
+  // wide roughness spread at the aggregate period is another way of writing
+  // salt-and-pepper: clamping this term alone took the measured
+  // high-frequency deviation on the road from 2.45 to 1.68.
+  rough = 0.82 + 0.05 * grain + (1.0 - clamp(sA + sB, 0.0, 1.0)) * 0.06
+        - sA * (0.06 + 0.07 * a.z) - sB * 0.05 * b.z;
+  metal = 0.0;
+  /**
+   * AO IS THE WHOLE BALLGAME ON A GROUND PLANE. A street in shadow is lit
+   * almost entirely by the sky, so orm.r is very nearly the only shading
+   * term the surface has — a 0.62:1.0 cavity ripple at the 10-30 mm aggregate
+   * period is therefore a 1.6:1 luminance ripple at 2 screen pixels, which is
+   * precisely the salt-and-pepper the critics measured. (Proved by clamping
+   * the albedo to a constant and the normal map to flat: the speckle survived
+   * both untouched, and only died when this range was compressed.) Baked
+   * cavity AO belongs at low frequency and low contrast; the shading of an
+   * individual stone is the normal map's job.
+   */
+  ao = mix(0.87, 1.0, surface_ramp(0.42, 0.66, h));
+
+  // fine dust filling the gaps
+  float dust = 1.0 - surface_ramp(0.44, 0.62, h);
+  c = mix(c, cBed * 1.04, dust * 0.5);
+  rough += dust * 0.08;
+  ao = mix(ao, 1.0, dust * 0.3);
+
+  // Wheel and foot traffic sweeps the loose grit into drifts and polishes bare
+  // lanes: 0.5-1.5 m form inside the tile, which is the scale the eye uses to
+  // decide whether a road is a surface or a pattern.
+  float drift = owFbm01(owWarp(p * 0.9 + 17.0, P * 0.9, 0.8, 3), P * 0.9, 4, 0.6);
+  h += (drift - 0.5) * 0.10;
+  c *= 0.86 + 0.28 * drift;
+  rough += (drift - 0.5) * 0.10;
+  // Dust drifts BURY the aggregate: where the drift is deep the stones go
+  // under it. Without this the stone density is identical over every square
+  // metre of a hundred-metre street, which is the tell that it is a texture.
+  c = mix(c, cBed * (0.92 + 0.22 * drift), surface_ramp(0.55, 0.88, drift) * 0.72);
+
+  // Dried tyre tracks and dragged-heel scuffs — long, shallow, low contrast.
+  float scuff = owFbm01(owShear(p * 2.2, 0.0, 6.0), owShearPer(P * 2.2, 6.0), 4, 0.5);
+  c *= 1.0 - surface_ramp(0.55, 0.92, scuff) * 0.10;
+  rough -= surface_ramp(0.6, 0.95, scuff) * 0.08;
+
+  alb = clamp(c, vec3(0.02), vec3(0.78));
+  rough = clamp(rough, 0.62, 0.99);
+  ao = clamp(ao, 0.72, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void metal_painted_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 61.0 * 11.3;
+
+  // ---- substrate: steel with a mill finish ----
+  float mill = owFbm01(owShear(p * 5.0, 1.0, 8.0), owShearPer(P * 5.0, 8.0), 4, 0.5);
+  vec3 steel = owSRGB(vec3(0.330, 0.335, 0.345)) * (0.88 + 0.2 * mill);
+
+  // ---- rust that has crept under the paint ----
+  float bloom = 1.0 - owBillow(owWarp(p * 1.8, P * 1.8, 1.1, 4), P * 1.8, 5, 0.6);
+  float rustField = surface_ramp(0.60, 0.92, bloom);
+  float rustGrain = owFbm01(p * 22.0, P * 22.0, 4, 0.55);
+  vec3 rustCol = owRustColour(rustField, rustGrain);
+
+  // ---- paint: an industrial coat with roller texture and orange peel ----
+  float peel = owFbm01(p * 22.0, P * 22.0, 4, 0.5);
+  float roller = owFbm01(owShear(p * 2.0, 0.0, 3.0), owShearPer(P * 2.0, 3.0), 4, 0.5);
+  vec3 paint = vec3(0.72) * (0.90 + 0.16 * roller);
+  paint *= 0.96 + 0.08 * peel;
+  // sun-bleached on the up-facing halves
+  float bleach = surface_ramp(0.35, 0.85, owFbm01(p * 0.8, P * 0.8, 3, 0.6));
+  paint = mix(paint, paint * 1.25 + 0.03, bleach * 0.5);
+
+  // ---- chipping: paint fails at scratches, impacts and along its own edges ----
+  float chipField = owFbm01(owWarp(p * 2.6 + 4.0, P * 2.6, 0.9, 3), P * 2.6, 5, 0.55);
+  float chipEdge = owFbm01(p * 12.0, P * 12.0, 4, 0.5);
+  // Paint mostly holds: only the top of the distribution actually fails, and
+  // it fails hardest where rust is already lifting it from underneath.
+  float chipSrc = chipField * 0.60 + chipEdge * 0.20 + rustField * 0.32 + 0.35 * 0.25;
+  float chip = surface_ramp(0.66, 0.92, chipSrc);
+  // small impact chips scattered around
+  vec4 dings = owWorley(p * 20.0, P * 20.0, 1.0);
+  float ding = surface_ramp(0.14, 0.03, dings.x) * step(0.88, dings.w);
+  chip = clamp(chip + ding, 0.0, 1.0);
+
+  // scratches that cut down to bare metal
+  float scr = owScratches(p * 2.5, P * 2.5, 14.0, 1.0, 0.62);
+  scr += owScratches(p * 4.0 + 21.0, P * 4.0, 10.0, -1.0, 0.66) * 0.8;
+  scr = clamp(scr, 0.0, 1.0);
+
+  // ---- layer stack: paint over primer over rust over steel ----
+  vec3 primer = owSRGB(vec3(0.470, 0.300, 0.180));
+  float primerBand = surface_ramp(0.0, 0.35, chip) * (1.0 - surface_ramp(0.35, 0.6, chip));
+
+  vec3 c = paint;
+  float r = 0.42 + (peel - 0.5) * 0.22 + bleach * 0.16;
+  float mtl = 0.0;
+  h = 0.74 + (roller - 0.5) * 0.02 + (peel - 0.5) * 0.012;
+  ao = 1.0;
+
+  c = mix(c, primer, primerBand * 0.7);
+  c = mix(c, rustCol, surface_ramp(0.35, 0.75, chip) * (0.55 + 0.45 * rustField));
+  c = mix(c, steel, surface_ramp(0.75, 0.95, chip) * (1.0 - rustField) * 0.9);
+  r = mix(r, 0.88, surface_ramp(0.3, 0.8, chip) * (0.4 + 0.6 * rustField));
+  r = mix(r, 0.38, surface_ramp(0.8, 1.0, chip) * (1.0 - rustField));
+  mtl = mix(0.0, 1.0, surface_ramp(0.78, 0.96, chip) * (1.0 - surface_ramp(0.2, 0.7, rustField)));
+  h -= surface_ramp(0.4, 0.8, chip) * 0.16;     // paint has real thickness
+  ao -= surface_ramp(0.35, 0.7, chip) * 0.22;
+  // the lip of a chip is a bright hard edge
+  float lip = surface_ramp(0.30, 0.42, chip) * (1.0 - surface_ramp(0.42, 0.55, chip));
+  c *= 1.0 + lip * 0.15;
+  h += lip * 0.05;
+
+  // scratches on top of everything
+  c = mix(c, owSRGB(vec3(0.500, 0.505, 0.515)), scr * 0.55);
+  mtl = mix(mtl, 1.0, scr * 0.6);
+  r = mix(r, 0.26, scr * 0.55);
+
+  // ---- dirt and rain streaks ----
+  float streak = owFbm01(vec2(p.x * 6.0, p.y * 0.7), vec2(P.x * 6.0, max(P.y, 1.0)), 5, 0.55);
+  float grime = surface_ramp(0.52, 0.92, streak);
+  c *= 1.0 - grime * 0.30;
+  r += grime * 0.10;
+  mtl *= 1.0 - grime * 0.5;
+  // rust bleed running down from the chips
+  float bleed = surface_ramp(0.66, 0.95, streak) * surface_ramp(0.2, 0.6, rustField);
+  c = mix(c, owSRGB(vec3(0.360, 0.190, 0.090)), bleed * 0.45);
+
+  float cavity = 1.0 - surface_ramp(0.62, 0.78, h);
+  c *= 1.0 - cavity * 0.18;
+
+  alb = clamp(c, vec3(0.02), vec3(0.85));
+  rough = clamp(r, 0.14, 0.99);
+  metal = clamp(mtl, 0.0, 1.0);
+  ao = clamp(ao, 0.2, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void metal_rust_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 37.0 * 7.7;
+
+  // ---- base steel ----
+  float mill = owFbm01(owShear(p * 4.0, 1.0, 6.0), owShearPer(P * 4.0, 6.0), 4, 0.5);
+  float fine = owFbm01(p * 22.0, P * 22.0, 4, 0.5);
+  vec3 steel = owSRGB(vec3(0.330, 0.335, 0.345)) * (0.90 + 0.18 * mill);
+  vec3 c = steel;
+  h = 0.72 + (mill - 0.5) * 0.02 + (fine - 0.5) * 0.01;
+  rough = 0.40 + (mill - 0.5) * 0.16 + (fine - 0.5) * 0.08;
+  metal = 1.0;
+  ao = 1.0;
+
+  // ---- rust blooms: warped billow clusters, hard-edged where they flake ----
+  vec2 wp = owWarp(p * 1.4, P * 1.4, 1.2, 4);
+  float bloom = owBillow(wp, P * 1.4, 5, 0.6);
+  bloom = 1.0 - bloom;                              // clusters, not veins
+  float spread = owFbm01(p * 0.7 + 12.0, P * 0.7, 3, 0.6);
+  float rust = surface_ramp(0.36, 0.72, bloom * (0.55 + 0.85 * spread));
+  float rustGrain = owFbm01(p * 26.0, P * 26.0, 4, 0.55);
+  float pit = owFbm01(p * 24.0, P * 24.0, 3, 0.5);
+
+  // flaking scale: the rust lifts in plates near the edge of a bloom
+  float scale = owWorley(p * 16.0, P * 16.0, 1.0).x;
+  float flake = surface_ramp(0.30, 0.10, scale) * surface_ramp(0.25, 0.55, rust) * (1.0 - surface_ramp(0.8, 1.0, rust));
+
+  // Rust *colour* is driven by how old the patch is, not by how much of it
+  // there is — otherwise every heavily rusted area collapses to the same brown.
+  float rustAge = owFbm01(p * 0.85 + 21.0, P * 0.85, 4, 0.62);
+  vec3 rustCol = owRustColour(rustAge * 0.8 + rust * 0.3, rustGrain);
+  c = mix(c, rustCol, rust);
+  metal = mix(1.0, 0.0, surface_ramp(0.15, 0.55, rust));
+  rough = mix(rough, 0.86 + 0.10 * rustGrain, surface_ramp(0.1, 0.6, rust));
+  h += rust * 0.11 * (0.4 + rustGrain) + flake * 0.13;
+  h -= surface_ramp(0.5, 0.95, rust) * pit * 0.14;      // deep pitting under old rust
+  ao -= flake * 0.30 + surface_ramp(0.6, 1.0, rust) * 0.15;
+
+  // ---- pitting straight into the steel where rust has eaten through ----
+  vec4 pits = owWorley(p * 22.0, P * 22.0, 1.0);
+  float deep = surface_ramp(0.22, 0.0, pits.x) * step(0.72, pits.w) * surface_ramp(0.3, 0.8, rust);
+  h -= deep * 0.22;
+  ao -= deep * 0.45;
+  c = mix(c, rustCol * 0.35, deep * 0.7);
+
+  // ---- scratches through everything, exposing bright metal ----
+  float scr = owScratches(p * 3.0, P * 3.0, 12.0, 1.0, 0.60);
+  scr += owScratches(p * 5.0 + 8.0, P * 5.0, 9.0, -2.0, 0.66) * 0.7;
+  scr = clamp(scr, 0.0, 1.0) * 0.6;
+  c = mix(c, owSRGB(vec3(0.480, 0.485, 0.495)), scr * 0.8);
+  metal = mix(metal, 1.0, scr * 0.85);
+  rough = mix(rough, 0.24, scr * 0.7);
+  h -= scr * 0.010;
+
+  // ---- grime ----
+  float grime = surface_ramp(0.55, 0.9, owFbm01(vec2(p.x * 5.0, p.y * 0.8), vec2(P.x * 5.0, max(P.y, 1.0)), 5, 0.55));
+  c *= 1.0 - grime * 0.25;
+  rough += grime * 0.08;
+
+  alb = clamp(c, vec3(0.02), vec3(0.80));
+  rough = clamp(rough, 0.12, 0.99);
+  ao = clamp(ao, 0.15, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void rubber_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 97.0 * 9.6;
+
+  // moulded pebble grain
+  vec4 pb = owWorley(p * 12.0, P * 12.0, 1.0);
+  float pebble = surface_ramp(0.42, 0.10, pb.x);
+  float fine = owFbm01(p * 12.0, P * 12.0, 3, 0.5);
+  float macro = owFbm01(p * 1.5, P * 1.5, 4, 0.6);
+
+  h = 0.60 + pebble * 0.10 + (fine - 0.5) * 0.02 + (macro - 0.5) * 0.03;
+  // 0.20 sRGB ~= 0.031 linear. Anything darker lands under the 0.02 albedo
+  // floor applied below, which clamps the entire surface flat (a black,
+  // detail-free rubber that violates the "no flat surfaces" bar).
+  vec3 c = owSRGB(vec3(0.200, 0.200, 0.206));
+  c *= 0.85 + 0.25 * (pebble * 0.5 + 0.5);
+  c *= 0.94 + 0.10 * fine;
+
+  rough = 0.88 - pebble * 0.06 + (fine - 0.5) * 0.08;
+  metal = 0.0;
+  ao = mix(0.6, 1.0, pebble * 0.5 + 0.5);
+
+  // mould seam
+  float seam = 1.0 - surface_ramp(0.0, 0.012, abs(fract(uv.y * 2.0 + 0.5) - 0.5));
+  h += seam * 0.03;
+  c *= 1.0 + seam * 0.35;
+  rough -= seam * 0.10;
+
+  // scuffs: rubber goes chalky-grey where it abrades
+  float scuff = surface_ramp(0.55, 0.88, owFbm01(owWarp(p * 3.0, P * 3.0, 0.8, 3), P * 3.0, 4, 0.55));
+  c = mix(c, owSRGB(vec3(0.220, 0.218, 0.212)), scuff * 0.45);
+  rough += scuff * 0.06;
+  h -= scuff * 0.015;
+
+  // cracking from ozone / age
+  float crack = owCracks(p * 7.0, P * 7.0, 0.9, 0.028, 0.62);
+  h -= crack * 0.06;
+  c *= 1.0 - crack * 0.35;
+  ao -= crack * 0.35;
+
+  // dust
+  float dust = surface_ramp(0.5, 0.9, owFbm01(p * 8.0, P * 8.0, 4, 0.5));
+  c = mix(c, owSRGB(vec3(0.290, 0.275, 0.250)), dust * 0.16);
+
+  alb = clamp(c, vec3(0.02), vec3(0.35));
+  rough = clamp(rough, 0.55, 0.99);
+  ao = clamp(ao, 0.3, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void glass_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 3.0 * 2.2;
+
+  float smear = owFbm01(owShear(p * 3.0, 1.0, 6.0), owShearPer(P * 3.0, 6.0), 4, 0.5);
+  float dustF = owFbm01(p * 5.0, P * 5.0, 5, 0.55);
+  float spots = owWorley(p * 24.0, P * 24.0, 1.0).x;
+  float fine = owFbm01(p * 12.0, P * 12.0, 3, 0.5);
+
+  // glass itself is almost black in albedo; the look comes from reflections
+  vec3 c = owSRGB(vec3(0.045, 0.050, 0.052));
+
+  float dirty = surface_ramp(0.45, 0.85, dustF);
+  c = mix(c, owSRGB(vec3(0.300, 0.290, 0.265)), dirty * 0.35);
+
+  rough = 0.045 + smear * 0.10 * surface_ramp(0.3, 0.9, dustF) + dirty * 0.22;
+  rough += surface_ramp(0.30, 0.05, spots) * 0.25;             // water spots
+  rough += (fine - 0.5) * 0.02;
+
+  // fine scratches
+  float scr = owScratches(p * 2.0, P * 2.0, 24.0, 1.0, 0.70);
+  rough += scr * 0.25;
+  c += scr * 0.02;
+
+  h = 0.5 + (smear - 0.5) * 0.004;
+  metal = 0.0;
+  ao = 1.0 - dirty * 0.1;
+
+  alb = clamp(c, vec3(0.02), vec3(0.5));
+  rough = clamp(rough, 0.02, 0.7);
+  h = clamp(h, 0.0, 1.0);
+}
+
+
+void detail_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 1.0;
+  // ~10 mm swell, ~3.5 mm tooth
+  float a = owFbm01(p * 3.0, P * 3.0, 4, 0.55);
+  float b = owFbm01(p * 9.0, P * 9.0, 4, 0.52);
+  // 3.9 mm pits and 1.6 mm grains — both wide enough to survive two mip levels
+  vec4 pores = owWorley(p * 8.0, P * 8.0, 1.0);
+  vec4 grit  = owWorley(p * 20.0, P * 20.0, 1.0);
+  float scr = owScratches(p * 2.5, P * 2.5, 16.0, 1.0, 0.66)
+            + owScratches(p * 4.0 + 5.0, P * 4.0, 11.0, -2.0, 0.70) * 0.8;
+  // Proud grains: a solid, rounded bump rather than a threshold speck.
+  float gritA = surface_ramp(0.34, 0.08, pores.x) * step(0.38, pores.z);
+  float gritB = surface_ramp(0.30, 0.06, grit.x) * step(0.34, grit.z);
+  float pit   = surface_ramp(0.26, 0.0, pores.x) * step(0.72, pores.w);
+  h = 0.5 + (a - 0.5) * 0.34 + (b - 0.5) * 0.26;
+  h -= pit * 0.38;
+  h += gritA * 0.26 * (0.5 + grit.z) + gritB * 0.20;
+  h -= clamp(scr, 0.0, 1.0) * 0.18;
+  // Albedo tracks the grain so a proud grain reads light and its trough reads
+  // dark; the shader scales this by the per-surface detail albedo amount.
+  alb = vec3(0.5 + (a - 0.5) * 0.22 + (b - 0.5) * 0.15
+           + gritA * 0.16 + gritB * 0.10 - pit * 0.14);
+  rough = 0.5 + (b - 0.5) * 0.5;
+  metal = 0.0;
+  ao = 1.0 - pit * 0.45 - gritB * 0.10;
+  h = clamp(h, 0.0, 1.0);
 }
 
 
@@ -600,7 +1379,18 @@ void surface_sample(vec2 uv, float kind, out vec3 albedo, out float height, out 
     if(kind<0.5) plaster_surface(uv,albedo,height,rough,metal,ao);
     else if(kind<1.5) asphalt_surface(uv,albedo,height,rough,metal,ao);
     else if(kind<2.5) wood_surface(uv,albedo,height,rough,metal,ao);
-    else if(kind>4.5) concrete_surface(uv,albedo,height,rough,metal,ao);
-    else { legacy_surface(uv,kind,albedo,height,packed); return; }
-    packed=vec3(rough,metal,ao);
+    else if(kind<3.5) metal_brushed_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<4.5) fabric_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<5.5) concrete_surface(uv,0.0,albedo,height,rough,metal,ao);
+    else if(kind<6.5) concrete_surface(uv,1.0,albedo,height,rough,metal,ao);
+    else if(kind<7.5) brick_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<8.5) tile_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<9.5) dirt_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<10.5) gravel_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<11.5) metal_painted_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<12.5) metal_rust_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<13.5) rubber_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<14.5) glass_surface(uv,albedo,height,rough,metal,ao);
+    else detail_surface(uv,albedo,height,rough,metal,ao);
+    packed=clamp(vec3(rough,metal,ao),0.0,1.0);
 }

@@ -4,6 +4,7 @@ uniform highp sampler2D weapon_texture;
 uniform highp sampler2D bloom_texture;
 uniform lowp sampler2D debug_texture;
 uniform highp samplerCube environment_texture;
+uniform highp vec4 atlas_window;
 uniform highp vec4 post; // exposure, bloom strength, debug view, atlas half (0=all,1=lower,2=upper)
 #include "/render/radiance.glsl"
 #include "/render/agx.glsl"
@@ -35,7 +36,7 @@ void main() {
         vec3 d=vec3(cos(latitude)*sin(longitude),sin(latitude),cos(latitude)*cos(longitude));
         gl_FragColor=vec4(tone_map(decode_radiance(textureCube(environment_texture,d).rgb)),1.0);
     } else if (post.z>0.5) {
-        vec2 uv=var_uv;
+        vec2 uv=atlas_window.xy+var_uv*atlas_window.zw;
         if(post.z<3.5 && post.w>0.5) uv.y=uv.y*0.5+(post.w>1.5?0.5:0.0);
         vec3 data=texture2D(debug_texture,uv).rgb;
         if (post.z>3.5) data=vec3(data.r+data.g/255.0);

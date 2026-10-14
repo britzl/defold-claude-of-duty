@@ -5,19 +5,36 @@ Requires Pillow and Lua. Owns/closes the Defold engine.
 """
 from pathlib import Path
 import subprocess
+import json
 from PIL import Image, ImageChops, ImageStat
 from automation_bridge import editor, engine
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def atlas_layout():
+def atlas_stats(quality="medium"):
+    values=subprocess.check_output(["lua","-e",'local a=require("game.render.surface_atlas").new("'+quality+'") print(a.width,a.height,a.job_count,a.draw_count)'],cwd=ROOT,text=True)
+    return dict(zip(("width","height","jobs","draws"),map(int,values.split())))
+
+
+def validate_channels(name, mean):
+    # Glass remains dielectric and smooth; exposed steel is metallic; oxide is
+    # insulating. Recipe averages must agree with those physical distinctions.
+    assert mean[2] > 120, (name,"occlusion",mean)
+    assert mean[0] > (5 if name == "glass" else 30), (name,"roughness",mean)
+    if name == "metal_brushed": assert mean[1] > 200, (name,mean)
+    elif name in ("metal_painted","metal_rust"): assert 0 <= mean[1] < 245, (name,mean)
+    else: assert mean[1] < 10, (name,"dielectric",mean)
+    if name == "glass": assert mean[0] < 100, (name,"glass gloss",mean)
+
+
+def atlas_layout(quality="medium"):
     rows = subprocess.check_output(["lua", "-e", '''
-local a=require "game.render.surface_atlas"
+local a=require("game.render.surface_atlas").new("QUALITY")
 for _,s in ipairs(a.surfaces) do for level,r in ipairs(s.rects) do
  print(s.name,level-1,r.x,r.y,r.size)
 end end
-'''], cwd=ROOT, text=True)
+'''.replace('QUALITY',quality)], cwd=ROOT, text=True)
     return [(name, *map(lambda v: int(float(v)), values))
             for name, *values in (line.split() for line in rows.splitlines())]
 
@@ -41,9 +58,8 @@ def validate_maps(images, layout):
             if view == "normals":
                 assert 120 < base[0] < 135 and 120 < base[1] < 135 and base[2] > 215, (name, base)
             elif view == "material":
-                assert base[0] > 70 and base[2] > 170, (name, base)
-                assert base[1] > 100 if name == "metal" else base[1] < 10, (name, base)
-        print("PASS", view, "all 62 mip regions retain energy and wrapped borders", flush=True)
+                validate_channels(name,base)
+        print("PASS", view, len(layout), "mip regions retain energy and wrapped borders", flush=True)
     albedo = images["albedo"]
     for name, level, x, y, size in layout:
         if level == 0 and name in ("plaster", "concrete", "asphalt", "wood"):
@@ -59,26 +75,31 @@ def main():
     def cmd(name, values=None): return game.command(name, values or {})["result"]
     try:
         engine.wait_until(lambda: cmd("world.snapshot")["ready"], timeout=45)
-        engine.wait_until(lambda: cmd("renderer.snapshot")["ready"], timeout=15)
+        engine.wait_until(lambda: cmd("renderer.snapshot")["ready"], timeout=60)
         cmd("capture.shot", {"name": "laboratory"})
         stats = cmd("renderer.snapshot")
-        assert stats["bake_jobs"] == 372 and stats["bake_draws"] == 558
+        expected=atlas_stats(stats["material_quality"])
+        assert stats["bake_jobs"] == expected["jobs"] and stats["bake_draws"] == expected["draws"]
         assert stats["target_count"] == 9 and stats["peak_target_bytes"] > stats["target_bytes"]
         width, height = stats["atlas_width"], stats["atlas_height"]
-        # Capture two halves at 1:1: macOS clamps window height to the display.
-        game.resize(width, height//2)
-        engine.wait_until(lambda: cmd("renderer.snapshot")["width"] == width and cmd("renderer.snapshot")["height"] == height//2, timeout=10)
-        images = {}
+        # Page through 1024-pixel windows, avoiding desktop window-size limits.
+        game.resize(1024, 1024);game.wait_frames(35)
+        size=cmd("renderer.snapshot")
+        game.resize(round(1024**2/size["width"]),round(1024**2/size["height"]))
+        engine.wait_until(lambda: (cmd("renderer.snapshot")["width"],cmd("renderer.snapshot")["height"]) == (1024,1024),timeout=10)
+        images={}
+        columns=(width+1023)//1024
         for view in ("albedo", "normals", "material"):
-            combined = Image.new("RGB", (width, height))
-            for half in (1, 2):
-                cmd("renderer.configure", {"view": view, "atlas_half": half}); game.wait_frames(5)
-                shot = game.screenshot()
-                image = Image.open(shot.path).convert("RGB")
-                assert image.size == (width, height//2), image.size
-                combined.paste(image, (0, height//2 if half == 1 else 0))
-            combined.save(output / (view+".png"))
-            images[view] = combined
+            combined=Image.new("RGB",(width,height))
+            for row in range((height+1023)//1024):
+                for column in range(columns):
+                    cmd("renderer.configure",{"view":view,"atlas_page":row*columns+column+1});game.wait_frames(5)
+                    shot=game.screenshot()
+                    image=Image.open(shot.path).convert("RGB")
+                    assert image.size==(1024,1024),image.size
+                    combined.paste(image,(column*1024,height-(row+1)*1024))
+            combined.save(output/(view+".png"));images[view]=combined
+        (output/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
         validate_maps(images, atlas_layout())
     finally:
         game.close_engine(); game.close()

@@ -15,7 +15,7 @@ local indices = { 1, 2, 3, 1, 3, 4 }
 
 function M.new(key, material, chunk_x, chunk_z)
     return { key = key, material = material, chunk_x = chunk_x, chunk_z = chunk_z,
-        positions = {}, normals = {}, colors = {}, vertex_count = 0, boxes = 0,
+        positions = {}, normals = {}, colors = {}, edges = {}, masks = {}, vertex_count = 0, boxes = 0,
         bounds = { math.huge, math.huge, math.huge, -math.huge, -math.huge, -math.huge } }
 end
 
@@ -71,6 +71,23 @@ function M.box(batch, box, shade, visible, edge_points)
                     bounds[axis+3] = math.max(bounds[axis+3], vertex[axis])
                 end
                 c[#c + 1] = 1
+                local y,z=vertex[2]-center[2],vertex[3]-center[3]
+                local local_position={vertex[1]-center[1],y*cosine+z*sine,-y*sine+z*cosine}
+                local horizontal,vertical=u,v
+                if u==2 then horizontal,vertical=v,u end
+                local e=batch.edges
+                e[#e+1]=local_position[horizontal]+half[horizontal]
+                e[#e+1]=half[horizontal]-local_position[horizontal]
+                e[#e+1]=local_position[vertical]+half[vertical]
+                e[#e+1]=half[vertical]-local_position[vertical]
+                local mask=box.weather_masks or {1,.35,.18,1}
+                -- Ground chunk boundaries are bookkeeping, not worn edges.
+                local ground=box.id and (box.id:match("^road/") or box.id:match("^walk/") or box.id:match("^ground/"))
+                for j=1,3 do batch.masks[#batch.masks+1]=ground and 0 or mask[j] end
+                -- Visible rectangles under a sill/ledge carry its actual source
+                -- height; original box edges still define wear. No stain quads.
+                local top=u==2 and rectangle[3] or v==2 and rectangle[4] or center[2]+half[2]
+                batch.masks[#batch.masks+1]=ground and 0 or (mask[4]>0 and top or -1000)
                 vertices=vertices+1
             end
         end

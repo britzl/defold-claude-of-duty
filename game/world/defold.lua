@@ -2,6 +2,8 @@
 local materials = require "game.world.materials"
 local M = {}
 local POSITION, NORMAL, COLOR = hash("position"), hash("normal"), hash("color")
+local EDGES,MASKS=hash("surface_edges"),hash("surface_masks")
+local atlas=require "game.render.surface_atlas"
 local WORLD = { hash("world") }
 
 function M.new(mesh_factory, collision_factory)
@@ -14,10 +16,14 @@ function M.add_batch(adapter, batch)
         { name = POSITION, type = buffer.VALUE_TYPE_FLOAT32, count = 3 },
         { name = NORMAL, type = buffer.VALUE_TYPE_FLOAT32, count = 3 },
         { name = COLOR, type = buffer.VALUE_TYPE_FLOAT32, count = 4 },
+        { name = EDGES, type = buffer.VALUE_TYPE_FLOAT32, count = 4 },
+        { name = MASKS, type = buffer.VALUE_TYPE_FLOAT32, count = 4 },
     })
     local positions, normals, colors = buffer.get_stream(data, POSITION), buffer.get_stream(data, NORMAL), buffer.get_stream(data, COLOR)
     for i = 1, #batch.positions do positions[i] = batch.positions[i]; normals[i] = batch.normals[i] end
     for i = 1, #batch.colors do colors[i] = batch.colors[i] end
+    local edges,masks=buffer.get_stream(data,EDGES),buffer.get_stream(data,MASKS)
+    for i=1,batch.vertex_count*4 do edges[i]=batch.edges[i];masks[i]=batch.masks[i] end
     buffer.set_metadata(data, "AABB", batch.bounds, buffer.VALUE_TYPE_FLOAT32)
     local id = factory.create(adapter.mesh_factory)
     adapter.objects[#adapter.objects + 1] = id
@@ -27,9 +33,13 @@ function M.add_batch(adapter, batch)
     go.set(url, "vertices", path)
     local surface=batch.surface or {materials[batch.material].kind,0,0,0}
     go.set(url, "surface", vmath.vector4(surface[1],surface[2],surface[3],surface[4]))
+    local s=assert(atlas.surfaces[surface[1]+1])
+    go.set(url,"surface_info",vmath.vector4(s.metres,s.size,s.relief,s.last_level))
+    local weather=materials[batch.material].weather or 1
+    go.set(url,"surface_effects",vmath.vector4(s.parallax,s.detail,weather,0))
     batch.object, batch.resource = id, path
     -- The resource owns the buffer now. Keep only bounds/stats in Lua.
-    batch.positions, batch.normals, batch.colors = nil, nil, nil
+    batch.positions, batch.normals, batch.colors, batch.edges, batch.masks = nil, nil, nil, nil, nil
 end
 
 function M.add_collision(adapter, shape)

@@ -65,7 +65,7 @@ float owFbm(vec2 p, vec2 per, int oct, float gain){
   float s = 0.0, a = 0.5, n = 0.0;
   for (int i = 0; i < 10; i++){
     if (i >= oct) break;
-    s += a * owNoise(p, per) * (1.0-smoothstep(256.0,512.0,max(per.x,per.y)));
+    s += a * owNoise(p, per) * (1.0-smoothstep(bake.z*0.25,bake.z*0.5,max(per.x,per.y)));
     n += a;
     p *= 2.0; per *= 2.0; a *= gain;
   }

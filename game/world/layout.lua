@@ -47,7 +47,7 @@ return {
     ground = {
         { id = "west_courtyard", x0 = -25.5, x1 = -6.5, z0 = 5, z1 = 10, y = 0, material = "dirt", surface = "dirt" },
         { id = "west_alley", x0 = -25.5, x1 = -6.5, z0 = -12, z1 = -8, y = 0, material = "dirt", surface = "dirt" },
-        { id = "west_rear", x0 = -25.5, x1 = -21.5, z0 = -8, z1 = 5, y = 0, material = "dirt", surface = "dirt" },
+        { id = "west_rear", x0 = -25.5, x1 = -21.5, z0 = -8, z1 = 5, y = 0, material = "gravel", surface = "dirt" },
     },
     -- Endpoints create street/kerb links; intermediate points stay on the ground
     -- rectangles above. All links are bidirectional and validated with Bullet.

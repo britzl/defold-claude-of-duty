@@ -125,7 +125,7 @@ local function add(world, shape, faces)
     end
     local stats = world.stats
     stats.boxes, stats.vertices = stats.boxes + 1, stats.vertices + batch.vertex_count-before
-    stats.mesh_bytes = stats.vertices * 10 * 4
+    stats.mesh_bytes = stats.vertices * 18 * 4
     stats.batches, stats.colliders = #world.batches, #world.colliders
 end
 

@@ -1,12 +1,16 @@
 attribute highp vec3 position;
 attribute mediump vec3 normal;
 attribute lowp vec4 color;
+attribute highp vec4 surface_edges;
+attribute mediump vec4 surface_masks;
 uniform highp mat4 view_proj;
 varying highp vec3 var_world;
 varying mediump vec3 var_normal;
 varying lowp vec4 var_color;
+varying highp vec4 var_edges;
+varying mediump vec4 var_masks;
 void main() {
-    // Static batches contain world vertices and use identity GO transforms.
     var_world=position; var_normal=normal; var_color=color;
+    var_edges=surface_edges;var_masks=surface_masks;
     gl_Position=view_proj*vec4(position,1.0);
 }

@@ -103,29 +103,33 @@ def capture_baseline(output, motion, profile):
                     "counters": [asdict(counter) for counter in costs.counters()]}
             print("CAPTURE", name, "repeat pixels identical", flush=True)
         if motion:
-            sequence = output / "laboratory-sweep"
-            sequence.mkdir()
-            cmd("capture.shot", {"name": "laboratory"})
-            samples = []
-            for frame in range(catalog["sweep_frames"]):
-                samples.append(cmd("capture.frame", {"frame": frame}))
-                save(f"laboratory-sweep/{frame:04d}.png")
-                if frame % 30 == 0:
-                    print("SWEEP", frame, "/", catalog["sweep_frames"] - 1, flush=True)
-            report["motion"] = {"fps": catalog["sweep_fps"], "samples": samples,
-                                "sequence": "laboratory-sweep/%04d.png", "timing": "frame-addressed; not a real-time performance recording"}
-            if shutil.which("ffmpeg"):
-                subprocess.run(["ffmpeg", "-v", "error", "-framerate", str(catalog["sweep_fps"]),
-                                "-i", str(sequence / "%04d.png"), "-c:v", "libx264", "-crf", "16",
-                                "-pix_fmt", "yuv420p", str(output / "laboratory-sweep.mp4")], check=True)
-                report["motion"]["video"] = "laboratory-sweep.mp4"
+            report["motions"]={}
+            for shot_name in ("laboratory", "material_grazing", "weathering_facade"):
+                directory=shot_name+"-sweep"
+                sequence=output/directory;sequence.mkdir()
+                cmd("capture.shot", {"name": shot_name})
+                samples=[]
+                for frame in range(catalog["sweep_frames"]):
+                    samples.append(cmd("capture.frame", {"frame": frame}))
+                    save(f"{directory}/{frame:04d}.png")
+                    if frame%30==0:
+                        print("SWEEP",shot_name,frame,"/",catalog["sweep_frames"]-1,flush=True)
+                record={"fps":catalog["sweep_fps"],"samples":samples,"sequence":directory+"/%04d.png",
+                    "timing":"frame-addressed; not a real-time performance recording"}
+                if shutil.which("ffmpeg"):
+                    subprocess.run(["ffmpeg","-v","error","-framerate",str(catalog["sweep_fps"]),
+                        "-i",str(sequence/"%04d.png"),"-c:v","libx264","-crf","16","-pix_fmt","yuv420p",
+                        str(output/(directory+".mp4"))],check=True)
+                    record["video"]=directory+".mp4"
+                report["motions"][shot_name]=record
+            report["motion"]=report["motions"]["laboratory"]
         assert not cmd("capture.end")["active"]
         game.wait_frames(35)
         assert cmd("renderer.snapshot")["settings"] == original
         # Re-enter/release the fixture to exercise ownership and deferred deletion.
         cmd("capture.shot", {"name": "laboratory"})
         game.wait_frames(5)
-        assert cmd("capture.snapshot")["lab_meshes"] == 17
+        assert cmd("capture.snapshot")["lab_meshes"] == 27
         cmd("capture.end")
         report["cleanup"] = "Settings restored; laboratory can be recreated and released."
     finally:

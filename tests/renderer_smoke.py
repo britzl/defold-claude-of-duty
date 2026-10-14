@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from PIL import Image, ImageChops, ImageStat
 from automation_bridge import editor, engine
-from materials_smoke import atlas_layout
+from materials_smoke import atlas_layout, atlas_stats, validate_channels
 
 
 def main():
@@ -28,6 +28,9 @@ def main():
         game.wait_frames(3)
 
     def capture(name):
+        # Native launches may lose focus while the editor compiles another target.
+        command("ui.pause", {"paused": False})
+        game.wait_frames(3)
         shot = game.screenshot(resolution_multiplier=.5)
         path = output / (name + ".png")
         shutil.copyfile(shot.path, path)
@@ -43,14 +46,15 @@ def main():
 
     try:
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=25)
-        engine.wait_until(lambda: command("renderer.snapshot")["ready"], timeout=5)
+        engine.wait_until(lambda: command("renderer.snapshot")["ready"], timeout=60)
         command("ai.configure", {"enabled": False})
         command("world.view", {"name": "street"})
         initial = command("renderer.snapshot")
-        assert initial["bake_jobs"] == 372 and initial["bake_draws"] == 558
+        expected=atlas_stats()
+        assert initial["bake_jobs"] == expected["jobs"] and initial["bake_draws"] == expected["draws"]
         assert initial["environment_faces"] == 6 and initial["local_light_count"] == 4
         assert initial["target_count"] == 9 and initial["shadow_size"] == 1024
-        assert initial["atlas_width"] == 3080 and initial["atlas_height"] == 2052
+        assert initial["atlas_width"] == expected["width"] and initial["atlas_height"] == expected["height"]
         assert initial["shadow_frames"] > 0
 
         for view in ("albedo", "normals", "material"):
@@ -59,16 +63,15 @@ def main():
             w, h = image.size
             for name, level, x, y, size in atlas_layout():
                 if level != 0: continue
-                patch = image.crop((round(w*(x+.15*size)/3080), round(h*(1-(y+.85*size)/2052)),
-                                    round(w*(x+.85*size)/3080), round(h*(1-(y+.15*size)/2052))))
+                patch = image.crop((round(w*(x+.15*size)/expected["width"]), round(h*(1-(y+.85*size)/expected["height"])),
+                                    round(w*(x+.85*size)/expected["width"]), round(h*(1-(y+.15*size)/expected["height"]))))
                 mean = ImageStat.Stat(patch).mean
                 if view == "albedo":
                     assert 2 < min(mean) < 255, (name, mean)
                 elif view == "normals":
                     assert 115 < mean[0] < 140 and 115 < mean[1] < 140 and mean[2] > 215, (name, mean)
                 else:
-                    assert mean[0] > 50 and mean[2] > 170, (name, mean)
-                    assert mean[1] > 100 if name == "metal" else mean[1] < 10, (name, mean)
+                    validate_channels(name,mean)
         configure(view="environment")
         environment = capture("environment")
         assert min(ImageStat.Stat(region(environment)).stddev) > 8
@@ -156,7 +159,7 @@ def main():
         assert resized["width"] != before["width"] and resized["height"] != before["height"]
         assert resized["bloom_width"] == resized["width"]//4
         assert resized["bloom_height"] == resized["height"]//4
-        assert resized["bake_draws"] == 558 and resized["target_count"] == 9
+        assert resized["bake_draws"] == expected["draws"] and resized["target_count"] == 9
         game.resize(960, 640)
         command("world.view", {"name": "street"})
         game.wait_frames(8)

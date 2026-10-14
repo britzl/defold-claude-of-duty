@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 3, width = 1280, height = 720, settle_frames = 32,
+local M = { version = 4, width = 1280, height = 720, settle_frames = 32,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -19,7 +19,7 @@ local shots = {
     { id="night", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
         reference="night", requested_hour=1.5, unsupported="Time-of-day lighting is not implemented (rendering step 10)." },
     { id="laboratory", position={6.8,4.2,9.5}, target={0,1.3,-1}, fov=65,
-        laboratory=true, reference=false, purpose="Six current surface recipes, dielectric/metal roughness rows and furniture contact." },
+        laboratory=true, reference=false, purpose="Fifteen surface recipes, dielectric/metal roughness rows and furniture contact." },
     { id="material_plaster", position={-6,2,-2.4}, target={-6,2,-5.3}, fov=45,
         laboratory=true, reference=false, purpose="Plaster trowel relief, pinholes and coating variation at close range." },
     { id="material_concrete", position={-3.6,2,-2.4}, target={-3.6,2,-5.3}, fov=45,
@@ -31,6 +31,31 @@ local shots = {
     { id="material_grazing", position={0,.3,4}, target={0,.1,-8}, fov=70,
         reference=false, purpose="Road minification and grazing-angle filtering." },
 }
+for _,entry in ipairs({{"metal_brushed",3.6},{"fabric",6}}) do
+    shots[#shots+1]={id="material_"..entry[1],position={entry[2],2,-2.4},target={entry[2],2,-5.3},fov=45,
+        laboratory=true,reference=false,purpose="Reference recipe close-up: sheen, grain and filtering."}
+end
+local extra=require("game.render.laboratory").extra_materials
+for i,name in ipairs(extra) do
+    local x=8.4+i*2.4
+    shots[#shots+1]={id="material_"..name,position={x,2,-2.4},target={x,2,-5.3},fov=45,
+        laboratory=true,reference=false,purpose="Reference "..name.." recipe: physical scale, relief, roughness and filtering."}
+end
+for _,shot in ipairs({
+    {id="materials_extended",position={20,4.6,7},target={20,2,-5.3},fov=80},
+    {id="materials_far",position={20,5,22},target={20,2,-5.3},fov=65},
+    {id="laboratory_far",position={0,5,20},target={0,2,-5.3},fov=65},
+    {id="weathering_facade",position={-20,2.1,2},target={-20,2.1,-5.3},fov=75},
+    {id="weathering_close",position={-24.8,2.8,-3.9},target={-25.9,3.7,-5.3},fov=50},
+    {id="weathering_far",position={-20,3,15},target={-20,2,-5.3},fov=65},
+    {id="micro_detail",position={-5.8,2,-4.75},target={-6,2,-5.3},fov=50},
+    {id="parallax_tile",position={16.25,2,-4.8},target={15.2,2,-5.3},fov=55},
+}) do
+    shot.laboratory=true;shot.reference=false
+    shot.purpose="Near/mid/far filtering, anchored weathering and bounded relief."
+    shots[#shots+1]=shot
+end
+
 local function copy(t)
     if type(t)~="table" then return t end
     local result={};for k,v in pairs(t) do result[k]=copy(v) end;return result

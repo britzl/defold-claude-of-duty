@@ -189,8 +189,8 @@ Height fog, quarter-resolution bloom, shared tone mapping and an isolated weapon
 colour/depth pass precede the GUI. Diagnostic views and effect toggles are exposed
 through the Automation Bridge. The 72 Lua tests, native macOS/Metal renderer and
 combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
-physical mobile validation is still outstanding. The four main surface recipes
-and material mip filtering are now ported (step 3 below); full material parity,
+physical mobile validation is still outstanding. All fifteen planned surface recipes, material mip filtering and world weathering
+are now implemented (steps 3–4 below);
 environment filtering, local-light
 shadows, cascades, ambient occlusion and temporal effects remain later stages.
 See `README.md` for resource budgets and validation scope.
@@ -336,38 +336,44 @@ are the source references. Kaigen's engine implementation is not included in the
 local checkout; its renderer integration must not be mistaken for a locally
 verified engine build.
 
-Step 3 is in progress: plaster, concrete, asphalt and wood now use adapted 1K
-reference recipes with their original tile scales and relief. Concrete has its
-own maps; plaster has trowel/coating variation, pores and chips; asphalt has
-binder, aggregate, patches and stains; wood has planks, grain, knots and nails.
-Two-channel height storage feeds physical-scale Sobel normals. Three atlases hold
-six full mip chains with periodic borders, linear box reductions, trilinear
-sampling, two-tap anisotropic filtering and normal-variance roughness correction.
-Paint tints follow the reference palette without double-darkening wood/asphalt.
+Step 3 implementation is complete: all fifteen requested surface recipes now
+have GPU-generated linear albedo/height, physical-scale normals and packed
+roughness/metalness/occlusion. Concrete floors, brick, tile, dirt, gravel,
+painted/rusted/brushed metal, fabric, rubber and glass join the first four recipes.
+Glass is a recipe preview; its transparent rendering pass remains step 9.
+The shared microdetail set and low/medium/high launch-time presets preserve stable
+IDs, seeds and physical scale. Every preset includes full isolated mip chains,
+wrapped borders, trilinear/two-tap filtering and normal-variance roughness correction.
+The medium preset is the default and reduces target storage at 1280 × 720 from
+102.49 to 93.72 MiB steady, with a 116.91 MiB bake peak. Low/high estimates are
+46.19/283.66 MiB steady; high is explicitly a desktop preset. Loading is 926 jobs /
+1394 draws on medium, with nine targets after scratch resources are released.
 
-The low-angle capture exposed a one-pixel trim/slab T-junction depth tie.
-Shared edges now use matching endpoints; geometry rises to 36,552 vertices /
-1.39 MiB while the 77 batches and 190 colliders remain unchanged.
-The native GPU check validates all 62 mip regions and wrapped borders in all
-three atlases. Lua checks cover non-overlap, pass feedback, resource ownership,
-context restoration and physical parameters. Capture catalogue v3 adds concrete
-to the six-panel laboratory, four material close-ups and a grazing road view.
-Defold's discard-on-load render targets required full-atlas preservation before
-partial updates; the temporary maps are released after baking. At 1280 × 720,
-HDR target storage is 102.49 MiB steady / 134.60 MiB during baking, compared with
-33.91 MiB before the 1K recipes. Loading uses 372 jobs / 558 draws; normal play
-still owns nine targets and does not rebake on resize/restart.
+Step 4 implementation is complete: deterministic world-space discolouration,
+repair patches, runoff, ground splash, dust, cavity grime and edge wear are wired
+to the production world shader. Original face-edge distances and mesh
+wear/grime/occlusion masks avoid treating visibility cuts or ground chunk seams
+as worn edges. Runoff starts at visible wall/ledge boundaries. Interior finishes
+have reduced exposure. Shared micro normals fade by distance and pixel footprint;
+selective 12-step parallax fades at grazing angles, silhouettes and distance.
+Unstructured materials use continuous world-space warping; brick/tile/plank
+layouts retain their geometry. Occlusion masks do not double-darken baked cavities.
 
-Remaining step-3 work: the concrete-floor variant; brick, tile, dirt and gravel;
-painted/rusted/brushed metal, fabric, rubber and glass; fine detail maps; wider
-motion/filtering review; WebGL/mobile qualification and memory quality presets.
-Validation on macOS/Metal passes 132 Lua checks, the native renderer/HDR
-suites, all atlas mip/border checks, and exact pixels for all 12 captures across
-three independent launches. A 121-frame laboratory sweep and per-shot costs are
-saved under `captures/rendering/materials-verified`; before/after images and
-`report.md` are in `captures/rendering/materials-review-final`.
-The full near/mid/far visual gate remains open. Metre-scale de-tiling, mesh wear
-masks and accumulated world-space grime belong to step 4.
+The expanded catalogue provides close-ups of every material, near/mid/far views
+and three deterministic motion sequences of 121 frames each. All 31 supported
+native views match every RGB pixel across three independent engine launches.
+The 137 Lua checks, native GPU checks of all three presets and 53-stage WebGL
+suite pass. GPU checks cover maps, wrapped mip borders, feature contributions
+and camera return. See `README.md` and
+`captures/rendering/surface-weathering-review/report.md` for comparisons, timing
+samples and measured scope. The world still has 36,552 vertices and 190 colliders; additional material
+assignments make 86 batches, and the extended mesh streams total 2.51 MiB.
+Forced WebGL context restoration currently aborts in the engine framebuffer path;
+the failed qualification is retained separately. Physical mobile qualification,
+other native backends and sustained-combat GPU budgets remain open.
+Step 2's WebGL/mobile floating-point HDR gate is also still
+open: these browser checks use its compatibility path. Kaigen runtime comparison
+remains unavailable because the local reference lacks its engine.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

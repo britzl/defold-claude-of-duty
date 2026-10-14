@@ -95,7 +95,7 @@ local function bake_next(self)
             render.set_render_target(self.targets[job.target])
             if job.op=="recipe" then
                 render.set_viewport(0,0,job.size,job.size)
-                self.bake_constants.bake=vmath.vector4(job.channel,job.kind,0,0)
+                self.bake_constants.bake=vmath.vector4(job.channel,job.kind,job.size,0)
                 fullscreen(self,"bake",self.bake_constants)
             else
                 local r,src=job.rect,job.source_rect
@@ -128,7 +128,8 @@ local function report(self)
     self.report=false
     msg.post("main:/controller#script","renderer_stats",{
         ready=self.bake_step==atlas.job_count, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
-        atlas_width=atlas.width,atlas_height=atlas.height,
+        atlas_width=atlas.width,atlas_height=atlas.height,material_quality=atlas.quality,surface_count=#atlas.surfaces-1,
+        detail_resolution=atlas.surfaces[atlas.detail_kind+1].size,
         environment_faces=math.max(0,self.bake_step-#self.bake_jobs), environment_size=settings.environment_size,
         shadow_size=settings.shadow_size, shadow_frames=self.shadow_frames,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
@@ -211,6 +212,8 @@ function update(self)
         local inverse_view=vmath.inv(view)
         local eye=inverse_view*vmath.vector4(0,0,0,1)
         self.lighting.eye_position=eye
+        self.lighting.weather_features=vmath.vector4(o.weathering and 1 or 0,o.micro_detail and 1 or 0,
+            o.parallax and atlas.quality~="low" and 1 or 0,atlas.surfaces[atlas.detail_kind+1].size)
         self.lighting.features=vmath.vector4(o.shadows and 1 or 0,o.normal_maps and 1 or 0,
             o.local_lights and 1 or 0,o.fog and 1 or 0)
         self.lighting.shadow_params=vmath.vector4(1/settings.shadow_size,.0007,1,0)
@@ -300,6 +303,10 @@ function update(self)
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
         render.set_viewport(0,0,self.width,self.height)
         self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,settings.views[o.view],o.atlas_half)
+        local page=o.atlas_page-1
+        self.post_constants.atlas_window=page<0 and vmath.vector4(0,0,1,1) or
+            vmath.vector4((page%math.ceil(atlas.width/1024))*1024/atlas.width,
+                math.floor(page/math.ceil(atlas.width/1024))*1024/atlas.height,1024/atlas.width,1024/atlas.height)
         bind("scene_texture",t.scene)
         bind("weapon_texture",t.weapon)
         bind("bloom_texture",t.bloom_b)

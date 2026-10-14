@@ -26,26 +26,27 @@ function M.finish(self)
     if self.capture_lab then laboratory.final(self.capture_lab);self.capture_lab=nil end
     return M.snapshot(self)
 end
+function M.select(self,data)
+    assert(self.ctx.world.ready and self.renderer_stats.ready,"Wait for world and renderer loading")
+    local shot=shots.select(data.name)
+    local frame=data.frame or 0
+    shots.camera(shot,frame)
+    if shot.laboratory and not self.capture_lab then self.capture_lab=laboratory.create() end
+    local saved=self.capture and self.capture.saved or {settings=self.renderer_settings}
+    self.capture={shot=shot,frame=frame,saved=saved}
+    self.renderer_settings=settings.defaults()
+    self.active_lights=nil
+    input.reset(self.ctx.input)
+    window.set_mouse_lock(false)
+    audio.suspend(self.ctx,true)
+    msg.post("@render:","renderer_configure",self.renderer_settings)
+    msg.post("@render:","capture_configure",{active=true,laboratory=shot.laboratory or false})
+    return M.snapshot(self)
+end
 function M.install(self)
     automation_bridge.command("capture.catalog",shots.catalog)
     automation_bridge.command("capture.snapshot",function() return M.snapshot(self) end)
-    automation_bridge.command("capture.shot",function(data)
-        assert(self.ctx.world.ready and self.renderer_stats.ready,"Wait for world and renderer loading")
-        local shot=shots.select(data.name)
-        local frame=data.frame or 0
-        shots.camera(shot,frame)
-        if shot.laboratory and not self.capture_lab then self.capture_lab=laboratory.create() end
-        local saved=self.capture and self.capture.saved or {settings=self.renderer_settings}
-        self.capture={shot=shot,frame=frame,saved=saved}
-        self.renderer_settings=settings.defaults()
-        self.active_lights=nil
-        input.reset(self.ctx.input)
-        window.set_mouse_lock(false)
-        audio.suspend(self.ctx,true)
-        msg.post("@render:","renderer_configure",self.renderer_settings)
-        msg.post("@render:","capture_configure",{active=true,laboratory=shot.laboratory or false})
-        return M.snapshot(self)
-    end)
+    automation_bridge.command("capture.shot",function(data) return M.select(self,data) end)
     automation_bridge.command("capture.frame",function(data)
         assert(self.capture,"Select a capture shot first")
         assert(type(data.frame)=="number","frame is required")
