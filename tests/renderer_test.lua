@@ -3,6 +3,7 @@
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
+local shadows=require "game.render.shadows"
 local tests=0
 local function test(name,fn) fn();tests=tests+1;print("PASS "..name) end
 test("settings reject unknown, mistyped and nonfinite values atomically",function()
@@ -17,7 +18,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==1920*1280*8*2+480*320*4*2+1024^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
+    assert(settings.target_bytes(1920,1280)==1920*1280*8*2+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -84,7 +85,7 @@ graphics.get_adapter_info=function() return {family="metal"} end
 sys={get_config_string=function(_,default) return default end}
 hash=function(s) return s end
 local matrix_mt={}
-local function value(...) return setmetatable({x=0,y=0,z=0,w=1,args={...}},matrix_mt) end
+local function value(...) return setmetatable({x=0,y=0,z=0,w=1,m00=1,m11=1,m02=0,m12=0,m22=1,m03=0,m13=0,m23=0,args={...}},matrix_mt) end
 matrix_mt.__add=function() return value() end
 matrix_mt.__mul=function() return value() end
 vmath={matrix4=value,matrix4_orthographic=value,matrix4_look_at=value,normalize=value,
@@ -155,12 +156,12 @@ test("recipes, padded mip chains and filtered environment finish before the worl
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
-    local expected={"world_shadow","soldier_shadow","fullscreen","model","viewmodel","fullscreen","fullscreen","fullscreen","gui","debug_text"}
+    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","fullscreen","model","viewmodel","fullscreen","fullscreen","fullscreen","gui","debug_text"}
     assert(#draws==#expected)
     for i,name in ipairs(expected) do assert(draws[i].predicate==name,i.." "..draws[i].predicate) end
     assert(draws[1].material=="shadow" and draws[2].material=="shadow_skinned")
-    assert(draws[4].target==self.targets.scene and draws[5].target==self.targets.weapon)
-    assert(draws[8].target=="screen" and draws[8].material==nil)
+    assert(draws[10].target==self.targets.scene and draws[11].target==self.targets.weapon)
+    assert(draws[14].target=="screen" and draws[14].material==nil)
     assert(next(bindings)==nil)
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
@@ -168,7 +169,7 @@ test("resize reuses screen targets and leaves generated textures intact",functio
     assert(#targets==12 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
-    assert(self.targets.shadow.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1024)
+    assert(self.targets.shadow.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==shadows.atlas_size)
     assert(self.targets.albedo.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==atlas.width)
     local count=#draws;w=0;update(self);assert(#draws==count)
     w=1279;update(self);assert(self.resizes==2)
@@ -185,7 +186,7 @@ end)
 test("capture isolates the laboratory, hides HUD/actors, and restores ordinary passes",function()
     on_message(self,"capture_configure",{active=true,laboratory=true})
     draws={};update(self)
-    assert(draws[1].predicate=="capture_lab_shadow" and draws[3].predicate=="capture_lab")
+    assert(draws[1].predicate=="capture_lab_shadow" and draws[6].predicate=="capture_lab")
     for _,draw in ipairs(draws) do
         assert(draw.predicate~="gui" and draw.predicate~="debug_text" and draw.predicate~="soldier_shadow")
     end

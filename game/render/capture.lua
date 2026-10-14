@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 5, width = 1280, height = 720, settle_frames = 32,
+local M = { version = 6, width = 1280, height = 720, settle_frames = 32,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -35,6 +35,12 @@ for _,entry in ipairs({{"metal_brushed",3.6},{"fabric",6}}) do
     shots[#shots+1]={id="material_"..entry[1],position={entry[2],2,-2.4},target={entry[2],2,-5.3},fov=45,
         laboratory=true,reference=false,purpose="Reference recipe close-up: sheen, grain and filtering."}
 end
+shots[#shots+1]={id="shadow_cutout",position={5,3.8,7},target={2,1.1,3},fov=58,
+    laboratory=true,reference=false,purpose="Matching perforated panel and shadow silhouette; near-cascade contact/softness."}
+shots[#shots+1]={id="shadow_distance",position={0,3,27},target={0,1.5,-30},fov=65,
+    reference=false,purpose="All four cascades, near/distant coverage and blended boundaries in motion."}
+shots[#shots+1]={id="shadow_remote",position={164,4,7},target={160,.5,0},fov=65,
+    laboratory=true,reference=false,purpose="Camera-following shadows at a fixture 160 m outside the old fixed map."}
 local extra=require("game.render.laboratory").extra_materials
 for i,name in ipairs(extra) do
     local x=8.4+i*2.4

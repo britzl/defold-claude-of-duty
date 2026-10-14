@@ -2,11 +2,7 @@
 #include "/render/sky.glsl"
 #include "/render/environment_sampling.glsl"
 #include "/render/ggx.glsl"
-uniform lowp sampler2D shadow_texture;
-uniform highp mat4 sun_matrix;
 uniform highp vec4 eye_position;
-uniform highp vec4 features; // shadow, normals, local lights, fog
-uniform highp vec4 shadow_params; // texel size, depth bias, environment ready, reserved
 uniform highp vec4 light_positions[4]; // xyz, radius
 uniform highp vec4 light_colours[4]; // linear RGB radiance
 uniform highp vec4 light_minimums[4];
@@ -38,20 +34,7 @@ float interior_visibility(vec3 p) {
     }
     return visibility;
 }
-float shadow_visibility(vec3 p, vec3 n)
-{
-    if (features.x<0.5) return 1.0;
-    vec4 clip=sun_matrix*vec4(p+n*0.025,1.0);
-    vec3 coord=clip.xyz/clip.w*0.5+0.5;
-    if (coord.x<0.002 || coord.x>0.998 || coord.y<0.002 || coord.y>0.998 || coord.z<0.0 || coord.z>1.0) return 1.0;
-    float visibility=0.0;
-    for (int y=-1;y<=1;y++) for (int x=-1;x<=1;x++) {
-        vec2 stored=texture2D(shadow_texture,coord.xy+vec2(float(x),float(y))*shadow_params.x).rg;
-        float depth=stored.x+stored.y/255.0;
-        visibility+=step(coord.z-shadow_params.y,depth);
-    }
-    return visibility/9.0;
-}
+#include "/render/shadows.glsl"
 vec3 brdf(vec3 albedo,float roughness,float metal,vec3 n,vec3 v,vec3 l)
 {
     vec3 h=normalize(v+l);
@@ -63,11 +46,13 @@ vec3 brdf(vec3 albedo,float roughness,float metal,vec3 n,vec3 v,vec3 l)
     vec3 f=f0+(1.0-f0)*pow(1.0-max(dot(h,v),0.0),5.0);
     return ((1.0-f)*(1.0-metal)*albedo/PI + d*g*f/max(4.0*nv*nl,0.001))*nl;
 }
-vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n)
+vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec3 geometric)
 {
+    float visibility=shadow_visibility(p,geometric);
+    if(shadow_data[17].w>.5) return shadow_debug(p,visibility);
     vec3 v=normalize(eye_position.xyz-p);
     vec3 sun=normalize(sun_direction.xyz);
-    vec3 result=brdf(albedo,roughness,metal,n,v,sun)*sun_radiance.rgb*shadow_visibility(p,n);
+    vec3 result=brdf(albedo,roughness,metal,n,v,sun)*sun_radiance.rgb*visibility;
     float indoor=interior_visibility(p),nv=max(dot(n,v),.0001);
     vec3 reflected=environment_specular(reflect(-v,n),lighting_features.y>.5?roughness:0.0);
     vec3 f0=mix(vec3(0.04),albedo,metal);
@@ -97,6 +82,7 @@ vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n)
 }
 vec3 height_fog(vec3 radiance,vec3 p)
 {
+    if(shadow_data[17].w>.5) return radiance;
     vec3 ray=p-eye_position.xyz;
     float distance_to_eye=length(ray);
     // Three-point integration is stable for horizontal rays and either direction.

@@ -35,6 +35,22 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
     isolated=Image.open(output/'laboratory_no_volumes.png').convert('RGB')
     assert ImageChops.difference(lab,isolated).getbbox() is None
     assert stats['volume_count']==4 and stats['reflection_levels']==6
+    if stats.get('shadow_cascades')==4:
+        assert stats['shadow_atlas_size']==2048 and stats['shadow_draw_passes']==4
+        for name in ('shadow_distance','shadow_cutout','shadow_remote'):
+            enabled=Image.open(output/(name+'.png')).convert('RGB')
+            disabled=Image.open(output/(name+'_disabled.png')).convert('RGB')
+            difference=sum(ImageStat.Stat(ImageChops.difference(enabled,disabled)).mean)/3
+            assert difference>.05,(name,difference);metrics[name]=difference
+        from shadows_smoke import cutout_samples
+        metrics['cutout_coverage']=cutout_samples(Image.open(output/'shadow_cutout_visibility.png').convert('RGB'))
+        remote=Image.open(output/'shadow_remote.png').convert('RGB')
+        returned=Image.open(output/'shadow_remote_return.png').convert('RGB')
+        assert ImageChops.difference(remote,returned).getbbox() is None
+        atlas=Image.open(output/'shadow_atlas.png').convert('RGB');w,h=atlas.size
+        for y in (0,h//2):
+            for x in (0,w//2):
+                assert sum(atlas.crop((x,y,x+w//2,y+h//2)).getchannel('R').histogram()[:250])>100
     first=Image.open(output/'street.png').convert('RGB')
     returned=Image.open(output/'street_return.png').convert('RGB')
     assert ImageChops.difference(first,returned).getbbox() is None,'Browser return pixels differ'

@@ -192,8 +192,8 @@ combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
 physical mobile validation is still outstanding. All fifteen planned surface recipes, material mip filtering and world weathering
 are now implemented (steps 3–4 below);
 Unified daylight, filtered environment lighting and interior attenuation are
-implemented in rendering step 5. Local-light shadows, cascades, ambient occlusion
-and temporal effects remain later stages.
+implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Local-light
+shadows, ambient occlusion and temporal effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -422,7 +422,33 @@ without cube seams. Geometry and reference time-of-day differences remain.
 Physical mobile, other native backends, WebGL floating-point HDR and sustained
 GPU budgets remain open. Forced browser context recovery was not requalified
 in this step; the previous engine failure remains recorded. Step 6, stable
-cascaded sun shadows, is the next rendering improvement.
+cascaded sun shadows, is implemented below.
+
+Step 6 implementation is complete: four camera-following 1024² sun cascades
+share one 2048² atlas, covering camera depths 8/22/52/120 m. Rotation-invariant
+sphere fits include overlapping 12% blend bands, 12-texel guard space and 80 m
+upstream caster coverage. Light-space origins snap to whole texels; each cascade
+culls static and animated batches against its own projection. The final slice
+fades out. Geometric-normal/world-texel bias, eight blocker taps and nine bilinear
+comparison taps provide bounded contact-hardening softness without temporal
+screen noise. Atlas taps cannot cross tiles; one clear and one render pass
+preserve all cascades on discard-on-load backends.
+
+Colour/shadow passes share animated skinning and procedural cutout coverage.
+The capture laboratory adds a perforated panel and remote occluders 160 m away;
+new distance/cutout sweeps and cascade/visibility debug modes expose the quality
+gates. Target/sampler count is unchanged, while the larger shadow atlas adds
+24 MiB: medium HDR at 1280 × 720 is 119.33 MiB steady / 142.52 MiB baking.
+Validation passes 145 Lua checks, native renderer/animated-caster and dedicated
+shadow GPU checks. All 34 native views match every RGB pixel across three fresh
+launches, with five 121-frame sweeps. WebGL 2 compatibility passes 67 stages and
+pixel checks, including projected cutout holes and remote coverage. Street draws
+rise from 158 to 398, native render-script median CPU from 54 to 85.5 µs, and the
+short 1024² browser street GPU sample from 3.76 to 6.25 ms. Comparisons and scoped
+costs are in `captures/rendering/shadows-review`.
+Physical mobile, other native backends, forced browser context recovery and
+sustained combat budgets remain separate qualification work. Step 7, depth/normals,
+ambient occlusion and contact shadows, is the next rendering improvement.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

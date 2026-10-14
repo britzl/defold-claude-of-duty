@@ -104,7 +104,7 @@ def capture_baseline(output, motion, profile):
             print("CAPTURE", name, "repeat pixels identical", flush=True)
         if motion:
             report["motions"]={}
-            for shot_name in ("laboratory", "material_grazing", "weathering_facade"):
+            for shot_name in ("laboratory", "material_grazing", "weathering_facade", "shadow_distance", "shadow_cutout"):
                 directory=shot_name+"-sweep"
                 sequence=output/directory;sequence.mkdir()
                 cmd("capture.shot", {"name": shot_name})
@@ -129,7 +129,7 @@ def capture_baseline(output, motion, profile):
         # Re-enter/release the fixture to exercise ownership and deferred deletion.
         cmd("capture.shot", {"name": "laboratory"})
         game.wait_frames(5)
-        assert cmd("capture.snapshot")["lab_meshes"] == 27
+        assert cmd("capture.snapshot")["lab_meshes"] == 28
         cmd("capture.end")
         report["cleanup"] = "Settings restored; laboratory can be recreated and released."
     finally:

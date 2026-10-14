@@ -41,6 +41,7 @@ lua tests/ai_test.lua
 lua tests/squads_test.lua
 lua tests/suppression_test.lua
 lua tests/renderer_test.lua
+lua tests/shadows_test.lua
 lua tests/surface_atlas_test.lua
 lua tests/visible_faces_test.lua
 lua tests/weathering_test.lua
@@ -65,6 +66,7 @@ PYTHONPATH=automation-bridge-python python3 tests/squads_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/shadows_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ui_smoke.py
 ```
@@ -655,7 +657,7 @@ for every supported shot, recording `repeatability.json` and separate per-launch
 manifests. The overlapping wall/slab and trim surfaces have been repaired and
 buried faces clipped. Shared trim/slab edges also use matching endpoints to
 prevent one-pixel depth ties at grazing angles. No pixels are masked or tolerated.
-Catalogue version 4 expands the repeatability gate to 31 supported shots and retains the 0.1–500 m world clip
+Catalogue version 6 expands the repeatability gate to 34 supported shots and retains the 0.1–500 m world clip
 range; the 0.1 m near plane improves depth precision while remaining inside the
 player's wall clearance. The separate weapon clip range is unchanged.
 
@@ -668,10 +670,11 @@ The generated laboratory has fifteen surface panels, a floor, a corner with crat
 a table and two sphere rows: rear dielectric, front metal, with roughness
 0.08/0.25/0.5/0.75/1 from left to right. It uses the production world shader and
 shadow pass; uniform sphere parameters isolate lighting from the texture recipes.
-Its 27 meshes are released on exit.
+Its 28 meshes are released on exit; the shadow fixtures include a perforated
+panel and a remote floor/occluders 160 m from the street.
 
-The optional laboratory, grazing-road and weathered-façade sweeps each contain
-121 frame-addressed camera samples at 30 FPS. Screenshot transport never advances gameplay or the sweep;
+The optional laboratory, grazing-road, weathered-façade, shadow-distance and
+cutout-shadow sweeps each contain 121 frame-addressed camera samples at 30 FPS. Screenshot transport never advances gameplay or the sweep;
 `capture.frame` explicitly selects each pose. Their MP4s are for visual stability
 review and do not measure real-time frame pacing.
 
@@ -806,15 +809,34 @@ The room lights have warm radiance, finite attenuation and interior bounds to pr
 lighting across exterior walls/floors. Props do not occlude these local lights. The soldier
 retains procedural camouflage; weapon vertex colours now carry metalness.
 
-A 1024² shadow target covers a fixed 64-metre square around the initial street
-block. Static batches and the soldier use separate shadow materials; the latter
-shares the colour pass's 25-bone palette and skinning function. Shadow depth is
-packed in two RGBA8 channels and compared with nine nearest samples, a depth bias
-and a normal offset. Out-of-map receivers are unshadowed; the remote optional
-traversal/firing fixtures are not guaranteed shadow coverage. Cascades, local-light shadows
-and screen-space ambient occlusion remain future work.
+Rendering step 6 replaces the fixed street shadow map with four 1024² cascades
+in one 2048² RGBA8/depth atlas. Camera-depth splits are 8, 22, 52 and 120 metres;
+the last 12% of each slice blends into the next, with a final fade to unshadowed
+beyond 120 m. Fits include the preceding blend band and an 80 m upstream caster
+margin. Bounding-sphere extents remain constant under camera rotation; light-space
+centres snap in all three axes to whole texels. A 12-texel guard contains the
+normal offset and filter footprint, and every tap clamps to its own atlas tile.
+The displayed interpolated camera drives fitting, including ADS, inspection,
+teleports, laboratory captures and aspect-ratio changes.
 
-Pass order is sun shadow → sky/world → isolated weapon → two quarter-resolution
+Static/capture batches and animated soldiers draw into each cascade with their
+own light frustum. The colour and shadow passes share the soldier's 25-bone
+skinning and the world's procedural binary-coverage function. Vertex alpha of
+one stays solid; lower world alpha opens circular holes on a 30 cm grid. Soldier
+alpha remains camouflage weight. A laboratory panel checks matching visible
+holes and projected shadows. The complete atlas clears once per frame, including
+when shadows are disabled; all four tiles draw in that same render pass so tile
+GPUs retain earlier cascades.
+
+Sun visibility uses geometric normals for world-unit normal/slope bias, packed
+16-bit depth, eight blocker taps and nine bilinear comparison taps (36 texture
+reads) for bounded contact-hardening softness. Kernels stay fixed in light space;
+there is no screen-noise rotation to shimmer before TAA. Close blockers remain
+sharp, distant blockers soften with a 0.022 sun-radius factor, capped at four
+texels. This is a bounded approximation to the reference PCSS, not exact renderer
+parity. Local-light shadows and screen-space occlusion remain steps 9 and 7.
+
+Pass order is four sun cascades → sky/world → isolated weapon → two quarter-resolution
 bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
 height density along the eye ray. Rendering step 2 enables linear RGBA16F for
 scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
@@ -840,12 +862,16 @@ At the 1280 × 720 capture size, estimated HDR target storage is:
 
 | Preset | Atlas size | Steady / bake peak (MiB) | Bake jobs / draws |
 | --- | --- | ---: | ---: |
-| Low | 1024 × 1368 | 47.80 / 53.64 | 825 / 1245 |
-| Medium | 2048 × 2712 | 95.33 / 118.52 | 921 / 1389 |
-| High | 4096 × 5408 | 285.27 / 377.77 | 1017 / 1533 |
+| Low | 1024 × 1368 | 71.80 / 77.64 | 825 / 1245 |
+| Medium | 2048 × 2712 | 119.33 / 142.52 | 921 / 1389 |
+| High | 4096 × 5408 | 309.27 / 401.77 | 1017 / 1533 |
 
-The environment adds 1.61 MiB on HDR (0.80 MiB on the compatibility path)
-relative to step 4. Steady draw passes and nine-target ownership are unchanged.
+The environment added 1.61 MiB on HDR (0.80 MiB on the compatibility path)
+in step 5. Step 6 adds 24 MiB for cascaded colour/depth storage on both paths.
+The sampler count and nine-target ownership remain unchanged. Four static and
+four skinned shadow submissions replace the previous one of each, with per-cascade
+frustum culling; frozen captures omit the skinned submissions. These material
+presets currently share the same shadow resolution; mobile budgets remain open.
 The previous six-recipe implementation used 102.49 / 134.60 MiB at this size.
 These are allocation estimates including conservative 32-bit depth, excluding
 meshes and driver overhead; they are not measured process peaks. The world now
@@ -853,12 +879,15 @@ uses 86 material/chunk batches, 36,552 vertices, 2.51 MiB of mesh streams and th
 same 190 colliders. Resize affects only four screen-sized targets; zero-sized
 windows skip drawing and finalization releases owned targets.
 
-`renderer.snapshot` reports bake jobs/draws, current/peak target bytes, local-light count,
+`renderer.snapshot` reports cascade splits, world texel sizes, atlas dimensions and
+shadow submissions, plus bake jobs/draws, current/peak target bytes, local-light count,
 shadow frames, environment dimensions/levels/sample count, volume count and active settings. `renderer.configure` accepts booleans
 `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
 `micro_detail`, `parallax`, `interior_lighting`, `environment_filter`; numeric `exposure` in
 0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
-`environment`, `environment_atlas` or `hdr_probe`. The last view renders diagnostic HDR stripes into
+`environment`, `environment_atlas`, `cascades`, `shadow_visibility` or `hdr_probe`.
+`shadow` shows all four atlas tiles; `cascades` colours the receiver slices and
+blend bands; `shadow_visibility` isolates sun visibility. `hdr_probe` renders diagnostic HDR stripes into
 the actual scene/weapon targets and displays transfer/filter/blend samples.
 `environment_level` chooses the equirectangular debug row: 0 is visible sky,
 1..6 are specular roughness levels and 7 is diffuse. `environment_atlas` shows
@@ -941,6 +970,31 @@ The short 1024² browser street sample changes from 3.31 to 3.76 ms median GPU;
 interior/laboratory medians are 3.13/3.55 ms. Separate-run timing samples include
 whole-frame work and noise; sustained combat and mobile qualification remain open.
 
+
+Step 6 validation adds five shadow-fitting tests (145 Lua checks total), the
+native renderer suite including animated soldier shadow deformation, and
+`tests/shadows_smoke.py`. GPU checks cover every atlas tile, remote receivers,
+projected cutout holes versus solid cells, effect disable/re-enable, camera/FOV
+changes and resize return. All 34 native captures match every RGB pixel across
+three independent launches; five sweeps contain 121 frames each. At street
+capture FOV/aspect, near-cascade texels are about 2.5 cm versus 6.25 cm previously.
+
+The WebGL 2 compatibility path passes 67 stages plus map/feature/return checks,
+all four atlas tiles, remote shadow coverage and projected cutout-hole assertions
+on Chromium / ANGLE Metal / Apple M3 Pro. At 1024² the short street GPU sample is
+6.25 ms median versus the step-5 sample's 3.76 ms; interior/laboratory are
+4.76/4.38 ms. Browser resources match the final native source and use the cached
+debug engine. Forced context recovery was not requalified.
+
+The street's frozen native draw count rises from 158 to 398; render-script median
+CPU rises from 54 to 85.5 µs. `captures/rendering/shadows-review/costs.json` records
+the scope and full comparisons. These separate short runs do not establish
+sustained combat or mobile budgets. New artifacts are:
+
+- `captures/rendering/shadows-final`: three-launch repeatability, stills, sweeps and native profiles.
+- `captures/rendering/shadows-review`: labelled before/after stills, motion samples and cost comparisons.
+- `captures/rendering/shadow-validation`: atlas/visibility diagnostics, projected cutout samples and native GPU report.
+- `captures/rendering/shadows-browser`: WebGL captures, GPU queries and build provenance.
 
 ## Generated audio
 

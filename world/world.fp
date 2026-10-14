@@ -10,7 +10,9 @@ uniform lowp sampler2D material_texture;
 #include "/render/lighting.glsl"
 #include "/render/surface_sampling.glsl"
 #include "/render/weathering.glsl"
+#include "/render/coverage.glsl"
 void main() {
+    surface_clip(var_world,var_normal,var_color.a);
     vec3 geometric=normalize(var_normal),tangent;
     tangent=abs(geometric.x)>.5?vec3(0,0,1):vec3(1,0,0);
     vec3 bitangent=normalize(cross(geometric,tangent));
@@ -55,6 +57,6 @@ void main() {
         bump=vec3(0,0,1);
     }
     vec3 n=normalize(geometric*bump.z+(tangent*bump.x+bitangent*bump.y)*features.y);
-    vec3 radiance=lighting(albedo,max(packed.r,.04),packed.g,packed.b,var_world,n);
+    vec3 radiance=lighting(albedo,max(packed.r,.04),packed.g,packed.b,var_world,n,geometric);
     gl_FragColor=vec4(encode_radiance(height_fog(radiance,var_world)),1.0);
 }

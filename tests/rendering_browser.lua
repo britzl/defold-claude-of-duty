@@ -17,6 +17,15 @@ function M.new()
         {name="laboratory",id="laboratory_no_volumes",changes={interior_lighting=false}},
         {name="laboratory",id="environment_atlas",changes={view="environment_atlas"}},
     }) do steps[#steps+1]=step end
+    for _,step in ipairs({
+        {name="shadow_distance",id="shadow_atlas",changes={view="shadow",bloom=false}},
+        {name="shadow_distance",id="shadow_cascades",changes={view="cascades",bloom=false}},
+        {name="shadow_distance",id="shadow_distance_disabled",changes={shadows=false}},
+        {name="shadow_cutout",id="shadow_cutout_disabled",changes={shadows=false}},
+        {name="shadow_cutout",id="shadow_cutout_visibility",changes={view="shadow_visibility",bloom=false}},
+        {name="shadow_remote",id="shadow_remote_disabled",changes={shadows=false}},
+        {name="shadow_remote",id="shadow_remote_return"},
+    }) do steps[#steps+1]=step end
     for _,view in ipairs({"albedo","normals","material"}) do
         for page=1,math.ceil(atlas.width/1024)*math.ceil(atlas.height/1024) do
             steps[#steps+1]={name="laboratory",id=view.."_page_"..page,changes={view=view,atlas_page=page},page=page,view=view}

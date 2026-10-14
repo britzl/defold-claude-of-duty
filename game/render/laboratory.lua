@@ -2,7 +2,7 @@
 local mesh=require "game.world.mesh"
 local M={roughness={.08,.25,.5,.75,1},
     extra_materials={"concrete_floor","brick","tile","dirt","gravel","metal_painted","metal_rust","rubber","glass"},
-    batch_count=27}
+    batch_count=28}
 local function sphere_vertex(batch,centre,radius,lat,lon)
     local n={math.sin(lat)*math.cos(lon),math.cos(lat),math.sin(lat)*math.sin(lon)}
     for axis=1,3 do
@@ -59,6 +59,16 @@ function M.batches()
         M.sphere(batch,{(i-3)*2,.6,metal==0 and -2.4 or .2},.6)
         list[#list+1]=batch
     end end
+    -- Remote fixture proves shadows follow inspection/teleport cameras outside
+    -- the original street map. Reuses existing material batches and bounds.
+    box("concrete_floor",160,-.1,0,14,.2,14)
+    box("wood",160,1,0,1,2,1)
+    box("metal",163,1,-2,.12,2,.12)
+    -- Perforated overhead panel: colour and shadow must show identical holes.
+    local cutout=mesh.new("cutout","metal",0,0)
+    mesh.box(cutout,{material="metal",x=2,y=2.2,z=3,w=2.4,h=.02,d=1.8},1)
+    for i=4,#cutout.colors,4 do cutout.colors[i]=.45 end
+    list[#list+1]=cutout
     return list
 end
 function M.create()

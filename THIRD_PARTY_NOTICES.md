@@ -17,6 +17,12 @@ The coarse interior footprint gate in `render/lighting.glsl` and
 and `src/render/index.js` from the same MIT-licensed project. The doorway and
 awning extensions, environment filtering and BRDF integration are local implementations.
 
+The cascade sphere fitting, overlapping transitions and contact-hardening shadow
+approach in `game/render/shadows.lua` and `render/shadows.glsl` adapt
+`src/render/csm.js` from the same project. The Defold atlas layout, packed-depth
+sampling, fixed bilinear comparison kernel and shared procedural cutout coverage
+are local adaptations.
+
 MIT License
 
 Copyright (c) 2026 mshumer

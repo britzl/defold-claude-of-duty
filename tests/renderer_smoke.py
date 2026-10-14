@@ -118,13 +118,14 @@ def main():
             print("PASS camera selects visible room light on", name, delta, flush=True)
 
         # Frozen soldier remains animated; collapse must also deform the shadow.
-        command("ai.reset", {"position": {"x": 3, "y": .004, "z": 3}, "yaw": 0})
+        command("world.view", {"name": "street"})
+        command("ai.reset", {"position": {"x": 1, "y": .004, "z": 4}, "yaw": 0})
         configure(view="shadow")
         standing = capture("shadow_standing")
         command("gameplay.damage", {"target": "enemy_1", "amount": 1000, "source": "player"})
         engine.wait_until(lambda: command("ai.snapshot")["actors"][0]["death"] >= 1, timeout=5)
         collapsed = capture("shadow_collapsed")
-        shadow_diff = ImageChops.difference(region(standing), region(collapsed)).getchannel("R")
+        shadow_diff = ImageChops.difference(standing, collapsed).getchannel("R")
         changed_pixels = sum(shadow_diff.histogram()[2:])
         assert changed_pixels > 30, changed_pixels
         print("PASS animated skeleton changes the shadow silhouette", changed_pixels, flush=True)

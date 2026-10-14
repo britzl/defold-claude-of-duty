@@ -3,6 +3,7 @@
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
+local shadows=require "game.render.shadows"
 local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local WORLD_CAMERA="main:/camera#camera"
@@ -133,7 +134,9 @@ local function report(self)
         environment_faces=self.bake_step==atlas.job_count and 6 or 0, environment_size=settings.environment_size,
         environment_width=daylight.environment_width,environment_height=daylight.environment_height,
         reflection_levels=daylight.reflection_levels,environment_samples=128,volume_count=self.volume_count,
-        shadow_size=settings.shadow_size, shadow_frames=self.shadow_frames,
+        shadow_size=shadows.size, shadow_atlas_size=shadows.atlas_size, shadow_cascades=shadows.count,
+        shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
+        shadow_draw_passes=self.shadow_draw_passes or 0,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
         target_count=self.targets.scratch_a and 12 or 9,
         target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,self.targets.scratch_a~=nil),
@@ -168,7 +171,6 @@ function init(self)
     self.sky_constants=render.constant_buffer()
     self.post_constants=render.constant_buffer()
     self.bloom_constants=render.constant_buffer()
-    self.shadow_constants=render.constant_buffer()
     self.probe_constants=render.constant_buffer()
     for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants}) do
         constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
@@ -181,16 +183,9 @@ function init(self)
     end
     self.lighting.volume_data={}
     for i=1,daylight.max_volumes*5 do self.lighting.volume_data[i]=vmath.vector4() end
-    local centre=vmath.vector3(-1,2,-2)
-    local d=daylight.sun_direction
-    local sun=vmath.normalize(vmath.vector3(d[1],d[2],d[3]))
-    self.sun_view=vmath.matrix4_look_at(centre+sun*50,centre,vmath.vector3(0,1,0))
-    local extent=settings.shadow_extent
-    self.sun_projection=vmath.matrix4_orthographic(-extent,extent,-extent,extent,1,110)
-    self.sun_matrix=self.sun_projection*self.sun_view
-    self.lighting.sun_matrix=self.sun_matrix
-    self.shadow_constants.sun_matrix=self.sun_matrix
-    self.targets.shadow=colour_target(settings.shadow_size,settings.shadow_size,true,true)
+    self.cascade_constants={}
+    for i=1,shadows.count do self.cascade_constants[i]=render.constant_buffer() end
+    self.targets.shadow=colour_target(shadows.atlas_size,shadows.atlas_size,true,true)
     for _,name in ipairs({"albedo","normal","material"}) do
         self.targets[name]=colour_target(atlas.width,atlas.height)
     end
@@ -223,7 +218,10 @@ function update(self)
             o.parallax and atlas.quality~="low" and 1 or 0,atlas.surfaces[atlas.detail_kind+1].size)
         self.lighting.features=vmath.vector4(o.shadows and 1 or 0,o.normal_maps and 1 or 0,
             o.local_lights and 1 or 0,o.fog and 1 or 0)
-        self.lighting.shadow_params=vmath.vector4(1/settings.shadow_size,.0007,1,0)
+        local fits,matrices,data=shadows.update(inverse_view,projection,daylight.sun_direction,vmath.vector4,vmath.matrix4)
+        data[18].w=o.view=="cascades" and 1 or o.view=="shadow_visibility" and 2 or 0
+        self.lighting.shadow_data=data
+        self.shadow_texels={fits[1].texel,fits[2].texel,fits[3].texel,fits[4].texel}
         self.lighting.lighting_features=vmath.vector4(o.interior_lighting and not self.capture.laboratory and 1 or 0,
             o.environment_filter and 1 or 0,self.volume_count,0)
         self.lighting.lighting_transform=self.identity
@@ -233,22 +231,33 @@ function update(self)
         -- Clear every frame even when disabled, so re-enabling cannot expose stale data.
         render.set_camera()
         render.set_render_target(t.shadow)
-        render.set_viewport(0,0,settings.shadow_size,settings.shadow_size)
+        render.set_viewport(0,0,shadows.atlas_size,shadows.atlas_size)
         render.set_depth_mask(true)
         render.disable_state(G.STATE_BLEND)
         render.enable_state(G.STATE_DEPTH_TEST)
         render.enable_state(G.STATE_CULL_FACE)
         render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
         render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+        self.shadow_draw_passes=0
         if o.shadows then
-            render.set_view(self.sun_view)
-            render.set_projection(self.sun_projection)
-            render.enable_material("shadow")
-            render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,
-                {constants=self.shadow_constants,frustum=self.sun_matrix})
-            if not self.capture.active then
-                render.enable_material("shadow_skinned")
-                render.draw(self.soldier_shadow,{constants=self.shadow_constants,frustum=self.sun_matrix})
+            -- Bind/clear ONCE: switching targets between tiles discards earlier
+            -- cascades on tile GPUs. Each draw keeps its own immutable constants.
+            render.set_view(self.identity)
+            for i,fit in ipairs(fits) do
+                local vp=fit.viewport
+                render.set_viewport(vp[1],vp[2],vp[3],vp[4])
+                render.set_projection(matrices[i])
+                local constants=self.cascade_constants[i]
+                constants.sun_matrix=matrices[i]
+                render.enable_material("shadow")
+                render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,
+                    {constants=constants,frustum=matrices[i]})
+                self.shadow_draw_passes=self.shadow_draw_passes+1
+                if not self.capture.active then
+                    render.enable_material("shadow_skinned")
+                    render.draw(self.soldier_shadow,{constants=constants,frustum=matrices[i]})
+                    self.shadow_draw_passes=self.shadow_draw_passes+1
+                end
             end
             render.disable_material()
             self.shadow_frames=self.shadow_frames+1
@@ -311,7 +320,7 @@ function update(self)
         end
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
         render.set_viewport(0,0,self.width,self.height)
-        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,settings.views[o.view],o.atlas_half)
+        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,(o.view=="cascades" or o.view=="shadow_visibility") and 0 or settings.views[o.view],o.atlas_half)
         self.post_constants.environment_debug=vmath.vector4(o.environment_level,0,0,0)
         local page=o.atlas_page-1
         self.post_constants.atlas_window=page<0 and vmath.vector4(0,0,1,1) or
