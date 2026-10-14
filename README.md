@@ -46,6 +46,7 @@ lua tests/shadows_test.lua
 lua tests/temporal_test.lua
 lua tests/local_lights_test.lua
 lua tests/combat_fx_test.lua
+lua tests/photographic_test.lua
 lua tests/surface_atlas_test.lua
 lua tests/visible_faces_test.lua
 lua tests/weathering_test.lua
@@ -72,6 +73,8 @@ PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/atmosphere_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/combat_rendering_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/photographic_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/photographic_adaptation_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/shadows_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/occlusion_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/temporal_smoke.py
@@ -952,17 +955,15 @@ The separate weapon still composites last. Intersecting glass and refractive
 transmission are outside this thin-pane path.
 
 Pass order is sun cascades → two point-shadow cubes → depth/normals → AO/contact
-→ bilateral resolve → sky/world/material data → reflections → temporal resolve
-→ separate weapon AA → glass accumulation/composition → two quarter-resolution
-bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
-height density along the eye ray. Rendering step 2 enables linear RGBA16F for
-scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
-remain linear and are no longer limited to 0..8. Authored vertex colours use the
-piecewise sRGB transfer function; generated atlas values are linear albedo.
-The final pass composites world/weapon light, applies one fixed exposure and the
-references' neutral AgX curve, then performs one accurate sRGB display conversion
-with deterministic 8-bit dithering. Bloom affects only the world; GUI stays
-outside exposure, fog and bloom. The reference look/grade is deferred to step 12.
+→ sky/world → reflections → shadowed atmosphere → world temporal resolve
+→ isolated weapon AA → sorted glass/effects → world motion/ADS blur → exposure
+meter → multiscale bloom → world/weapon composition, sharpening, exposure and
+vignette → AgX → sRGB conversion → generated grade, grain and dither → GUI.
+Metal uses linear RGBA16F radiance; authored vertex colours use the piecewise
+sRGB transfer function and generated atlas values are linear albedo. Weapon
+flashes participate in metering/bloom. The weapon remains separate from world
+fog, temporal history and optical blur. GUI stays outside the photographic chain.
+See rendering step 12 below for controls and qualification.
 
 Other backends retain the square-root encoded 0..8 RGBA8 compatibility path until
 float renderability, filtering and blending are qualified there. The presence of
@@ -1277,6 +1278,104 @@ The frozen native weapon view submits 776 draws; its firing counterpart submits
 not a sustained gameplay or GPU benchmark. Physical mobile, other native backends, WebGL floating-point HDR, context recovery
 and sustained combat GPU budgets remain unqualified. Geometry bevels, richer
 soldier anatomy and source weapon silhouettes remain separate visual-parity work.
+
+## Photographic treatment (rendering step 12)
+
+**Escape → Photo** controls photographic quality, automatic exposure, bloom
+strength, colour grade, sharpening, motion blur, ADS depth of field, vignette and
+grain. Display's exposure slider remains a manual multiplier (0.25–4) on the
+metered value. These settings affect presentation only and never use gameplay RNG.
+
+Bloom now extracts the premultiplied world/weapon composition in exposure-scaled
+linear light, including muzzle flashes. A 1.6 threshold with a 0.9 soft knee,
+first-level luminance weighting, and a quarter-resolution downsample/upsample
+pyramid spread bright light at several scales. Reconstruction averages levels
+rather than adding energy at every mip. Default bloom strength is 0.14.
+
+A 64² centre-weighted log-luminance meter reduces through 16², 4² and 1² on the
+GPU, without readback. Bright sky receives less weight and individual samples
+are clamped to stop flashes/sun glints dominating the meter. Two packed RGBA8
+1² targets adapt in exposure stops at 1.4/s toward brighter exposure and 3.2/s
+toward darker exposure. The multiplier stays within 0.65–1.8 in daylight/sunset
+and 0.8–1.3 at night; the exposure key is 0.18. Pause freezes adaptation, stalls
+contribute at most 0.1 seconds, and history resets invalidate the previous meter.
+
+The reference's 33³ colour grade is generated into a 1089 × 33 RGBA8 LUT and
+sampled as two bilinear blue slices. It applies slope/offset/power, cool shadows,
+warm highlights, saturation, highlight desaturation, contrast and normalized
+shoulder/toe **after** the one sRGB display conversion. Luminance-only sharpening
+(default 0.25) operates before exposure and is bounded by neighbourhood luminance
+and a 0.8–1.2 gain; it requires TAA. The 0.18 vignette attenuates linear light.
+Default monochrome grain is 0.006 in display space, reduced in shadows, with a
+presentation clock that stops on pause. Neither grade nor grain affects diagnostics.
+
+World blur follows temporal resolve and transparent composition, before adding
+the weapon. Motion uses the existing camera/rigid/skinned velocity data, removes
+projection jitter, normalizes the shutter to 60 Hz and caps displacement. Its
+default strength is 0.15 (0 disables it). TAA must be enabled for motion history.
+ADS focus reads centre world depth, clamps focus to 3–18 metres, and uses a
+maximum 3.3-pixel circle of confusion, scaled by the actual ADS transition.
+Near blur is weaker than far blur. Both gathers reject incompatible depths and
+screen-edge samples. The viewmodel and sights stay sharp; glass/smoke still use
+the opaque depth underneath them. This bounded gather does not spread foreground
+bokeh across silhouettes or reconstruct offscreen motion.
+
+Photographic presets are independent of `render.material_quality` (atlas size):
+
+| Preset | Bloom levels / draws | Optical blur | 720p HDR target storage | 1024² WebGL GPU median / p95 |
+|---|---|---|---|---|
+| Low | 3 / 5 | Disabled; releases both full-resolution targets | 218.51 MiB | 8.52 / 10.30 ms |
+| Medium | 4 / 7 | 9 taps; 12-pixel motion cap | 232.60 MiB | 8.38 / 11.73 ms |
+| High (default) | 5 / 9 | 13 taps; 16-pixel motion cap | 232.61 MiB | 11.23 / 13.73 ms |
+
+Medium is the measured compromise for retaining both optical effects. Low's
+clear benefit here is memory; its median is within measurement variation of
+medium. High retains the broadest bloom and densest gathers for visual review.
+These are three alternating 350 ms GPU windows per tier (93–97 valid samples),
+Chromium / ANGLE Metal / Apple M3 Pro, a stationary camera with live TAA, ADS and exposure, at 1024².
+They are not sustained combat measurements or a mobile performance target.
+Native 720p render-script medians are 224 / 239.5 / 263.5 µs; they measure CPU
+submission, not GPU time. Native target counts are 33 / 37 / 39; high's bake peak
+is 255.80 MiB. Estimates include colour/data/depth attachments and exclude driver,
+mesh, sound and shader memory. Disabling either blur control releases its target;
+preset changes and resizes reuse or release resources without rebaking materials.
+
+`renderer.configure` accepts `photographic_quality="low"|"medium"|"high"`,
+`auto_exposure`, `bloom_strength` (0–0.5), `grade_strength` (0–1), `sharpen` (0–0.5),
+`motion_blur` / `ads_dof` (0–1), `vignette` (0–0.5) and `grain` (0–0.03).
+Diagnostic `view="bloom"` shows the reconstructed pyramid; `bloom_level=1..5`
+selects a downsample level (0 restores reconstruction, levels clamp to the tier).
+`view="exposure"` shows current and target log exposure in red/green, mapped from
+−2..2 stops into 0..1. `view="grade"` displays the generated LUT.
+`renderer.snapshot` reports pass counts, target bytes, quality, exposure limits,
+ADS amount and the active exposure mode.
+
+Capture catalogue version 12 explicitly locks exposure and grain phase for
+repeatable stills. If auto exposure is enabled during a frozen capture, each frame
+uses the instantaneous meter deterministically; `temporal_live=true` instead
+permits normal adaptation. Capture end restores the user's settings. Source
+fingerprints, pixel checks and costs are saved in:
+
+- `captures/rendering/photographic-validation`: native feature returns, bloom scales, exposure bounds, resize, preset and pause checks.
+- `captures/rendering/photographic-adaptation`: live street/sky exposure lag and settling in both directions, pause and Photo menu controls.
+- `captures/rendering/photographic-browser`: 28 WebGL stages, exact street return, pixel assertions, GPU samples and build provenance.
+- `captures/rendering/photographic-review`: labelled before/after and adapted Three.js comparisons, plus `costs.json`.
+- `captures/rendering/photographic-final`: complete native still/motion catalogue and independent-launch repeatability.
+
+Run the two photographic smoke suites above; build a debug HTML5 bundle with
+`--settings tests/photographic_browser.project` for the focused browser fixture.
+Use `tools/validate_rendering_browser.mjs` as described above, followed by
+`python3 tests/photographic_browser_pixels.py`. There are 177 passing Lua checks.
+All 56 stills match every RGB pixel across two independent Metal launches; all
+five 121-frame sweeps complete with frozen simulation and restored settings.
+Native HDR probes also pass at three exposures, preserving radiance above 8,
+linear filtering/blending, sRGB transfer and the reference AgX curve.
+Temporal regression checks pass for exact capture/resize returns, isolated
+weapon AA, camera/actor motion, history resets and continuous sweep playback.
+Physical mobile, other native backends, WebGL floating-point HDR, forced context
+recovery and sustained combat performance remain unqualified. Source geometry,
+matched time-of-day lighting and missing Kaigen captures still prevent claiming
+complete cross-engine visual parity or the final agreed-performance gate.
 
 ## Atmosphere (rendering step 10)
 

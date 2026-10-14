@@ -1,0 +1,5 @@
+name: "grade"
+tags: "fullscreen"
+vertex_program: "/render/composite.vp"
+fragment_program: "/render/grade.fp"
+vertex_space: VERTEX_SPACE_LOCAL

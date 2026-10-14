@@ -36,7 +36,7 @@ function M.select(self,data)
     local saved=self.capture and self.capture.saved or {settings=self.renderer_settings}
     require("game.render.combat_fx_defold").fixture(self.combat_visuals,shot.combat_fixture)
     self.capture={shot=shot,frame=frame,saved=saved,actors=data.actors==true,temporal_live=data.temporal_live==true}
-    self.renderer_settings=settings.configure(settings.defaults(),{lighting=shot.lighting or "daylight",clouds=shot.clouds~=false})
+    self.renderer_settings=settings.configure(settings.defaults(),{lighting=shot.lighting or "daylight",clouds=shot.clouds~=false,auto_exposure=false})
     self.active_lights=nil
     input.reset(self.ctx.input)
     window.set_mouse_lock(false)

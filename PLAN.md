@@ -195,7 +195,9 @@ Unified daylight, filtered environment lighting and interior attenuation are
 implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Temporal stability is implemented in rendering step 8. Reflections, transparent
 glass, local-light shadows and muzzle lighting are implemented in rendering step 9.
 Atmosphere is implemented in rendering step 10. Weapon/combat rendering is
-implemented in rendering step 11. Final photographic effects remain step 12.
+implemented in rendering step 11. Final photographic treatment and desktop/browser
+qualification are implemented in rendering step 12; sustained/mobile budgets and
+full cross-engine parity remain open.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -584,6 +586,35 @@ All 172 Lua checks pass, and all 56 capture views match every RGB pixel across
 three independent native launches. The WebGL 2 compatibility path passes all
 143 capture stages and pixel assertions. Physical mobile and sustained GPU budgets
 remain subsequent qualification work.
+
+Step 12 implementation adds exposure-scaled multiscale bloom (including muzzle
+flashes), bounded GPU exposure adaptation, the generated reference 33³ display
+colour grade, restrained luminance sharpening, velocity-based motion blur and
+ADS world depth of field. Vignette runs in linear light; grain runs after grading
+with a pause-aware presentation clock. Weapon sights and GUI remain independent
+of world blur. Frozen captures lock exposure and grain, and native/encoded WebGL
+paths share the same treatment. The Photo menu and automation expose all controls.
+
+Low/medium/high photographic tiers use 3/4/5 bloom levels; medium/high add 9/13-tap
+optical gathers. Low releases both full-resolution blur targets. At 720p, total
+HDR attachment storage is 218.51 / 232.60 / 232.61 MiB. Three alternating short
+1024² Chromium/ANGLE Metal samples per tier measure median GPU 8.52 / 8.38 /
+11.23 ms and p95 10.30 / 11.73 / 13.73 ms. Medium retains optical effects with a
+lower measured GPU cost than high; low is useful for its memory saving. These
+samples do not establish sustained combat or physical mobile budgets.
+
+All 177 Lua checks pass, alongside native feature/return pixels, all bloom scales,
+bounded exposure, live street/sky adaptation in both directions, pause and Photo
+menu controls, odd resize and repeated resource-tier transitions. HDR probes at
+three exposures and temporal history/weapon-AA/motion regressions also pass. The
+focused WebGL fixture passes 28 stages and pixel gates, including exact street
+return. Complete still/motion captures and source fingerprints are retained in
+`captures/rendering/photographic-*`; all 56 stills match every RGB pixel across
+two independent Metal launches, and five 121-frame sweeps complete. See README.md
+for commands and detailed costs.
+The implementation is complete, but the final parity/performance gate remains
+limited by unfinished reference geometry, unmatched reference lighting, missing
+Kaigen captures and unqualified sustained/device budgets.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

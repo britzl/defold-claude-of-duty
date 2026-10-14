@@ -494,6 +494,9 @@ function late_update(self, dt)
     local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, (self.ctx.paused or self.capture) and 0 or dt,
         visible,self.capture and (self.capture.shot.weapon or "hidden"),
         self.capture and self.capture.shot.weapon_id,self.capture and self.capture.shot.firing)
+    msg.post("@render:","renderer_photographic_state",{
+        ads=self.capture and (self.capture.shot.weapon=="ads" and 1 or 0) or (visible and self.ctx.weapons.ads or 0),
+        paused=not self.capture and self.ctx.paused or false})
     local active_flash=visible and weapon_pose.parts.flash.visible or false
     if self.weapon_flash_active~=active_flash then
         self.weapon_flash_active=active_flash
@@ -600,7 +603,7 @@ end
 
 function on_message(self, message_id, message, sender)
     if message_id == hash("ui_action") then ui.action(self, message) end
-    if message_id == hash("renderer_stats") or message_id == hash("renderer_details") then
+    if message_id == hash("renderer_stats") or message_id == hash("renderer_details") or message_id == hash("renderer_photographic") then
         for k,v in pairs(message) do self.renderer_stats[k]=v end
     end
     if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end

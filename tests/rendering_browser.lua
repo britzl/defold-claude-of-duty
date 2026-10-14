@@ -83,6 +83,30 @@ function M.new()
         {name="combat_glass",id="combat_glass_return"},
     }) do steps[#steps+1]=step end
     steps[#steps+1]={name="street",id="street_return"}
+    if sys.get_config_string("rendering_validation.suite","")=="photographic" then
+        steps={}
+        for _,name in ipairs({"street","interior","sunset","night","rifle_ads","weapon_fire","detail"}) do
+            steps[#steps+1]={name=name,id=name}
+        end
+        for _,item in ipairs({{"street","grade_strength"},{"street","vignette"},{"street","grain"},{"detail","sharpen"},{"rifle_ads","ads_dof"},{"weapon_fire","bloom_strength"}}) do
+            steps[#steps+1]={name=item[1],id=item[1].."_"..item[2].."_off",changes={[item[2]]=0}}
+        end
+        steps[#steps+1]={name="weapon_fire",id="bloom_diagnostic",changes={view="bloom"}}
+        for _,name in ipairs({"street","interior","night"}) do
+            steps[#steps+1]={name=name,id=name.."_exposure",changes={view="exposure",auto_exposure=true}}
+        end
+        -- Alternating tier order limits thermal/order bias; live TAA and both lens
+        -- passes are included. GPU samples come from the browser timer harness.
+        for repeat_index=1,3 do
+            local tiers=repeat_index==2 and {"high","medium","low"} or {"low","medium","high"}
+            for _,tier in ipairs(tiers) do
+                steps[#steps+1]={name="rifle_ads",id="photo_cost_"..tier.."_"..repeat_index,live=true,
+                    changes={photographic_quality=tier,auto_exposure=true}}
+            end
+        end
+        steps[#steps+1]={name="street",id="photo_moving",play=true,changes={motion_blur=1}}
+        steps[#steps+1]={name="street",id="street_return"}
+    end
     return {steps=steps,index=0,frames=0,intervals={}}
 end
 function M.update(test,self,dt)
@@ -100,7 +124,7 @@ function M.update(test,self,dt)
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==23)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==39)
             assert(stats.surface_count==15 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,

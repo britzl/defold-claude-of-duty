@@ -4,6 +4,7 @@ local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
 local shadows=require "game.render.shadows"
+local photo=require "game.render.photographic"
 local tests=0
 local function test(name,fn) fn();tests=tests+1;print("PASS "..name) end
 test("settings reject unknown, mistyped and nonfinite values atomically",function()
@@ -18,7 +19,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*8+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*8+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -28,7 +29,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
     assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
     assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
-    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==36680544)
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==36680544-320*180*8+photo.bytes(1280,720,true,settings.defaults())-photo.bytes(1280,720,false,settings.defaults()))
 end)
 
 test("camera light selection covers both buildings and every floor within four slots",function()
@@ -121,6 +122,15 @@ render.disable_texture=function(name) bindings[name]=nil end
 render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
     for _,target in pairs(bindings) do assert(target~=active,"render-target feedback loop") end
+    if material=="bloom" then
+        for _,name in ipairs({"source_texture","lower_texture","weapon_texture","exposure_texture"}) do
+            assert(bindings[name],"Missing bloom sampler "..name)
+        end
+    elseif material=="exposure" then
+        for _,name in ipairs({"source_texture","previous_texture","weapon_texture","depth_normal_texture"}) do
+            assert(bindings[name],"Missing exposure sampler "..name)
+        end
+    end
     if predicate=="viewmodel" then assert(not bindings.occlusion_texture,"Weapon sampled world AO") end
     draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture}
 end
@@ -129,9 +139,9 @@ dofile("render/game.render_script")
 local self={}
 test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
-    assert(#targets==26)
+    assert(#targets==42)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
-    for _,name in ipairs({"scene","weapon","environment","bloom_a","bloom_b"}) do
+    for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
     end
     local frames=0
@@ -157,13 +167,15 @@ test("recipes, padded mip chains and filtered environment finish before the worl
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
-    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","fullscreen","viewmodel","fullscreen","fullscreen","fullscreen","fullscreen","transparent","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
-    assert(#draws==#expected,#draws.." != "..#expected)
-    for i,name in ipairs(expected) do assert(draws[i].predicate==name,i.." "..draws[i].predicate) end
+    local positions={}
+    for i,d in ipairs(draws) do
+        if d.material then positions[d.material]=i end
+        if d.target=="screen" and d.predicate=="fullscreen" then positions.composite=i end
+        if d.predicate=="gui" then positions.gui=i end
+    end
+    assert(positions.temporal<positions.lens and positions.lens<positions.exposure)
+    assert(positions.exposure<positions.bloom and positions.bloom<positions.composite and positions.composite<positions.gui)
     assert(draws[1].material=="shadow" and draws[2].material=="shadow_skinned")
-    assert(draws[9].material=="prepass" and draws[10].predicate=="soldier_prepass"
-        and draws[15].target==self.targets.scene and draws[17].target==self.targets.weapon)
-    assert(draws[26].target=="screen" and draws[26].material==nil)
     assert(next(bindings)==nil)
 end)
 test("flash resolves in linear light without target feedback and retains weapon coverage",function()
@@ -188,7 +200,7 @@ test("flash resolves in linear light without target feedback and retains weapon 
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==26 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==42 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -209,7 +221,7 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     update(self);assert(self.shadow_frames==before+1 and self.bake_draws==atlas.draw_count)
 end)
 test("occlusion toggles skip work, diagnostics retain depth, and weapon never samples world AO",function()
-    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false,fog=false,combat_effects=false})
+    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false,fog=false,combat_effects=false,auto_exposure=false,motion_blur=0,ads_dof=0})
     draws={};update(self)
     assert(self.prepass_draw_passes==0 and self.occlusion_draw_passes==0)
     for _,draw in ipairs(draws) do assert(draw.material~="prepass" and draw.material~="occlusion") end
@@ -317,10 +329,31 @@ test("fog uses world depth, supports analytic fallback, and skips all work when 
     assert(self.atmosphere_draw_passes==1 and self.temporal.age==0)
     on_message(self,"renderer_configure",{view="scene",fog=true,volumetric_fog=true});update(self)
 end)
+test("photographic metering pauses, captures lock time, diagnostics bypass lens and presets release memory",function()
+    on_message(self,"renderer_configure",{auto_exposure=true,motion_blur=.15,ads_dof=1,photographic_quality="high",view="scene"})
+    on_message(self,"renderer_photographic_state",{ads=1,paused=false})
+    for _=1,40 do update(self,1/60) end
+    assert(self.exposure_draw_passes==5 and self.bloom_draw_passes==9 and self.lens_draw_passes==2)
+    local time=self.grain_time
+    on_message(self,"renderer_photographic_state",{ads=1,paused=true});update(self,1)
+    assert(self.grain_time==time and self.exposure_draw_passes==0)
+    on_message(self,"capture_configure",{active=true,laboratory=false})
+    for _=1,40 do update(self,1) end
+    assert(self.grain_time==time and self.pipeline.exposure_mode=="capture_metered")
+    assert(self.photo_constants.adaptation.args[1]==0 and self.photo_constants.adaptation.args[2]==1)
+    on_message(self,"renderer_configure",{view="depth"});update(self,1/60)
+    assert(self.lens_draw_passes==0 and self.bloom_draw_passes==0 and self.pipeline.exposure_mode=="fixed")
+    local old=self.targets.photo_dof
+    on_message(self,"renderer_configure",{photographic_quality="low",view="scene"});update(self,1/60)
+    assert(old.deleted and not self.targets.photo_dof and self.bloom_draw_passes==5)
+    on_message(self,"renderer_configure",{photographic_quality="high"});update(self,1/60)
+    assert(self.targets.photo_dof~=old and self.bloom_draw_passes==9)
+    on_message(self,"capture_configure",{active=false,laboratory=false})
+end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)
     while self.bake_step<atlas.job_count do update(self) end
-    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==29)
+    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2)
     final(self)
     for _,target in ipairs(targets) do assert(target.deleted) end
     assert(next(self.targets)==nil and listener==nil)

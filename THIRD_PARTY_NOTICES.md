@@ -35,6 +35,13 @@ and volumetric integration in `game/render/daylight.lua` and `render/atmosphere*
 The fixed presets, reduced integration budgets, sky lookup and Defold shadow/depth
 reconstruction are local adaptations. Multiple scattering is approximated.
 
+The generated colour-grade transform in `render/grade.fp`, luminance sharpening,
+lens shading and grain in `render/composite.fp`, and the metering, bloom and ADS
+focus rules in `render/exposure.fp`, `render/bloom.fp` and `render/lens.fp` adapt
+`src/render/lut.js`, `composite.js`, `exposure.js`, `bloom.js` and `dof.js` from
+that project. Portable packed exposure, the 2D LUT layout, bounded blur and the
+Defold scheduling/resource tiers are local adaptations.
+
 MIT License
 
 Copyright (c) 2026 mshumer

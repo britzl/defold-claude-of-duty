@@ -1,6 +1,6 @@
 local W = require "game.ui.widgets"
 local M = {}
-local tabs = { "audio", "display", "atmosphere", "combat", "controls" }
+local tabs = { "audio", "display", "atmosphere", "combat", "photo", "controls" }
 local specs = {
     audio = {
         {key="master",label="MASTER",kind="audio",min=0,max=1,step=.05},
@@ -37,6 +37,17 @@ local specs = {
         {key="combat_effects",label="SMOKE & MUZZLE FLASHES",kind="renderer"},
         {key="soft_particles",label="SOFT PARTICLE INTERSECTIONS",kind="renderer"},
         {key="impact_decals",label="IMPACT MARKS",kind="renderer"},
+    },
+    photo = {
+        {key="photographic_quality",label="PHOTO QUALITY",kind="renderer",choices={"low","medium","high"}},
+        {key="auto_exposure",label="ADAPT EXPOSURE",kind="renderer"},
+        {key="bloom_strength",label="BLOOM STRENGTH",kind="renderer",min=0,max=.5,step=.02},
+        {key="grade_strength",label="COLOUR GRADE",kind="renderer",min=0,max=1,step=.05},
+        {key="sharpen",label="SHARPENING",kind="renderer",min=0,max=.5,step=.05},
+        {key="motion_blur",label="MOTION BLUR",kind="renderer",min=0,max=1,step=.05},
+        {key="ads_dof",label="ADS DEPTH OF FIELD",kind="renderer",min=0,max=1,step=.05},
+        {key="vignette",label="VIGNETTE",kind="renderer",min=0,max=.5,step=.05},
+        {key="grain",label="FILM GRAIN",kind="renderer",min=0,max=.03,step=.01},
     },
     controls = {
         {key="sensitivity",label="MOUSE SENSITIVITY",kind="input",min=.25,max=3,step=.05},
@@ -102,9 +113,9 @@ local function rebuild(state)
         item.tab=tab
     end
     for i,spec in ipairs(specs[state.tab]) do
-        local y=435-(i-1)*(state.tab=="display" and 25 or 42)
+        local y=435-(i-1)*((state.tab=="display" or state.tab=="photo") and 25 or 42)
         local item={id="setting_"..spec.key,spec=spec,y=y,
-            node=box(state,"setting_"..spec.key,480,y,678,state.tab=="display" and 25 or 36,W.row)}
+            node=box(state,"setting_"..spec.key,480,y,678,(state.tab=="display" or state.tab=="photo") and 25 or 36,W.row)}
         text(state,nil,157,y,spec.label,.92,W.white,gui.PIVOT_W)
         item.value=text(state,"value_"..spec.key,802,y,"",.9,W.accent,gui.PIVOT_E)
         if spec.min then

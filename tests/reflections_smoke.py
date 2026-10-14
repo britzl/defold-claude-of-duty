@@ -32,7 +32,7 @@ def main():
         engine.wait_until(lambda:cmd('world.snapshot')['ready'] and stats()['ready'],timeout=80)
         game.resize(640,360);game.wait_frames(35)
         s=stats();game.resize(round(1280*640/s['width']),round(720*360/s['height']));game.wait_frames(35)
-        assert stats()['target_count']==23
+        assert stats()['target_count']==39
         for name,feature in [('reflections','reflections'),('glass','glass'),('local_lights','local_shadows')]:
             shot(name);enabled=save(name)
             config(**{feature:False});disabled=save(name+'-off')

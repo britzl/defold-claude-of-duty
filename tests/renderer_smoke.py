@@ -54,7 +54,7 @@ def main():
         expected=atlas_stats()
         assert initial["bake_jobs"] == expected["jobs"] and initial["bake_draws"] == expected["draws"]
         assert initial["environment_faces"] == 6 and initial["local_light_count"] == 4
-        assert initial["target_count"] == 23 and initial["shadow_size"] == 1024
+        assert initial["target_count"] == 39 and initial["shadow_size"] == 1024
         assert initial["atlas_width"] == expected["width"] and initial["atlas_height"] == expected["height"]
         assert initial["shadow_frames"] > 0
 
@@ -163,7 +163,7 @@ def main():
         assert resized["width"] != before["width"] and resized["height"] != before["height"]
         assert resized["bloom_width"] == resized["width"]//4
         assert resized["bloom_height"] == resized["height"]//4
-        assert resized["bake_draws"] == expected["draws"] and resized["target_count"] == 23
+        assert resized["bake_draws"] == expected["draws"] and resized["target_count"] == 39
         game.resize(960, 640)
         command("world.view", {"name": "street"})
         game.wait_frames(8)

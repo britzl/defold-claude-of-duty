@@ -1,11 +1,13 @@
 -- Generated maps/sky -> sun shadows -> depth/normals -> AO/contact -> world
--- -> shadowed atmosphere -> temporal resolve -> isolated weapon AA -> bloom -> tone mapping -> GUI.
+-- -> shadowed atmosphere -> temporal resolve -> isolated weapon AA -> photographic treatment -> tone mapping/grade -> GUI.
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
 local shadows=require "game.render.shadows"
 local temporal=require "game.render.temporal"
 local local_lights=require "game.render.local_lights"
+local photographic=require "game.render.photographic"
+local photo_pass=require "game.render.photographic_pass"
 local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local MOTION,EXPECTED=G.BUFFER_TYPE_COLOR1_BIT,G.BUFFER_TYPE_COLOR2_BIT
@@ -49,9 +51,8 @@ local function resize(self)
         self.width,self.height=d.width,d.height
         self.bloom_width,self.bloom_height=d.bloom_width,d.bloom_height
         self.occlusion_width,self.occlusion_height=d.occlusion_width,d.occlusion_height
-        for _,name in ipairs({"scene","weapon","bloom_a","bloom_b","history_a","history_b","weapon_aa","reflected","glass","glass_scene","fog_scene","fog_raw"}) do
-            local small=name=="bloom_a" or name=="bloom_b"
-            local w,h=small and d.bloom_width or name=="fog_raw" and d.occlusion_width or d.width,small and d.bloom_height or name=="fog_raw" and d.occlusion_height or d.height
+        for _,name in ipairs({"scene","weapon","history_a","history_b","weapon_aa","reflected","glass","glass_scene","fog_scene","fog_raw"}) do
+            local w,h=name=="fog_raw" and d.occlusion_width or d.width,name=="fog_raw" and d.occlusion_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
             else self.targets[name]=colour_target(w,h,name=="scene" or name=="weapon",name=="fog_raw",false,self.radiance_format,name=="scene",name=="weapon") end
         end
@@ -61,6 +62,7 @@ local function resize(self)
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
             else self.targets[name]=(name=="depth_normal" or name=="depth_previous") and prepass_target(w,h) or colour_target(w,h,false,true) end
         end
+        photo_pass.resize(self,colour_target)
         self.gui_projection=vmath.matrix4_orthographic(0,d.width,0,d.height,-1,1)
         self.resizes=self.resizes+1
         temporal.reset(self.temporal,"resize")
@@ -178,6 +180,7 @@ end
 local function report(self)
     if not self.report and self.frames%30~=0 then return end
     self.report=false
+    local target_count=0;for _ in pairs(self.targets) do target_count=target_count+1 end
     msg.post("main:/controller#script","renderer_stats",{
         ready=self.bake_step==atlas.job_count, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
         atlas_width=atlas.width,atlas_height=atlas.height,material_quality=atlas.quality,surface_count=#atlas.surfaces-1,
@@ -189,13 +192,13 @@ local function report(self)
         shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
         shadow_draw_passes=self.shadow_draw_passes or 0,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
-        target_count=self.targets.scratch_a and 26 or 23,
+        target_count=target_count,
         occlusion_width=self.occlusion_width,occlusion_height=self.occlusion_height,
         prepass_draw_passes=self.prepass_draw_passes or 0,occlusion_draw_passes=self.occlusion_draw_passes or 0,
         occlusion_radius=.85,contact_length=.4,occlusion_slices=4,occlusion_steps=6,contact_steps=12,
         depth_normal_format="rgba8_log_depth_oct_normal",
-        target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,self.targets.scratch_a~=nil),
-        peak_target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,true),resizes=self.resizes,
+        target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,self.targets.scratch_a~=nil,self.options),
+        peak_target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,true,self.options),resizes=self.resizes,
         local_light_count=self.light_count,frames=self.frames,
         radiance_range=self.pipeline.hdr and 65504 or settings.radiance_range })
     msg.post("main:/controller#script","renderer_details",{
@@ -214,6 +217,13 @@ local function report(self)
         atmosphere_draw_passes=self.atmosphere_draw_passes or 0,fog_steps=daylight.fog_steps,
         fog_width=self.occlusion_width,fog_height=self.occlusion_height,
         settings=self.options,pipeline=self.pipeline })
+    msg.post("main:/controller#script","renderer_photographic",{
+        bloom_levels=photographic.quality(self.options.photographic_quality).levels,bloom_draw_passes=self.bloom_draw_passes or 0,
+        exposure_draw_passes=self.exposure_draw_passes or 0,lens_draw_passes=self.lens_draw_passes or 0,
+        photographic_target_bytes=photographic.bytes(self.width,self.height,self.pipeline.hdr,self.options),
+        exposure_limits={photographic.exposure_limits(self.options.lighting)},ads_dof_amount=self.photo_state.ads*self.options.ads_dof,
+        grade_size=photographic.grade_size,grade_space="display_srgb",photographic_quality=self.options.photographic_quality,
+        grain_time=self.capture.active and 0 or self.grain_time })
 end
 function init(self)
     self.world=render.predicate({"model"})
@@ -241,6 +251,9 @@ function init(self)
     self.radiance_format=self.pipeline.hdr and G.TEXTURE_FORMAT_RGBA16F or G.TEXTURE_FORMAT_RGBA
     self.targets={}
     self.temporal=temporal.new()
+    self.photo_state={ads=0,paused=false}
+    self.grain_time=0
+    self.photo_constants=render.constant_buffer()
     self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
     self.bake_jobs=atlas.jobs()
     self.light_count=0
@@ -252,7 +265,6 @@ function init(self)
     self.bake_constants=render.constant_buffer()
     self.sky_constants=render.constant_buffer()
     self.post_constants=render.constant_buffer()
-    self.bloom_constants=render.constant_buffer()
     self.probe_constants=render.constant_buffer()
     self.occlusion_constants=render.constant_buffer()
     self.motion_constants=render.constant_buffer()
@@ -260,7 +272,7 @@ function init(self)
     self.aa_constants=render.constant_buffer()
     self.reflection_constants=render.constant_buffer()
     self.fog_constants=render.constant_buffer()
-    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants,self.temporal_constants,self.aa_constants,self.reflection_constants,self.fog_constants}) do
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.probe_constants,self.temporal_constants,self.aa_constants,self.reflection_constants,self.fog_constants,self.photo_constants}) do
         constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
     end
     for _,name in ipairs({"light_positions","light_colours","light_minimums","light_maximums"}) do
@@ -291,6 +303,7 @@ function init(self)
         if event==render.CONTEXT_EVENT_CONTEXT_RESTORED then
             -- Runtime render-target contents are transient across context loss.
             self.bake_step=0
+            self.grade_ready=false;self.exposure_valid=false
             temporal.reset(self.temporal,"context_restored")
             self.report=true
         end
@@ -312,7 +325,11 @@ function update(self,dt)
         if temporal.cut(self.previous_inverse_view,inverse_view) then temporal.reset(self.temporal,"camera_cut") end
         if self.previous_projection and (math.abs(projection.m00-self.previous_projection.m00)>.15
             or math.abs(projection.m11-self.previous_projection.m11)>.15) then temporal.reset(self.temporal,"projection_cut") end
-        local taa=o.temporal_aa and (o.view=="scene" or o.view=="motion" or o.view=="history")
+        if self.photo_history_resets~=self.temporal.resets then
+            self.exposure_valid=false;self.photo_history_resets=self.temporal.resets
+        end
+        local photographic_view=o.view=="scene" or o.view=="bloom" or o.view=="exposure"
+        local taa=o.temporal_aa and (photographic_view or o.view=="motion" or o.view=="history")
         local frozen=taa and self.capture.active and not self.capture.temporal_live and self.temporal.age>=temporal.capture_samples
         local advance=taa and not frozen
         local jx,jy=0,0
@@ -322,6 +339,8 @@ function update(self,dt)
         projection.m02=projection.m02-2*jx/self.width
         projection.m12=projection.m12-2*jy/self.height
         self.world_view,self.world_projection=view,projection
+        local photo_valid=self.temporal.age>0 and not frozen
+        local photo_previous_jx,photo_previous_jy=self.previous_jx or 0,self.previous_jy or 0
         local previous_view=self.temporal.age>0 and self.previous_view or view
         local previous_projection=self.temporal.age>0 and self.previous_jitter_projection or projection
         self.motion_constants.previous_view=previous_view
@@ -420,7 +439,7 @@ function update(self,dt)
         -- World geometry only; identical skinning and cutouts to colour/shadows.
         -- This data target is deliberately portable RGBA8, independent of HDR.
         local screen_debug=settings.views[o.view]>=10
-        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug or taa or o.reflections or o.glass or o.fog or o.combat_effects
+        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug or taa or o.reflections or o.glass or o.fog or o.combat_effects or o.auto_exposure or o.ads_dof>0 or o.motion_blur>0
         self.prepass_draw_passes,self.occlusion_draw_passes=0,0
         render.set_render_target(t.depth_normal)
         render.set_viewport(0,0,self.width,self.height)
@@ -492,7 +511,7 @@ function update(self,dt)
         -- reflection history/recursive feedback; world TAA follows this resolve.
         local opaque_scene=t.scene
         self.reflection_draw_passes=0
-        if (o.reflections and (o.view=="scene" or o.view=="motion" or o.view=="history")) or o.view=="reflections" then
+        if (o.reflections and (photographic_view or o.view=="motion" or o.view=="history")) or o.view=="reflections" then
             render.set_render_target(t.reflected)
             local c=self.reflection_constants
             c.reflection_view=view;c.reflection_inverse_view=inverse_view
@@ -515,7 +534,7 @@ function update(self,dt)
         self.lighting.lighting_transform=inverse_view
         render.draw(self.weapon,{constants=self.lighting})
         local weapon_source=t.weapon
-        if o.combat_effects and self.weapon_flash_active and o.view=="scene" then
+        if o.combat_effects and self.weapon_flash_active and photographic_view then
             -- The flash layer is linear on both backends. Resolve against the
             -- opaque weapon in shader, preserving encoded RGBA8 dark precision.
             -- Reuse idle transparency/AA targets; no additional target storage.
@@ -558,7 +577,7 @@ function update(self,dt)
         -- stabilizes both together. The independent weapon target stays clear.
         self.atmosphere_draw_passes=0
         local fog_debug=o.view=="fog_scatter" or o.view=="fog_transmittance"
-        if (o.fog and (o.view=="scene" or o.view=="motion" or o.view=="history")) or fog_debug then
+        if (o.fog and (photographic_view or o.view=="motion" or o.view=="history")) or fog_debug then
             local c=self.fog_constants
             c.fog_inverse_view=inverse_view
             c.screen_projection=vmath.vector4(projection.m00,projection.m11,projection.m02,projection.m12)
@@ -627,7 +646,7 @@ function update(self,dt)
             self.temporal.age=0
         end
         self.previous_inverse_view,self.previous_projection=inverse_view,unjittered
-        if o.weapon_aa and o.view=="scene" then
+        if o.weapon_aa and photographic_view then
             local output=weapon_source==t.weapon_aa and t.weapon or t.weapon_aa
             render.set_render_target(output)
             self.aa_constants.aa_params=vmath.vector4(1/self.width,1/self.height,0,0)
@@ -638,7 +657,7 @@ function update(self,dt)
             self.weapon_aa_draw_passes=1
         end
         self.glass_draw_passes=0
-        if (o.glass or o.combat_effects) and (o.view=="scene" or o.view=="glass") then
+        if (o.glass or o.combat_effects) and (photographic_view or o.view=="glass") then
             render.set_render_target(t.glass)
             render.set_viewport(0,0,self.width,self.height)
             render.clear({[COLOR]=vmath.vector4()})
@@ -667,24 +686,21 @@ function update(self,dt)
             resolved_scene=o.view=="glass" and t.glass or t.glass_scene
             self.glass_draw_passes=2
         end
-        render.set_render_target(t.bloom_a)
-        render.set_viewport(0,0,self.bloom_width,self.bloom_height)
-        if o.bloom then
-            bind("source_texture",resolved_scene)
-            self.bloom_constants.bloom_step=vmath.vector4(1/self.bloom_width,0,1,0)
-            fullscreen(self,"bloom",self.bloom_constants)
-            render.set_render_target(t.bloom_b)
-            bind("source_texture",t.bloom_a)
-            self.bloom_constants.bloom_step=vmath.vector4(0,1/self.bloom_height,0,0)
-            fullscreen(self,"bloom",self.bloom_constants)
-            render.disable_texture("source_texture")
-        else
-            render.set_render_target(t.bloom_b)
-            render.clear({[COLOR]=vmath.vector4()})
-        end
+        local rotation=vmath.matrix4(inverse_view)
+        rotation.m03,rotation.m13,rotation.m23=0,0,0
+        local old_rotation=vmath.matrix4(previous_view)
+        old_rotation.m03,old_rotation.m13,old_rotation.m23=0,0,0
+        local bloom
+        resolved_scene,bloom=photo_pass.draw(self,resolved_scene,resolved_weapon,dt,{
+            jx=jx/self.width,jy=jy/self.height,previous_jx=photo_previous_jx,previous_jy=photo_previous_jy,
+            valid=photo_valid,sky=previous_projection*old_rotation*rotation*vmath.inv(projection)},fullscreen,bind)
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
         render.set_viewport(0,0,self.width,self.height)
-        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,(o.view=="cascades" or o.view=="shadow_visibility") and 0 or settings.views[o.view],o.atlas_half)
+        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and o.bloom_strength or 0,(o.view=="cascades" or o.view=="shadow_visibility") and 0 or settings.views[o.view],o.atlas_half)
+        local treatment=o.view=="scene"
+        self.post_constants.photo=vmath.vector4(treatment and o.grade_strength or 0,treatment and o.temporal_aa and o.sharpen or 0,
+            treatment and o.vignette or 0,treatment and o.grain or 0)
+        self.post_constants.photo_screen=vmath.vector4(1/self.width,1/self.height,self.capture.active and 0 or self.grain_time,0)
         self.post_constants.environment_debug=vmath.vector4(o.environment_level,0,0,0)
         local page=o.atlas_page-1
         self.post_constants.atlas_window=page<0 and vmath.vector4(0,0,1,1) or
@@ -692,11 +708,13 @@ function update(self,dt)
                 math.floor(page/math.ceil(atlas.width/1024))*1024/atlas.height,1024/atlas.width,1024/atlas.height)
         bind("scene_texture",resolved_scene)
         bind("weapon_texture",resolved_weapon)
-        bind("bloom_texture",t.bloom_b)
+        bind("bloom_texture",o.view=="bloom" and o.bloom_level>0 and t["bloom_down_"..math.min(o.bloom_level,photographic.quality(o.photographic_quality).levels)] or bloom)
+        bind("exposure_texture",t.exposure_b)
+        bind("grade_texture",t.grade_lut)
         bind("environment_texture",t.environment)
         bind("debug_texture",({albedo=t.albedo,normals=t.normal,material=t.material,shadow=t.shadow,local_shadow=t.local_shadow,depth=t.depth_normal,geometry_normals=t.depth_normal,ao=t.occlusion,contact=t.occlusion,occlusion_raw=t.occlusion_raw})[o.view] or t.albedo)
         fullscreen(self,nil,self.post_constants)
-        for _,name in ipairs({"scene_texture","weapon_texture","bloom_texture","environment_texture","debug_texture"}) do
+        for _,name in ipairs({"scene_texture","weapon_texture","bloom_texture","environment_texture","debug_texture","exposure_texture","grade_texture"}) do
             render.disable_texture(name)
         end
     else
@@ -726,19 +744,27 @@ end
 function on_message(self,id,message)
     if id==hash("renderer_reset_history") then
         temporal.reset(self.temporal,message.reason or "explicit")
+        self.exposure_valid=false
         self.report=true
     elseif id==hash("capture_configure") then
         self.capture=message
+        self.exposure_valid=false
         temporal.reset(self.temporal,"capture")
     elseif id==hash("renderer_configure") then
         local next_options=settings.configure(self.options,message)
         if next_options.lighting~=self.options.lighting or next_options.clouds~=self.options.clouds then
             self.environment_dirty=true
         end
+        local reallocate=next_options.photographic_quality~=self.options.photographic_quality or
+            next_options.ads_dof~=self.options.ads_dof or next_options.motion_blur~=self.options.motion_blur
         self.options=next_options
+        if reallocate and self.width then photo_pass.resize(self,colour_target) end
+        self.exposure_valid=false
         atmosphere_constants(self)
         temporal.reset(self.temporal,"settings")
         self.report=true
+    elseif id==hash("renderer_photographic_state") then
+        self.photo_state=message
     elseif id==hash("renderer_volumes") then
         assert(#message.volumes<=daylight.max_volumes,"Indirect lighting volume budget exceeded")
         self.volume_count=#message.volumes

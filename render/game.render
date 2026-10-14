@@ -21,3 +21,6 @@ materials { name: "atmosphere" material: "/render/atmosphere.material" }
 materials { name: "fog" material: "/render/fog.material" }
 materials { name: "fog_composite" material: "/render/fog_composite.material" }
 materials { name: "weapon_composite" material: "/render/weapon_composite.material" }
+materials { name: "grade" material: "/render/grade.material" }
+materials { name: "exposure" material: "/render/exposure.material" }
+materials { name: "lens" material: "/render/lens.material" }

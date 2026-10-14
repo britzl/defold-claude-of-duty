@@ -36,7 +36,7 @@ def main():
     try:
         engine.wait_until(lambda:cmd('world.snapshot')['ready'] and stats()['ready'],timeout=70)
         resize(1280,720)
-        assert stats()['target_count']==23
+        assert stats()['target_count']==39
         for name in ('street','laboratory','shadow_cutout','weapon','ads'):
             shot(name);enabled=save(name)
             game.wait_frames(17);assert delta(enabled,save(name+'-held'))==0,'converged capture changed'
@@ -45,11 +45,14 @@ def main():
             config(temporal_aa=True);restored=save(name+'-restored')
             assert delta(enabled,restored)==0,(name,'nonrepeatable reset',delta(enabled,restored))
             if name in ('weapon','ads'):
+                # Step 12 bloom intentionally spreads weapon light into the
+                # world. Disable it here to isolate weapon AA's own footprint.
+                config(bloom=False);isolated=save(name+'-aa-isolated')
                 config(weapon_aa=False);no_aa=save(name+'-no-weapon-aa')
-                weapon_delta=delta(enabled,no_aa);assert weapon_delta>.001,(name,weapon_delta)
+                weapon_delta=delta(isolated,no_aa);assert weapon_delta>.001,(name,weapon_delta)
                 report[name+'_weapon_aa_difference']=weapon_delta
                 # A weapon-independent world region must be exactly unchanged.
-                assert delta(enabled.crop((0,0,1280,200)),no_aa.crop((0,0,1280,200)))==0
+                assert delta(isolated.crop((0,0,1280,200)),no_aa.crop((0,0,1280,200)))==0
             report[name]={'taa_difference':difference,'repeat_identical':True}
             print('PASS',name,report[name],flush=True)
         shot('street');reference=save('return-before')
@@ -92,7 +95,7 @@ def main():
             samples.append(state)
         report['continuous_sweep']={'samples':samples,'timing':'frame-addressed with continuous history; held frames depend on capture latency'}
         # Actual rigid actor movement plus skinned gait, viewed by a stationary camera.
-        cmd('capture.end');cmd('ui.pause',{'paused':False});cmd('movement.reset',{'x':0,'y':.01,'z':10,'yaw':0})
+        cmd('capture.end');cmd('ui.focus',{'focused':True});cmd('ui.pause',{'paused':False});cmd('movement.reset',{'x':0,'y':.01,'z':10,'yaw':0})
         cmd('ai.reset',{'position':{'x':1,'y':.004,'z':-3},'yaw':0})
         cmd('ai.patrol',{'points':[{'x':1,'y':.004,'z':-3},{'x':3,'y':.004,'z':-3}]})
         config(view='motion');game.wait_frames(18)

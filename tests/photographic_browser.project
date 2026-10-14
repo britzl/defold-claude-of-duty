@@ -1,0 +1,9 @@
+[rendering_validation]
+enabled = 1
+suite = photographic
+[display]
+width = 1024
+height = 1024
+high_dpi = 0
+[render]
+material_quality = medium

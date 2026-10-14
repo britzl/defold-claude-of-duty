@@ -79,7 +79,7 @@ def main():
         resize(1280, 720)
         initial = cmd('renderer.snapshot')
         assert initial['volume_count'] == 4 and initial['reflection_levels'] == 6
-        assert initial['target_count'] == 23
+        assert initial['target_count'] == 39
         shot('interior')
         default = save('interior')
         configure(interior_lighting=False)
@@ -150,7 +150,7 @@ def main():
         shot('street')
         assert ImageChops.difference(before,save('street-return')).getbbox() is None
         final=cmd('renderer.snapshot')
-        assert initial['bake_draws']==final['bake_draws'] and final['target_count']==23
+        assert initial['bake_draws']==final['bake_draws'] and final['target_count']==39
         report['renderer']=final
         report['scope']='Frozen production cameras; GPU pixel assertions. CPU/draw profiles are in the baseline manifests.'
         cmd('capture.end')
