@@ -14,7 +14,9 @@ sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slope
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
 reloads and generated viewmodels in an isolated render pass. Six runtime-generated,
 25-bone soldiers patrol as two squads, share alerts, claim cover and coordinate
-a rear-lane flank while firing physical rounds. GPU-generated surface maps,
+a rear-lane flank while firing physical rounds. Nearby player rounds and impacts
+build suppression; enemies duck, recover and alternate hiding with peeks from
+low cover. GPU-generated surface maps,
 shared material lighting,
 animated sun shadows, a procedural sky, height fog, tone mapping and bloom are
 implemented. A runtime-generated sound bank now supplies weapon fire, reloads,
@@ -37,6 +39,7 @@ lua tests/movement_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
 lua tests/squads_test.lua
+lua tests/suppression_test.lua
 lua tests/renderer_test.lua
 lua tests/audio_test.lua
 lua tests/ui_test.lua
@@ -55,6 +58,7 @@ PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ai_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/squads_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
@@ -180,7 +184,7 @@ Idle breathing, distance-driven walking, upper-body aiming, recoil and a bounded
 0.85-second death collapse are evaluated in Lua. Simulation poses advance at 120
 Hz. Presentation interpolates position, heading and pose parameters without
 changing collision transforms. This is a deliberately simplified animation
-prototype: runtime foot/hand IK, source clip parity and physics ragdolls remain
+prototype: terrain-following foot/hand IK, source clip parity and physics ragdolls remain
 later work. Death disables hit volumes and leaves one visible corpse until
 restart.
 
@@ -215,14 +219,36 @@ capsule-swept. This is not rigid actor-to-actor blocking.
 `game/ai/tactics.lua` coordinates the encounter. Cover selection requires an
 unclaimed, reachable position within firing range that shields the lower body
 and gives a standing firing lane. Claims are exclusive across both squads and
-release on death, lost contact, invalid cover, stalled movement or restart. This
-is standing fire over low cover; crouch/peek animation and suppression remain
-future work. With a visible ally engaging, one other squad member can claim the
+release on death, lost contact, invalid cover, stalled movement or restart.
+At low cover, soldiers alternate a deep crouch with short standing firing windows.
+Actor-index offsets stagger those windows without consuming weapon randomness.
+Standing requires capsule headroom; firing additionally requires a nearly risen
+pose, live visibility and clear muzzle/ally checks. While hidden, soldiers retain
+valid cover and use the existing last-seen memory; crouching does not grant sight
+through the barrier. With a visible ally engaging, one other squad member can claim the
 generated west loop, follow its approach, rear lane and opposite exit, then
 rejoin combat. One actor may claim that lane at a time. Target displacement,
 lost contact and movement failure cancel the tactic; a cooldown prevents
 immediate repeated circuits. The route is generated from the same layout as
 navigation.
+
+`game/ai/suppression.lua` observes actual travelled player projectile segments,
+including non-tracers, within 2.2 metres of the animated head. Near misses require
+world line of sight and never extend past a round's stopping point. Impacts within
+2.5 metres also add pressure; impact sound through cover is attenuated to 60% and
+limited to 1.5 metres. One round contributes only its strongest stimulus per actor,
+so successive segments, entry/exit and overlapping volumes cannot multiply it.
+Weak round-token keys expire with the projectiles. Friendly rounds are ignored;
+pressure neither deals damage nor reveals the player's position.
+
+Pressure is bounded to 1.6, decays at 0.55 per active second, triggers suppression
+at 0.9 and releases it at 0.3. Suppression immediately prevents firing, cancels a
+flank and forces a duck while retaining valid cover. After recovery, a short hide
+interval precedes the next peek. Pause and disabled AI freeze pressure and exposure
+timers; replacement clears them. The crouch palette lowers the pelvis, bends the
+legs toward planted ankles and keeps the rifle above the floor. Mesh, shadows,
+head-based perception, muzzle and authoritative hit volumes use the same pose;
+presentation interpolates it without modifying simulation collision.
 
 Head, chest, hips, thighs and shins have kinematic Bullet boxes transformed by
 the same skeleton as the mesh. Projectile thickness is measured in each box's
@@ -258,7 +284,23 @@ tests/squads_browser.project` to opt into this scenario. It prints
 `SQUAD_BROWSER START/COVER/FLANK/DEATHS/PASS` records and freezes the successful
 encounter for review. Normal builds omit the setting and run normal gameplay.
 
-Measured on this Mac on 2026-10-14, with diagnostic health damage disabled while
+Nine additional Lua suppression tests cover stopped/non-tracer rounds, per-round
+deduplication, impact range, friendly/dead filtering, recovery, pause, blocked
+headroom, cover retention/expiry, planted feet, mesh bounds, hit volumes, reset
+and 30/60/144-FPS equivalence. All 119 Lua checks pass. The shared native Metal and
+HTML5/WebGL 2 fixture fires real rounds past a cover holder and into the barrier,
+checks that firing stops, verifies the head volume drops from about 1.67 m to
+0.77 m behind actual Bullet cover, and waits for recovery and resumed fire.
+The six actors still use 54 objects, 42 hit volumes and one shared mesh buffer.
+Native screenshots and results are written to `build/suppression-validation`.
+For the browser fixture, bundle debug `wasm-web` with Bob's
+`--settings tests/suppression_browser.project`; stdout reports
+`SUPPRESSION_SCENARIO PEEK/PASSES/IMPACTS/RECOVERED/PASS`.
+Sideways peeks around tall cover, squad peek permissions, terrain IK and physical
+mobile validation remain outside this increment.
+
+Baseline before suppression/peeking, measured on this Mac on 2026-10-14 with
+diagnostic health damage disabled while
 physical bullets, impacts, sound and rendering continue:
 
 | Measurement | Native Metal debug | HTML5/WebGL 2 debug |
@@ -442,7 +484,9 @@ damage**; listeners must never apply it again. Damage payloads contain `target`,
 `source`, `amount` (actual damage), `health`, `killed`, `headshot` and optional
 `point`. Death contains `actor`, `source`, optional `point` and `impulse`.
 FX ignores player damage for hitmarkers. Weapons produce fire, dry-trigger, reload,
-shell, impact and tracer notifications. Audio consumes notifications without
+shell, impact, travelled-segment and tracer notifications. Impact and segment
+notifications share an opaque per-round token for suppression deduplication.
+Audio consumes notifications without
 applying damage or advancing any gameplay random stream. Future systems supply
 their remaining event producers.
 
@@ -632,7 +676,7 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 110 Lua checks and the
+with review images in `build/renderer-validation`. All 119 Lua checks pass; the
 native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
 HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no
@@ -772,10 +816,16 @@ Run Python with `PYTHONPATH=automation-bridge-python`. Application commands are
 registered only when the Automation Bridge Lua API is available.
 
 Squad automation: `ai.snapshot` returns actors in ID order, squad reports,
-cover/flank claims, actor roles, memory, replans and completed flanks.
+cover/flank claims, actor roles, memory, replans and completed flanks. Actors also
+report `suppression`, `suppressed`, `suppression_events`, `suppressed_ticks`,
+`crouch`, `stance`, `cover_phase`, `peek_timer` and `peeks`.
 `ai.reset` with no position restores all six; an explicit `position` retains the
 single-soldier fixture used by weapon/navigation suites. `ai.route` and `ai.patrol`
 accept an optional actor `id`. `ai.volumes` includes each volume's actor ID.
 `ai.configure` accepts `enabled` and a diagnostic `damage_scale` in 0..1; zero
 preserves physical bullets/impacts while suppressing their health damage for
 sustained profiles. Normal encounter restart restores the scale to 1.
+`ai.validate_suppression` starts the opt-in shared integration scenario;
+`ai.suppression_result` returns its phase and recorded assertions. The scenario
+resets the encounter and freezes AI after success; use `gameplay.restart` to
+return to ordinary play.

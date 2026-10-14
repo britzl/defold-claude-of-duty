@@ -10,7 +10,7 @@ function M.spawn(sim, def, origin, direction, source, tracer)
     sim.fired=sim.fired+1
     local p={position=V.copy(origin), velocity=V.point({x=0,y=0,z=0},direction,def.muzzleVelocity),
         damage=def.damage,power=def.penetration,initial_power=def.penetration,travelled=0,age=0,
-        def=def,source=source or "player",tracer=tracer,inside={},hit_actors={},layers=0,alive=true}
+        def=def,source=source or "player",tracer=tracer,inside={},hit_actors={},layers=0,alive=true,token={}}
     sim.live[#sim.live+1]=p
     return p
 end
@@ -21,7 +21,7 @@ local function impact(ctx,sim,p,hit,point,exiting)
     if exiting then sim.exits=sim.exits+1 end
     events.emit(ctx.events,events.BULLET_IMPACT,{point=V.copy(point),normal=exiting and hit.exit_normal or hit.normal,
         surface=hit.surface or "concrete",effect=props.fx,audio=props.audio,exit=exiting,
-        weapon=p.def.id,source=p.source,damage=damage(p),distance=p.travelled,collider=hit.id})
+        weapon=p.def.id,source=p.source,round=p.token,damage=damage(p),distance=p.travelled,collider=hit.id})
     if not exiting and hit.actor and not p.hit_actors[hit.actor] then
         p.hit_actors[hit.actor]=true
         combat.request(ctx.combat,{target=hit.actor,source=p.source,amount=damage(p)*(hit.headshot and 2 or 1)*(p.damage_scale or 1),
@@ -88,6 +88,11 @@ function M.update(ctx,sim,dt,query)
         end
         if p.alive then cursor=cursor+travel(p,math.max(0,length-cursor)) end
         p.position=V.point(from,dir,cursor)
+        -- Gameplay observes only the distance actually travelled, including a
+        -- stop inside a material. This is independent of optional tracer FX.
+        if cursor>0 then
+            events.emit(ctx.events,events.BULLET_SEGMENT,{from=from,to=V.copy(p.position),source=p.source,round=p.token})
+        end
         if p.tracer and cursor>0 then
             events.emit(ctx.events,events.BULLET_TRACER,{from=from,to=V.copy(p.position),weapon=p.def.id,speed=speed})
         end

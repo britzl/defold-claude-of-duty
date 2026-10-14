@@ -47,21 +47,49 @@ function M.pose(state)
     local rotations={}
     local function rotate(name,x,y,z) rotations[M.index[name]]=T.rotation(x,y,z) end
     local death=V.smooth(state.death or 0)
-    local walk=(state.walk or 0)*(1-death)
+    local crouch=V.clamp(state.crouch or 0,0,1)*(1-death)
+    local walk=(state.walk or 0)*(1-death)*(1-crouch*.7)
     local phase=state.phase or 0
     local aim=(state.aim or 0)*(1-death)
     local breathe=math.sin((state.time or 0)*2.1)*.008*(1-death)
-    rotate("Hips",-.10*walk,0,.025*math.sin(phase)*walk)
+    local hip_pitch=-.85*crouch-.10*walk*(1-crouch)
+    rotate("Hips",hip_pitch,0,.025*math.sin(phase)*walk*(1-crouch))
     rotate("Spine",breathe,0,0)
     -- The carried rifle points slightly down; bring it onto the aim line.
     rotate("Spine1",aim*(.05+(state.pitch or 0)*.45),0,0)
     rotate("Spine2",aim*(.05+(state.pitch or 0)*.55)+(state.recoil or 0)*.055,0,0)
-    rotate("Head",-.07*aim,math.sin((state.time or 0)*.7)*.07*(1-aim),0)
+    rotate("Head",.60*crouch-.07*aim,math.sin((state.time or 0)*.7)*.07*(1-aim),0)
+    rotate("ClavicleR",.9*crouch,0,0)
+    rotate("ClavicleL",.9*crouch,0,0)
     for _,side in ipairs({"R","L"}) do
         local swing=math.sin(phase+(side=="R" and 0 or math.pi))
         rotate("UpLeg"..side,swing*.42*walk,0,0)
         rotate("Leg"..side,-math.max(0,swing)*.65*walk,0,0)
         rotate("Foot"..side,-swing*.13*walk,0,0)
+        if crouch>0 then
+            -- Bend each leg toward a planted ankle as the pelvis lowers. This
+            -- small sagittal solve prevents the duck from sinking feet below
+            -- the floor; it is not terrain-following foot IK.
+            local upper=M.bones[M.index["UpLeg"..side]].local_position
+            local shin=M.bones[M.index["Leg"..side]].local_position
+            local foot=M.bones[M.index["Foot"..side]].local_position
+            local hy=.98-.70*crouch+math.cos(hip_pitch)*upper.y-math.sin(hip_pitch)*upper.z
+            local hz=.005+.12*crouch+math.sin(hip_pitch)*upper.y+math.cos(hip_pitch)*upper.z
+            local dy,dz=.088-hy,.022-hz
+            local a=math.sqrt(shin.y^2+shin.z^2)
+            local b=math.sqrt(foot.y^2+foot.z^2)
+            local d=V.clamp(math.sqrt(dy*dy+dz*dz),math.abs(a-b)+.00001,a+b-.00001)
+            local axis=math.atan2(-dz,-dy)
+            local bend=math.acos(V.clamp((a*a+d*d-b*b)/(2*a*d),-1,1))
+            local thigh=axis+bend
+            local knee_y,knee_z=hy-math.cos(thigh)*a,hz-math.sin(thigh)*a
+            local lower=math.atan2(-(.022-knee_z),-(.088-knee_y))
+            local upper_angle=thigh-math.atan2(-shin.z,-shin.y)
+            local lower_angle=lower-math.atan2(-foot.z,-foot.y)
+            rotate("UpLeg"..side,upper_angle-hip_pitch,0,0)
+            rotate("Leg"..side,lower_angle-upper_angle,0,0)
+            rotate("Foot"..side,-lower_angle,0,0)
+        end
     end
     local worlds,palette={},{}
     for i,bone in ipairs(M.bones) do
@@ -75,8 +103,8 @@ function M.pose(state)
             fall[8]=-.77*death
             m=T.mul(fall,m)
             -- Rotate around pelvis, then lower it to the floor.
-            m[8]=.98-.77*death+breathe*.3+math.abs(math.sin(phase))*.025*walk
-            m[12]=.005+.38*death
+            m[8]=.98-.77*death-.70*crouch+breathe*.3+math.abs(math.sin(phase))*.025*walk*(1-crouch)
+            m[12]=.005+.38*death+.12*crouch
         end
         worlds[i]=bone.parent>0 and T.mul(worlds[bone.parent],m) or m
         palette[i]=T.mul(worlds[i],T.identity(-bone.bind.x,-bone.bind.y,-bone.bind.z))

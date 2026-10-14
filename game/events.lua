@@ -5,6 +5,7 @@ local M = {
     WEAPON_SHELL = "weapon:shell",
     BULLET_IMPACT = "bullet:impact",
     BULLET_TRACER = "bullet:tracer",
+    BULLET_SEGMENT = "bullet:segment",
     DAMAGE_DEALT = "damage:dealt",
     DAMAGE_TAKEN = "damage:taken",
     ACTOR_DEATH = "actor:death",

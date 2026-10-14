@@ -50,6 +50,7 @@ local function create_range(self)
 end
 
 local function restart_encounter(self)
+    self.suppression_validation=nil
     audio_system.reset(self.ctx)
     select_view(self,nil)
     combat.remove(self.ctx.combat,"player")
@@ -126,6 +127,9 @@ function init(self)
     if sys.get_sys_info().system_name=="HTML5" and sys.get_config_int("squad_validation.enabled",0)==1 then
         self.squad_validation=require("tests.squads_browser").new()
     end
+    if sys.get_config_int("suppression_validation.enabled",0)==1 then
+        self.suppression_validation=require("tests.suppression_scenario").new()
+    end
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -157,6 +161,15 @@ function init(self)
             description="Set shadows/normal_maps/local_lights/fog/bloom booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
+        automation_bridge.command("ai.validate_suppression",function()
+            assert(self.ctx.world.ready,"World is still loading")
+            self.suppression_validation=require("tests.suppression_scenario").new()
+            return {phase=self.suppression_validation.phase}
+        end)
+        automation_bridge.command("ai.suppression_result",function()
+            assert(self.suppression_validation,"No suppression scenario started")
+            return self.suppression_validation
+        end)
         automation_bridge.command("ai.configure",function(data)
             assert(data.enabled~=nil or data.damage_scale~=nil,"Expected enabled or damage_scale")
             if data.enabled~=nil then
@@ -224,7 +237,9 @@ function init(self)
             return snapshot(self.ctx)
         end)
         for name,description in pairs({
-            ["ai.snapshot"]="Read all six actors, squad reports, cover/flank claims, navigation, shots and CPU/resource costs.",
+            ["ai.snapshot"]="Read actors, suppression/crouch/peek state, squad reports, cover/flank claims, shots and costs.",
+            ["ai.validate_suppression"]="Start the opt-in real-projectile suppression and cover recovery validation scenario.",
+            ["ai.suppression_result"]="Read the active suppression validation phase and completed assertions.",
             ["ai.configure"]="Set enabled boolean and/or damage_scale 0..1 for repeatable combat profiles; frozen soldiers remain shootable.",
             ["ai.reset"]="Reset both squads; an explicit {position={x,y,z},yaw} creates a single test soldier. Preserves AI pause and damage scale.",
             ["ai.volumes"]="Read current skeleton-driven Bullet hit-volume centres.",
@@ -375,6 +390,9 @@ function update(self, dt)
     runtime.update(self.ctx, dt)
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
+    end
+    if self.suppression_validation then
+        require("tests.suppression_scenario").update(self.suppression_validation,self.ctx)
     end
     if automation_bridge and self.world_phase ~= self.ctx.world.phase then
         self.world_phase = self.ctx.world.phase

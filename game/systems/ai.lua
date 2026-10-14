@@ -9,9 +9,10 @@ local V = require "game.weapons.math"
 local rng = require "game.rng"
 local ballistics = require "game.weapons.ballistics"
 local tactics = require "game.ai.tactics"
+local suppression = require "game.ai.suppression"
 local M = {}
 local SHOT={id="enemy_rifle",muzzleVelocity=400,damage=10,penetration=.45,dropoff=.6,maxRange=60,dragK=.01}
-local function eye(enemy) return {x=enemy.position.x,y=enemy.position.y+1.665,z=enemy.position.z} end
+local eye=suppression.eye
 local function player_target(ctx)
     local p=ctx.player.position
     return {x=p.x,y=p.y+ctx.player.motion.height*.72,z=p.z}
@@ -23,7 +24,7 @@ local function muzzle(e)
     return transform.point(transform.root(e.position,e.yaw),local_point)
 end
 local function sample(e)
-    return {time=e.age,phase=e.phase,walk=e.walk,aim=e.aim,pitch=e.pitch,recoil=e.recoil,death=e.death}
+    return {time=e.age,phase=e.phase,walk=e.walk,aim=e.aim,pitch=e.pitch,recoil=e.recoil,death=e.death,crouch=e.crouch}
 end
 local function spawn(ctx,point)
     local position,yaw,id=point.position,point.yaw or math.pi,point.id
@@ -31,11 +32,12 @@ local function spawn(ctx,point)
     local e={id=id,actor=combat.register(ctx.combat,id,100),index=index,squad=point.squad,role="patrol",
         flanks_completed=0,stuck=0,replans=0,
         position=V.copy(position),previous=V.copy(position),yaw=yaw or math.pi,previous_yaw=yaw or math.pi,
-        state="patrol",age=0,phase=0,walk=0,aim=0,pitch=0,recoil=0,death=0,
+        state="patrol",age=0,phase=0,walk=0,aim=0,pitch=0,recoil=0,death=0,crouch=0,duck=false,peeks=0,peek_timer=0,
         think=(index-1)/60,notice=0,memory=0,cooldown=1,route=nil,route_age=0,patrol=2,shots=0,travel=0,
         random=rng.new(ctx.world.seed,id),
         patrol_points={V.copy(position),V.copy(point.patrol or {x=0,y=0,z=-5})}}
     e.motion=capsule.new(e.position);e.motion.yaw=e.yaw
+    suppression.init(e)
     e.previous_pose=sample(e)
     e.palette=rig.pose(e.previous_pose)
     ctx.ai.actors[e.id]=e
@@ -51,6 +53,8 @@ end
 function M.init(ctx)
     ctx.ai={actors={},order={},squads={},cover_claims={},flank_claims={},nav_cache={},enabled=true,spawned=false,
         sim=ballistics.new(),damage_scale=1,work_seconds=0,peak_tick=0,ticks=0}
+    events.on(ctx.events,events.BULLET_SEGMENT,ctx.ai,function(_,segment) suppression.observe(ctx,segment,false) end)
+    events.on(ctx.events,events.BULLET_IMPACT,ctx.ai,function(_,hit) suppression.observe(ctx,hit,true) end)
     events.on(ctx.events,events.DAMAGE_DEALT,ctx.ai,function(_,hit)
         local e=ctx.ai.actors[hit.target]
         if e and hit.source=="player" and e.actor.alive then
@@ -82,16 +86,20 @@ local function think(ctx,e,query)
     if e.memory>0 and e.last_seen and ctx.player.actor.alive then
         local origin=muzzle(e)
         local can_fire=sees and distance<10 and query:visible(eye(e),origin) and query:visible(origin,target)
-        goal=tactics.flank(ctx,e)
+        if e.suppressed and e.flank then tactics.release_flank(ctx.ai,e);e.flank_retry=e.age+5 end
+        goal=not e.suppressed and tactics.flank(ctx,e) or nil
         if goal then e.state="flank";e.role="flank"
         else
             local cover=e.squad and tactics.cover(ctx,e,query)
             if cover and nav.distance(e.position,cover)>.32 then
                 goal=cover;e.state="cover";e.role="cover"
-            elseif can_fire then e.state="fire";e.role=cover and "cover" or "engage"
+            elseif cover then
+                e.state=e.suppressed and "suppressed" or (e.cover_phase=="peek" and can_fire and "fire" or "hide")
+                e.role="cover"
+            elseif can_fire then e.state="fire";e.role="engage"
             else
-                -- A protected position without a firing lane is not a permanent
-                -- hiding place: leave it and close on the last observed position.
+                -- Without usable cover or a clear shot, close on the last
+                -- observed position rather than following an unseen player.
                 tactics.release_cover(ctx.ai,e)
                 goal=e.last_seen;e.state="pursuit";e.role="engage"
             end
@@ -125,7 +133,8 @@ local function think(ctx,e,query)
     elseif not goal then e.route=nil;e.route_goal=nil;e.stuck=0 end
 end
 local function fire(ctx,e,query)
-    if e.state~="fire" or not e.visible or e.cooldown>0 or e.aim<.85 then return end
+    if e.state~="fire" or e.suppressed or e.duck or e.crouch>.08 or e.motion.stance~="stand"
+        or not e.visible or e.cooldown>0 or e.aim<.85 then return end
     local target=player_target(ctx)
     if math.abs(wrap(angle(target.x-e.position.x,target.z-e.position.z)-e.yaw))>.10 then return end
     -- Trace from the animated rifle's muzzle and confirm that the muzzle itself
@@ -165,20 +174,22 @@ function M.fixed_update(ctx,dt)
                 e.death=math.min(1,e.death+dt/.85);e.age=e.age+dt
             elseif ai.enabled and ctx.player.enabled then
                 e.age=e.age+dt;e.memory=math.max(0,e.memory-dt)
+                suppression.tick(e,dt)
                 e.cooldown=math.max(0,e.cooldown-dt);e.route_age=e.route_age+dt
                 e.think=e.think-dt
                 if e.think<=0 then think(ctx,e,query);e.think=.1 end
+                tactics.posture(e,dt)
                 local waypoint=e.route and e.route[1]
                 while waypoint and nav.distance(e.position,waypoint)<.28 do
                     table.remove(e.route,1);waypoint=e.route[1]
                 end
-                local facing=(e.state=="fire" and ctx.player.position) or waypoint
+                local facing=(e.cover_phase and e.last_seen) or (e.state=="fire" and ctx.player.position) or waypoint
                 if facing then
                     local desired=angle(facing.x-e.position.x,facing.z-e.position.z)
                     e.yaw=e.yaw+V.clamp(wrap(desired-e.yaw),-dt*4,dt*4)
                 end
                 e.motion.yaw=e.yaw
-                local intent={enabled=true,move_x=0,move_z=0}
+                local intent={enabled=true,move_x=0,move_z=0,crouch=e.duck}
                 if waypoint then
                     local dx,dz=waypoint.x-e.position.x,waypoint.z-e.position.z
                     local distance=math.sqrt(dx*dx+dz*dz)
@@ -194,11 +205,16 @@ function M.fixed_update(ctx,dt)
                     end
                 end
                 capsule.update(e.motion,intent,dt,query)
+                -- The mover expands only after a real headroom check. Skinning,
+                -- muzzle, perception and hit volumes all use this same blend.
+                local target_crouch=e.motion.stance=="crouch" and 1 or 0
+                e.crouch=e.crouch+V.clamp(target_crouch-e.crouch,-dt*5,dt*7)
                 e.travel=e.travel+e.motion.travel;e.phase=e.phase+e.motion.travel*2*math.pi/1.25
                 e.stuck=waypoint and (e.motion.travel<dt*.15 and e.stuck+dt or 0) or 0
                 local speed=e.motion.travel/dt
                 e.walk=e.walk+(math.min(1,speed/1.1)-e.walk)*math.min(1,dt*9)
-                e.aim=e.aim+((e.state=="fire" and 1 or 0)-e.aim)*math.min(1,dt*8)
+                local aiming=not e.duck and (e.state=="fire" or e.cover_phase=="peek")
+                e.aim=e.aim+((aiming and 1 or 0)-e.aim)*math.min(1,dt*8)
                 local target=player_target(ctx)
                 local d=math.sqrt((target.x-e.position.x)^2+(target.z-e.position.z)^2)
                 e.pitch=V.clamp(math.atan2(target.y-(e.position.y+1.4),math.max(.01,d)),-.5,.5)
@@ -249,6 +265,9 @@ function M.snapshot(ctx)
         out.actors[#out.actors+1]={id=e.id,health=e.actor.health,alive=e.actor.alive,state=e.state,
             x=e.position.x,y=e.position.y,z=e.position.z,yaw=e.yaw,visible=e.visible or false,
             phase=e.phase,aim=e.aim,death=e.death,shots=e.shots,travel=e.travel,route=e.route and #e.route or 0,
+            suppression=e.suppression,suppressed=e.suppressed,suppression_events=e.suppression_events,
+            suppressed_ticks=e.suppressed_ticks,crouch=e.crouch,stance=e.motion.stance,
+            cover_phase=e.cover_phase,peek_timer=e.peek_timer,peeks=e.peeks,
             bones=rig.count,hitboxes=#rig.hitboxes,recovery_failed=e.motion.recovery_failed,
             squad=e.squad,role=e.role,cover=e.cover and e.cover.id,flank=e.flank and e.flank.id,
             flank_index=e.flank and e.flank.index,flanks_completed=e.flanks_completed,

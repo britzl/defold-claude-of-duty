@@ -7,6 +7,7 @@ local M = {}
 function M.release_cover(ai,e)
     if e.cover and ai.cover_claims[e.cover.id]==e.id then ai.cover_claims[e.cover.id]=nil end
     e.cover=nil
+    e.cover_phase=nil;e.peek_timer=0
 end
 function M.release_flank(ai,e)
     if e.flank and ai.flank_claims[e.flank.id]==e.id then ai.flank_claims[e.flank.id]=nil end
@@ -32,13 +33,34 @@ end
 
 local function protected(query,cover,target)
     local dx,dz=target.x-cover.x,target.z-cover.z
-    return dx*cover.normal_x+dz*cover.normal_z<-.2
+    return cover.height>=.75 and dx*cover.normal_x+dz*cover.normal_z<-.2
         and math.abs(target.y-cover.y)<.8
         and not query:visible({x=cover.x,y=cover.y+math.min(.55,cover.height*.6),z=cover.z},
             {x=target.x,y=target.y+1.25,z=target.z})
         and nav.distance(cover,target)<10
         and query:visible({x=cover.x,y=cover.y+1.665,z=cover.z},
             {x=target.x,y=target.y+1.25,z=target.z})
+end
+
+-- Timed exposure uses simulation time and actor index, leaving weapon RNG
+-- untouched. Suppression cancels a peek immediately but retains valid cover.
+function M.posture(e,dt)
+    local at_cover=e.cover and not e.flank and e.memory>0 and nav.distance(e.position,e.cover)<=.32
+    if at_cover then
+        if not e.cover_phase then
+            e.cover_phase="hide";e.peek_timer=.75+(e.index%3)*.15
+        end
+        e.peek_timer=math.max(0,e.peek_timer-dt)
+        if e.suppressed then
+            e.cover_phase="hide";e.peek_timer=math.max(e.peek_timer,.6)
+        elseif e.peek_timer==0 then
+            e.cover_phase=e.cover_phase=="hide" and "peek" or "hide"
+            e.peek_timer=e.cover_phase=="peek" and (1.3+(e.index%3)*.15) or (1+(e.index%3)*.1)
+            if e.cover_phase=="peek" then e.peeks=e.peeks+1 end
+            e.think=0
+        end
+    else e.cover_phase=nil;e.peek_timer=0 end
+    e.duck=e.suppressed or e.cover_phase=="hide"
 end
 function M.cover(ctx,e,query)
     local ai=ctx.ai
