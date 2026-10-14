@@ -21,6 +21,15 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
         images[view]=combined;combined.save(output/(view+'.png'))
     validate_maps(images,atlas_layout(stats['material_quality']))
     metrics={}
+    for name in ('reflections','glass','local_lights'):
+        enabled=Image.open(output/(name+'.png')).convert('RGB')
+        disabled=Image.open(output/(name+'_disabled.png')).convert('RGB')
+        difference=sum(ImageStat.Stat(ImageChops.difference(enabled,disabled)).mean)/3
+        assert difference>.01,(name,difference);metrics[name]=difference
+    mask=Image.open(output/'reflection_confidence.png').convert('RGB')
+    assert sum(r>20 for r,g,b in mask.getdata())>100
+    assert ImageChops.difference(Image.open(output/'glass.png'),Image.open(output/'glass_return.png')).getbbox() is None
+
     for name in ('weathering_facade','micro_detail','parallax_tile'):
         enabled=Image.open(output/(name+'.png')).convert('RGB')
         disabled=Image.open(output/(name+'_disabled.png')).convert('RGB')

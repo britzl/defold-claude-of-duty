@@ -3,7 +3,13 @@ local mesh=require "game.world.mesh"
 local visible=require "game.world.visible_faces"
 local M={roughness={.08,.25,.5,.75,1},
     extra_materials={"concrete_floor","brick","tile","dirt","gravel","metal_painted","metal_rust","rubber","glass"},
-    batch_count=28}
+    batch_count=31}
+M.lights={
+    {id="lab/key",kind="room",x=40.5,y=2.7,z=-.5,radius=8,intensity=24,
+        minimum={x=37,y=0,z=-6},maximum={x=47,y=4,z=6}},
+    {id="lab/fill",kind="room",x=52,y=2.7,z=-1,radius=9,intensity=42,colour={1,.75,.5},
+        minimum={x=49,y=0,z=-6},maximum={x=59,y=4,z=6}}
+}
 local function sphere_vertex(batch,centre,radius,lat,lon)
     local n={math.sin(lat)*math.cos(lon),math.cos(lat),math.sin(lat)*math.sin(lon)}
     for axis=1,3 do
@@ -66,6 +72,19 @@ function M.batches()
     box("concrete_floor",160,-.1,0,14,.2,14)
     box("wood",160,1,0,1,2,1)
     box("metal",163,1,-2,.12,2,.12)
+    box("concrete_floor",42,-.1,0,10,.2,12)
+    box("plaster_cream",42,1.5,-4.5,10,3,.2)
+    box("wood",42,.6,-2,1.2,1.2,1.2)
+    box("concrete_floor",54,-.1,0,10,.2,12)
+    box("plaster_cream",54,1.5,-4.5,10,3,.2)
+    box("wood",54,.6,-1.5,1.2,1.2,1.2)
+    local mirror=mesh.new("reflection_floor","metal",0,0)
+    mirror.surface={3,1,.12,1}
+    -- Participate in the same visibility cuts and edge stitching as the box.
+    -- A separate intersecting plate caused subpixel depth ties in reflections.
+    local plate={material="metal",x=42,y=.01,z=0,w=7,h=.02,d=8,batch=mirror}
+    boxes[#boxes+1]=plate;bounds[#bounds+1]=visible.bounds(plate)
+    list[#list+1]=mirror
     -- Match production clipping/tessellation at table feet and wall/floor joints.
     -- Subpixel camera jitter exposes otherwise hidden T-junctions here.
     local faces,edges={},{}
@@ -73,12 +92,13 @@ function M.batches()
         faces[i]=visible.for_box(i,bounds)
         visible.register_edges(edges,bounds[i],faces[i])
     end
-    for i,shape in ipairs(boxes) do mesh.box(by_material[shape.material],shape,1,faces[i],edges) end
+    for i,shape in ipairs(boxes) do mesh.box(shape.batch or by_material[shape.material],shape,1,faces[i],edges) end
     -- Perforated overhead panel: colour and shadow must show identical holes.
     local cutout=mesh.new("cutout","metal",0,0)
     mesh.box(cutout,{material="metal",x=2,y=2.2,z=3,w=2.4,h=.02,d=1.8},1)
     for i=4,#cutout.colors,4 do cutout.colors[i]=.45 end
     list[#list+1]=cutout
+    for _,pane in ipairs(require("game.render.glass").laboratory()) do list[#list+1]=pane end
     return list
 end
 function M.create()

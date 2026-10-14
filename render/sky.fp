@@ -5,5 +5,6 @@ uniform highp vec4 eye_position;
 #include "/render/sky.glsl"
 void main() {
     vec4 p = inverse_view_proj * vec4(var_uv * 2.0 - 1.0, 1.0, 1.0);
-    gl_FragColor = vec4(encode_radiance(sky_radiance(p.xyz / p.w - eye_position.xyz)), 1.0);
+    gl_FragData[0] = vec4(encode_radiance(sky_radiance(p.xyz / p.w - eye_position.xyz)), 1.0);
+    gl_FragData[1]=vec4(0);gl_FragData[2]=vec4(0);
 }

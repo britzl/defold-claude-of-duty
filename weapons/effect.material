@@ -1,7 +1,7 @@
 name: "effect"
 tags: "model"
 vertex_program: "/weapons/weapon.vp"
-fragment_program: "/weapons/weapon.fp"
+fragment_program: "/weapons/effect.fp"
 vertex_space: VERTEX_SPACE_LOCAL
 vertex_constants { name: "world_view_proj" type: CONSTANT_TYPE_WORLDVIEWPROJ }
 vertex_constants { name: "world" type: CONSTANT_TYPE_WORLD }
@@ -23,3 +23,8 @@ fragment_constants { name: "environment_layout" type: CONSTANT_TYPE_USER value {
 fragment_constants { name: "lighting_features" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
 fragment_constants { name: "daylight_data" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
 fragment_constants { name: "volume_data" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+samplers { name: "local_shadow_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+fragment_constants { name: "local_shadow_params" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "flash_positions" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "flash_colours" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "light_shadow_slots" type: CONSTANT_TYPE_USER value { x: -1 y: 0 z: -1 w: 0 } }

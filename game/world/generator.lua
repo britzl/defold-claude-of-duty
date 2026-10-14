@@ -166,6 +166,11 @@ function M.step(world, max_jobs, deadline, now)
         else
             world.batch_lookup,world.decoration_rng,world.shape_bounds=nil,nil,nil
             world.shape_faces,world.edge_points=nil,nil
+            for _,batch in ipairs(require("game.render.glass").world(world.layout)) do
+                world.batches[#world.batches+1]=batch
+                world.stats.vertices=world.stats.vertices+batch.vertex_count
+            end
+            world.stats.batches=#world.batches;world.stats.mesh_bytes=world.stats.vertices*18*4
             world.phase="meshes"
             break
         end

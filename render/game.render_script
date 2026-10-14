@@ -5,16 +5,24 @@ local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
 local shadows=require "game.render.shadows"
 local temporal=require "game.render.temporal"
+local local_lights=require "game.render.local_lights"
 local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local MOTION,EXPECTED=G.BUFFER_TYPE_COLOR1_BIT,G.BUFFER_TYPE_COLOR2_BIT
 local WORLD_CAMERA="main:/camera#camera"
 local WEAPON_CAMERA="main:/viewmodel#camera"
-local function colour_target(w,h,depth,nearest,cube,format)
+local function colour_target(w,h,depth,nearest,cube,format,surface_data)
     local params={ [COLOR]={format=format or G.TEXTURE_FORMAT_RGBA,width=w,height=h,
         min_filter=nearest and G.TEXTURE_FILTER_NEAREST or G.TEXTURE_FILTER_LINEAR,
         mag_filter=nearest and G.TEXTURE_FILTER_NEAREST or G.TEXTURE_FILTER_LINEAR,
         u_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE,v_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE} }
+    if surface_data then
+        for _,attachment in ipairs({MOTION,EXPECTED}) do
+            params[attachment]={format=G.TEXTURE_FORMAT_RGBA,width=w,height=h,
+                min_filter=G.TEXTURE_FILTER_NEAREST,mag_filter=G.TEXTURE_FILTER_NEAREST,
+                u_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE,v_wrap=G.TEXTURE_WRAP_CLAMP_TO_EDGE}
+        end
+    end
     if depth then params[DEPTH]={format=G.TEXTURE_FORMAT_DEPTH,width=w,height=h} end
     if cube then params.type=G.TEXTURE_TYPE_CUBE_MAP end
     return render.render_target(params)
@@ -41,11 +49,11 @@ local function resize(self)
         self.width,self.height=d.width,d.height
         self.bloom_width,self.bloom_height=d.bloom_width,d.bloom_height
         self.occlusion_width,self.occlusion_height=d.occlusion_width,d.occlusion_height
-        for _,name in ipairs({"scene","weapon","bloom_a","bloom_b","history_a","history_b","weapon_aa"}) do
+        for _,name in ipairs({"scene","weapon","bloom_a","bloom_b","history_a","history_b","weapon_aa","reflected","glass","glass_scene"}) do
             local small=name=="bloom_a" or name=="bloom_b"
             local w,h=small and d.bloom_width or d.width,small and d.bloom_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
-            else self.targets[name]=colour_target(w,h,name=="scene" or name=="weapon",false,false,self.radiance_format) end
+            else self.targets[name]=colour_target(w,h,name=="scene" or name=="weapon",false,false,self.radiance_format,name=="scene") end
         end
         for _,name in ipairs({"depth_normal","depth_previous","occlusion_raw","occlusion"}) do
             local half=name=="occlusion_raw"
@@ -163,7 +171,7 @@ local function report(self)
         shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
         shadow_draw_passes=self.shadow_draw_passes or 0,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
-        target_count=self.targets.scratch_a and 19 or 16,
+        target_count=self.targets.scratch_a and 23 or 20,
         occlusion_width=self.occlusion_width,occlusion_height=self.occlusion_height,
         prepass_draw_passes=self.prepass_draw_passes or 0,occlusion_draw_passes=self.occlusion_draw_passes or 0,
         occlusion_radius=.85,contact_length=.4,occlusion_slices=4,occlusion_steps=6,contact_steps=12,
@@ -177,6 +185,11 @@ local function report(self)
         temporal_samples=temporal.samples,temporal_draw_passes=self.temporal_draw_passes or 0,
         weapon_aa_draw_passes=self.weapon_aa_draw_passes or 0,
         motion_format="rgba8_signed_uv16",history_depth_rejection=true,
+        muzzle_light_count=self.muzzle_light_count or 0,muzzle_light_frames=self.muzzle_light_frames or 0,
+        reflection_draw_passes=self.reflection_draw_passes or 0,reflection_steps=48,
+        local_shadow_lights=local_lights.shadow_count,local_shadow_size=local_lights.shadow_size,
+        local_shadow_draw_passes=self.local_shadow_draw_passes or 0,
+        glass_draw_passes=self.glass_draw_passes or 0,
         settings=self.options,pipeline=self.pipeline })
 end
 function init(self)
@@ -189,6 +202,8 @@ function init(self)
     self.soldier_shadow=render.predicate({"soldier_shadow"})
     self.soldier_prepass=render.predicate({"soldier_prepass"})
     self.rigid_prepass=render.predicate({"rigid_prepass"})
+    self.glass=render.predicate({"glass"})
+    self.glass_lab=render.predicate({"capture_glass"})
     self.weapon=render.predicate({"viewmodel"})
     self.quad=render.predicate({"fullscreen"})
     self.gui=render.predicate({"gui"})
@@ -214,15 +229,24 @@ function init(self)
     self.motion_constants=render.constant_buffer()
     self.temporal_constants=render.constant_buffer()
     self.aa_constants=render.constant_buffer()
-    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants,self.temporal_constants,self.aa_constants}) do
+    self.reflection_constants=render.constant_buffer()
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants,self.temporal_constants,self.aa_constants,self.reflection_constants}) do
         constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
     end
     for _,name in ipairs({"light_positions","light_colours","light_minimums","light_maximums"}) do
         self.lighting[name]={vmath.vector4(),vmath.vector4(),vmath.vector4(),vmath.vector4()}
     end
-    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants}) do
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.reflection_constants}) do
         for name,value in pairs(daylight.constants(vmath.vector4)) do constants[name]=value end
     end
+    self.lighting.flash_positions={vmath.vector4(),vmath.vector4()}
+    self.lighting.flash_colours={vmath.vector4(),vmath.vector4()}
+    self.flash_positions,self.flash_colours={},{}
+    self.local_shadow_positions={vmath.vector4(),vmath.vector4()}
+    self.lighting.light_shadow_slots=vmath.vector4(-1,0,-1,0)
+    self.local_shadow_constants={}
+    for i=1,12 do self.local_shadow_constants[i]=render.constant_buffer() end
+    self.targets.local_shadow=colour_target(local_lights.shadow_width,local_lights.shadow_height,true,true)
     self.lighting.volume_data={}
     for i=1,daylight.max_volumes*5 do self.lighting.volume_data[i]=vmath.vector4() end
     self.cascade_constants={}
@@ -243,7 +267,7 @@ function init(self)
         end
     end)
 end
-function update(self)
+function update(self,dt)
     if not resize(self) then return end
     self.frames=self.frames+1
     -- Previous frame's queued bake draws have now consumed these resources.
@@ -286,6 +310,14 @@ function update(self)
         self.lighting.lighting_features=vmath.vector4(o.interior_lighting and not self.capture.laboratory and 1 or 0,
             o.environment_filter and 1 or 0,self.volume_count,0)
         self.lighting.lighting_transform=self.identity
+        self.lighting.local_shadow_params=vmath.vector4(o.local_shadows and o.local_lights and 1 or 0,local_lights.shadow_size,0,0)
+        self.muzzle_light_count=0
+        for i=1,2 do
+            if o.muzzle_lights and o.local_lights and not self.capture.active and self.flash_positions[i] and self.flash_positions[i].w>0 then self.muzzle_light_count=self.muzzle_light_count+1 end
+            self.lighting.flash_positions[i]=o.muzzle_lights and not self.capture.active and self.flash_positions[i] or vmath.vector4()
+            self.lighting.flash_colours[i]=o.muzzle_lights and not self.capture.active and self.flash_colours[i] or vmath.vector4()
+        end
+        if self.muzzle_light_count>0 then self.muzzle_light_frames=(self.muzzle_light_frames or 0)+1 end
         self.sky_constants.eye_position=eye
         self.sky_constants.inverse_view_proj=vmath.inv(projection*view)
 
@@ -324,10 +356,40 @@ function update(self)
             self.shadow_frames=self.shadow_frames+1
         end
 
+        render.set_render_target(t.local_shadow)
+        render.set_viewport(0,0,local_lights.shadow_width,local_lights.shadow_height)
+        render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+        self.local_shadow_draw_passes=0
+        if o.local_lights and o.local_shadows then
+            render.set_view(self.identity)
+            for light=1,local_lights.shadow_count do
+                local position=self.local_shadow_positions[light]
+                if position.w>0 then
+                    for face,matrix in ipairs(local_lights.faces(position)) do
+                        local tile=(light-1)*6+face
+                        local c=self.local_shadow_constants[tile]
+                        c.sun_matrix=matrix;c.local_shadow_position=position
+                        render.set_viewport((face-1)%3*local_lights.shadow_size,
+                            (math.floor((face-1)/3)+(light-1)*2)*local_lights.shadow_size,local_lights.shadow_size,local_lights.shadow_size)
+                        render.set_projection(matrix)
+                        render.enable_material("local_shadow")
+                        render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,{constants=c,frustum=matrix})
+                        self.local_shadow_draw_passes=self.local_shadow_draw_passes+1
+                        if not self.capture.active then
+                            render.enable_material("local_shadow_skinned")
+                            render.draw(self.soldier_shadow,{constants=c,frustum=matrix})
+                            self.local_shadow_draw_passes=self.local_shadow_draw_passes+1
+                        end
+                    end
+                end
+            end
+            render.disable_material()
+        end
+
         -- World geometry only; identical skinning and cutouts to colour/shadows.
         -- This data target is deliberately portable RGBA8, independent of HDR.
         local screen_debug=settings.views[o.view]>=10
-        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug or taa
+        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug or taa or o.reflections or o.glass
         self.prepass_draw_passes,self.occlusion_draw_passes=0,0
         render.set_render_target(t.depth_normal)
         render.set_viewport(0,0,self.width,self.height)
@@ -379,6 +441,7 @@ function update(self)
         fullscreen(self,"sky",self.sky_constants)
         bind("occlusion_texture",t.occlusion)
         bind("shadow_texture",t.shadow)
+        bind("local_shadow_texture",t.local_shadow)
         bind("environment_texture",t.environment)
         bind("albedo_texture",t.albedo)
         bind("normal_texture",t.normal)
@@ -392,12 +455,33 @@ function update(self)
         if not self.capture.active then render.draw_debug3d() end
 
         render.disable_texture("occlusion_texture")
+        -- Current opaque radiance and material data are immutable inputs. No
+        -- reflection history/recursive feedback; world TAA follows this resolve.
+        local opaque_scene=t.scene
+        self.reflection_draw_passes=0
+        if (o.reflections and (o.view=="scene" or o.view=="motion" or o.view=="history")) or o.view=="reflections" then
+            render.set_render_target(t.reflected)
+            local c=self.reflection_constants
+            c.reflection_view=view;c.reflection_inverse_view=inverse_view
+            c.screen_projection=vmath.vector4(projection.m00,projection.m11,projection.m02,projection.m12)
+            c.reflection_params=vmath.vector4(1/self.width,1/self.height,o.view=="reflections" and 1 or 0,o.environment_filter and 1 or 0)
+            bind("source_texture",t.scene);bind("depth_normal_texture",t.depth_normal)
+            render.enable_texture("reflection_surface_texture",t.scene,MOTION)
+            render.enable_texture("reflection_weight_texture",t.scene,EXPECTED)
+            fullscreen(self,"reflections",c)
+            for _,name in ipairs({"source_texture","depth_normal_texture","reflection_surface_texture","reflection_weight_texture"}) do render.disable_texture(name) end
+            opaque_scene=t.reflected;self.reflection_draw_passes=1
+        end
         render.set_render_target(t.weapon)
+        render.set_depth_mask(true)
         render.clear({[COLOR]=vmath.vector4(0,0,0,0),[DEPTH]=1})
+        render.enable_state(G.STATE_DEPTH_TEST)
+        render.enable_state(G.STATE_CULL_FACE)
+        render.set_depth_mask(true)
         render.set_camera(WEAPON_CAMERA,{use_frustum=true})
         self.lighting.lighting_transform=inverse_view
         render.draw(self.weapon,{constants=self.lighting})
-        for _,name in ipairs({"shadow_texture","environment_texture","albedo_texture","normal_texture","material_texture"}) do
+        for _,name in ipairs({"shadow_texture","local_shadow_texture","environment_texture","albedo_texture","normal_texture","material_texture"}) do
             render.disable_texture(name)
         end
 
@@ -414,7 +498,7 @@ function update(self)
             fullscreen(self,"hdr_probe",self.probe_constants)
         end
 
-        local resolved_scene,resolved_weapon=t.scene,t.weapon
+        local resolved_scene,resolved_weapon=o.view=="hdr_probe" and t.scene or opaque_scene,t.weapon
         self.temporal_draw_passes,self.weapon_aa_draw_passes=0,0
         if taa then
             if advance then
@@ -426,7 +510,7 @@ function update(self)
                 local old_rotation=vmath.matrix4(previous_view)
                 old_rotation.m03,old_rotation.m13,old_rotation.m23=0,0,0
                 c.sky_reprojection=previous_projection*old_rotation*rotation*vmath.inv(projection)
-                bind("source_texture",t.scene)
+                bind("source_texture",opaque_scene)
                 bind("history_texture",t.history_b)
                 bind("depth_normal_texture",t.depth_normal)
                 bind("previous_depth_texture",t.depth_previous)
@@ -466,6 +550,28 @@ function update(self)
             resolved_weapon=t.weapon_aa
             self.weapon_aa_draw_passes=1
         end
+        self.glass_draw_passes=0
+        if o.glass and (o.view=="scene" or o.view=="glass") then
+            render.set_render_target(t.glass)
+            render.set_viewport(0,0,self.width,self.height)
+            render.clear({[COLOR]=vmath.vector4()})
+            render.set_camera();render.set_view(view);render.set_projection(unjittered)
+            render.set_depth_mask(false);render.disable_state(G.STATE_DEPTH_TEST);render.disable_state(G.STATE_CULL_FACE)
+            render.enable_state(G.STATE_BLEND)
+            render.set_blend_func(G.BLEND_FACTOR_ONE,G.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+            self.lighting.lighting_transform=self.identity
+            self.lighting.glass_screen=vmath.vector4(1/self.width,1/self.height,jx/self.width,jy/self.height)
+            bind("depth_normal_texture",t.depth_normal)
+            for _,name in ipairs({"shadow","local_shadow","environment","albedo","normal","material"}) do bind(name.."_texture",t[name]) end
+            render.draw(self.capture.laboratory and self.glass_lab or self.glass,{constants=self.lighting,frustum=unjittered*view,sort_order=render.SORT_BACK_TO_FRONT})
+            for _,name in ipairs({"depth_normal_texture","shadow_texture","local_shadow_texture","environment_texture","albedo_texture","normal_texture","material_texture"}) do render.disable_texture(name) end
+            render.set_render_target(t.glass_scene)
+            bind("source_texture",resolved_scene);bind("glass_texture",t.glass)
+            fullscreen(self,"glass_composite",self.aa_constants)
+            render.disable_texture("source_texture");render.disable_texture("glass_texture")
+            resolved_scene=o.view=="glass" and t.glass or t.glass_scene
+            self.glass_draw_passes=2
+        end
         render.set_render_target(t.bloom_a)
         render.set_viewport(0,0,self.bloom_width,self.bloom_height)
         if o.bloom then
@@ -493,7 +599,7 @@ function update(self)
         bind("weapon_texture",resolved_weapon)
         bind("bloom_texture",t.bloom_b)
         bind("environment_texture",t.environment)
-        bind("debug_texture",({albedo=t.albedo,normals=t.normal,material=t.material,shadow=t.shadow,depth=t.depth_normal,geometry_normals=t.depth_normal,ao=t.occlusion,contact=t.occlusion,occlusion_raw=t.occlusion_raw})[o.view] or t.albedo)
+        bind("debug_texture",({albedo=t.albedo,normals=t.normal,material=t.material,shadow=t.shadow,local_shadow=t.local_shadow,depth=t.depth_normal,geometry_normals=t.depth_normal,ao=t.occlusion,contact=t.occlusion,occlusion_raw=t.occlusion_raw})[o.view] or t.albedo)
         fullscreen(self,nil,self.post_constants)
         for _,name in ipairs({"scene_texture","weapon_texture","bloom_texture","environment_texture","debug_texture"}) do
             render.disable_texture(name)
@@ -544,7 +650,11 @@ function on_message(self,id,message)
             end
         end
         self.report=true
+    elseif id==hash("renderer_flashes") then
+        self.flash_positions,self.flash_colours=message.positions,message.colours
     elseif id==hash("renderer_lights") then
+        self.local_shadow_positions=message.shadow_positions or {vmath.vector4(),vmath.vector4()}
+        self.lighting.light_shadow_slots=message.shadow_slots or vmath.vector4(-1,0,-1,0)
         self.light_count=math.min(#message.lights,settings.max_lights)
         for i=1,settings.max_lights do
             local light=message.lights[i]
@@ -553,7 +663,6 @@ function on_message(self,id,message)
             self.lighting.light_minimums[i]=light and light.minimum or vmath.vector4()
             self.lighting.light_maximums[i]=light and light.maximum or vmath.vector4()
         end
-        self.report=true
     end
 end
 function final(self)

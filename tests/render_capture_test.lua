@@ -24,7 +24,7 @@ test("laboratory normals, winding, bounds and roughness range are valid",functio
             assert(math.abs(n[i]^2+n[i+1]^2+n[i+2]^2-1)<1e-6)
             for a=0,2 do assert(b.positions[i+a]>=b.bounds[a+1]-1e-6 and b.positions[i+a]<=b.bounds[a+4]+1e-6) end
         end
-        if b.surface then
+        if b.key:match("^sphere/") then
             spheres=spheres+1
             assert(b.surface[3]>=.08 and b.surface[3]<=1)
             for i=1,#b.positions,9 do
@@ -36,6 +36,17 @@ test("laboratory normals, winding, bounds and roughness range are valid",functio
         end
     end
     assert(spheres==10 and #batches==lab.batch_count)
+    local contacts=0
+    for _,b in ipairs(batches) do if b.key=="wood" then
+        for i=1,#b.positions,3 do
+            local p,n=b.positions,b.normals
+            if p[i]>41 and p[i]<43 and p[i+2]>-3 and p[i+2]<-1 and math.abs(n[i+1])<.1 then
+                assert(p[i+1]>=.01999,"Reflection fixture sides must be clipped to the plate top")
+                contacts=contacts+1
+            end
+        end
+    end end
+    assert(contacts>0)
 end)
 test("capture weapon poses ignore live movement, clock and recoil",function()
     local pose=require "game.weapons.viewmodel"

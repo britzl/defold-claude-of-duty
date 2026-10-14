@@ -50,6 +50,15 @@ function M.new()
         {name="shadow_cutout",id="temporal_camera_motion",changes={view="motion"},play=true},
         {name="street",id="temporal_live_cost",live=true},
     }) do steps[#steps+1]=step end
+    for _,step in ipairs({
+        {name="reflections",id="reflections_disabled",changes={reflections=false}},
+        {name="reflections",id="reflection_confidence",changes={view="reflections"}},
+        {name="glass",id="glass_disabled",changes={glass=false}},
+        {name="local_lights",id="local_lights_disabled",changes={local_shadows=false}},
+        {name="local_lights",id="local_shadow_atlas",changes={view="local_shadow"}},
+        {name="glass",id="glass_return"},
+        {name="street",id="step9_disabled_cost",live=true,changes={reflections=false,glass=false,local_shadows=false,muzzle_lights=false}},
+    }) do steps[#steps+1]=step end
     steps[#steps+1]={name="street",id="street_return"}
     return {steps=steps,index=0,frames=0,intervals={}}
 end
@@ -68,7 +77,7 @@ function M.update(test,self,dt)
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==16)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==20)
             assert(stats.surface_count==15 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,

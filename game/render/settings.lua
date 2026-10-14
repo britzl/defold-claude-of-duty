@@ -2,9 +2,10 @@
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
 local shadows=require "game.render.shadows"
+local local_lights=require "game.render.local_lights"
 local M = { atlas_tile = atlas.scratch_size, surface_count = #atlas.surfaces, environment_size = daylight.environment_size,
     shadow_size = shadows.size, radiance_range = 8, max_lights = 4 }
-M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7, cascades = 8, shadow_visibility = 9, depth = 10, geometry_normals = 11, ao = 12, contact = 13, occlusion_raw = 14, motion = 15, history = 16 }
+M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7, cascades = 8, shadow_visibility = 9, depth = 10, geometry_normals = 11, ao = 12, contact = 13, occlusion_raw = 14, motion = 15, history = 16, reflections = 17, local_shadow = 18, glass = 19 }
 -- A format constant alone does not prove renderability/filtering/blending.
 -- Enable the measured backend first; qualify WebGL/mobile before expanding it.
 function M.pipeline(adapter, half_float, requested)
@@ -16,7 +17,7 @@ function M.pipeline(adapter, half_float, requested)
         tone_mapper="agx_neutral",output="srgb",exposure_mode="fixed"}
 end
 function M.defaults()
-    return { temporal_aa = true, weapon_aa = true, ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
+    return { reflections = true, glass = true, local_shadows = true, muzzle_lights = true, temporal_aa = true, weapon_aa = true, ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
         interior_lighting = true, environment_filter = true, environment_level = 0,
         bloom = true, weathering = true, micro_detail = true, parallax = true,
         exposure = 1, view = "scene", atlas_half = 0, atlas_page = 0 }
@@ -43,27 +44,7 @@ function M.configure(current, changes)
 end
 -- Prioritize room bounds near the displayed camera, including inspection views.
 -- Stable ties retain authored order and the shader's four-light budget.
-function M.select_lights(lights,camera)
-    local candidates={}
-    for i,light in ipairs(lights) do
-        if light.kind ~= "sun" then
-            local lo,hi=light.minimum,light.maximum
-            local distance=0
-            for _,axis in ipairs({"x","y","z"}) do
-                local d=math.max(lo[axis]-camera[axis],0,camera[axis]-hi[axis])
-                distance=distance+d*d
-            end
-            candidates[#candidates+1]={light=light,distance=distance,index=i}
-        end
-    end
-    table.sort(candidates,function(a,b)
-        if a.distance == b.distance then return a.index<b.index end
-        return a.distance<b.distance
-    end)
-    local selected={}
-    for i=1,math.min(M.max_lights,#candidates) do selected[i]=candidates[i].light end
-    return selected
-end
+function M.select_lights(lights,camera) return local_lights.rank(lights,camera) end
 function M.dimensions(w,h)
     if w<=0 or h<=0 then return nil end
     return { width=w, height=h, occlusion_width=math.max(1,math.ceil(w/2)), occlusion_height=math.max(1,math.ceil(h/2)), bloom_width=math.max(1,math.floor(w/4)), bloom_height=math.max(1,math.floor(h/4)) }
@@ -73,7 +54,7 @@ function M.target_bytes(w,h,hdr,baking)
     if not d then return 0 end
     -- HDR radiance, RGBA8 data maps, conservative 32-bit depth; no driver overhead.
     local colour=hdr and 8 or 4
-    return w*h*((colour+4)*2+36+colour*3) + d.occlusion_width*d.occlusion_height*4 + d.bloom_width*d.bloom_height*colour*2 + shadows.atlas_size^2*8
+    return local_lights.shadow_width*local_lights.shadow_height*8+w*h*((colour+4)*2+44+colour*6) + d.occlusion_width*d.occlusion_height*4 + d.bloom_width*d.bloom_height*colour*2 + shadows.atlas_size^2*8
         + atlas.width*atlas.height*4*3 + (baking and atlas.width*atlas.height*4+2*atlas.scratch_size^2*4 or 0) + daylight.environment_width*daylight.environment_height*colour
 end
 return M

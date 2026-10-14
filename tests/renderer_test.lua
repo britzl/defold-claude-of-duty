@@ -18,7 +18,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==1920*1280*(8*2+36+4*3)+960*640*4+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*6)+960*640*4+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -28,7 +28,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
     assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
     assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
-    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==19833696)
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==30892896)
 end)
 
 test("camera light selection covers both buildings and every floor within four slots",function()
@@ -88,8 +88,8 @@ local matrix_mt={}
 local function value(...) return setmetatable({x=0,y=0,z=0,w=1,m00=1,m11=1,m02=0,m12=0,m22=1,m03=0,m13=0,m23=0,args={...}},matrix_mt) end
 matrix_mt.__add=function() return value() end
 matrix_mt.__mul=function() return value() end
-vmath={matrix4=value,matrix4_orthographic=value,matrix4_look_at=value,normalize=value,
-    vector3=value,vector4=value,inv=value}
+vmath={matrix4=value,matrix4_perspective=value,matrix4_orthographic=value,matrix4_look_at=value,normalize=value,
+    vector3=value,vector4=function(...) local v=value(...);v.w=select(4,...) or 0;return v end,inv=value}
 camera={get_view=value,get_projection=value}
 local w,h=960,640
 local targets,draws,bindings,messages={},{},{},{}
@@ -129,7 +129,7 @@ dofile("render/game.render_script")
 local self={}
 test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
-    assert(#targets==19)
+    assert(#targets==23)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_a","bloom_b"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -157,18 +157,18 @@ test("recipes, padded mip chains and filtered environment finish before the worl
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
-    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","viewmodel","fullscreen","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
+    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","fullscreen","viewmodel","fullscreen","fullscreen","glass","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
     assert(#draws==#expected,#draws.." != "..#expected)
     for i,name in ipairs(expected) do assert(draws[i].predicate==name,i.." "..draws[i].predicate) end
     assert(draws[1].material=="shadow" and draws[2].material=="shadow_skinned")
     assert(draws[9].material=="prepass" and draws[10].predicate=="soldier_prepass"
-        and draws[15].target==self.targets.scene and draws[16].target==self.targets.weapon)
-    assert(draws[21].target=="screen" and draws[21].material==nil)
+        and draws[15].target==self.targets.scene and draws[17].target==self.targets.weapon)
+    assert(draws[24].target=="screen" and draws[24].material==nil)
     assert(next(bindings)==nil)
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==19 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==23 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -189,7 +189,7 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     update(self);assert(self.shadow_frames==before+1 and self.bake_draws==atlas.draw_count)
 end)
 test("occlusion toggles skip work, diagnostics retain depth, and weapon never samples world AO",function()
-    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false})
+    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false})
     draws={};update(self)
     assert(self.prepass_draw_passes==0 and self.occlusion_draw_passes==0)
     for _,draw in ipairs(draws) do assert(draw.material~="prepass" and draw.material~="occlusion") end
@@ -264,7 +264,7 @@ end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)
     while self.bake_step<atlas.job_count do update(self) end
-    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==22)
+    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==26)
     final(self)
     for _,target in ipairs(targets) do assert(target.deleted) end
     assert(next(self.targets)==nil and listener==nil)

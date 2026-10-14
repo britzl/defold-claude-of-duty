@@ -18,6 +18,10 @@ local specs = {
         {key="exposure",label="EXPOSURE",kind="renderer",min=.25,max=4,step=.05},
         {key="view",label="RENDER VIEW",kind="renderer",
             choices={"scene","albedo","normals","material","shadow","environment"}},
+        {key="reflections",label="SCREEN REFLECTIONS",kind="renderer"},
+        {key="glass",label="GLASS",kind="renderer"},
+        {key="local_shadows",label="LOCAL SHADOWS",kind="renderer"},
+        {key="muzzle_lights",label="MUZZLE LIGHTS",kind="renderer"},
         {key="temporal_aa",label="TEMPORAL ANTIALIASING",kind="renderer"},
         {key="weapon_aa",label="WEAPON ANTIALIASING",kind="renderer"},
     },
@@ -85,9 +89,9 @@ local function rebuild(state)
         item.tab=tab
     end
     for i,spec in ipairs(specs[state.tab]) do
-        local y=435-(i-1)*(state.tab=="display" and 36 or 42)
+        local y=435-(i-1)*(state.tab=="display" and 25 or 42)
         local item={id="setting_"..spec.key,spec=spec,y=y,
-            node=box(state,"setting_"..spec.key,480,y,678,36,W.row)}
+            node=box(state,"setting_"..spec.key,480,y,678,state.tab=="display" and 25 or 36,W.row)}
         text(state,nil,157,y,spec.label,.92,W.white,gui.PIVOT_W)
         item.value=text(state,"value_"..spec.key,802,y,"",.9,W.accent,gui.PIVOT_E)
         if spec.min then

@@ -192,8 +192,9 @@ combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
 physical mobile validation is still outstanding. All fifteen planned surface recipes, material mip filtering and world weathering
 are now implemented (steps 3–4 below);
 Unified daylight, filtered environment lighting and interior attenuation are
-implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Temporal stability is implemented in rendering step 8. Local-light
-shadows and the remaining photographic effects remain later stages.
+implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Temporal stability is implemented in rendering step 8. Reflections, transparent
+glass, local-light shadows and muzzle lighting are implemented in rendering step 9.
+Atmosphere and the remaining photographic effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -341,7 +342,7 @@ Step 3 implementation is complete: all fifteen requested surface recipes now
 have GPU-generated linear albedo/height, physical-scale normals and packed
 roughness/metalness/occlusion. Concrete floors, brick, tile, dirt, gravel,
 painted/rusted/brushed metal, fabric, rubber and glass join the first four recipes.
-Glass is a recipe preview; its transparent rendering pass remains step 9.
+Glass has an opaque recipe preview and the separate transparent pane path added in step 9.
 The shared microdetail set and low/medium/high launch-time presets preserve stable
 IDs, seeds and physical scale. Every preset includes full isolated mip chains,
 wrapped borders, trilinear/two-tap filtering and normal-variance roughness correction.
@@ -493,8 +494,43 @@ a 61-image sweep retains continuous history. The short street A/B sample is
 468 → 470 draws and 96 → 122.5 µs median render-script CPU, not a GPU budget.
 The WebGL 2 compatibility path passes 97 stages with material, contact and
 temporal pixel checks; diagnostics remain separate from radiance history.
-Step 9, reflections, glass and local lights, is next. Cross-backend/mobile
-qualification and the earlier outstanding reference/HDR gates remain separate.
+Step 9 is implemented below. Cross-backend/mobile qualification and the earlier
+outstanding reference/HDR gates remain separate.
+
+Step 9 implementation is complete: smooth opaque materials trace current-frame
+screen-space reflections with depth refinement and edge/roughness/distance fallback
+to the filtered environment. The resolve replaces the existing indirect specular
+term before world TAA. Separate thin glass panes use procedural smudges, two-sided
+Fresnel reflection, depth rejection, back-to-front sorting and linear premultiplied
+composition after TAA, including on encoded RGBA8. Two generated shop display panes
+and dedicated reflection/glass/local-shadow laboratory captures exercise the paths.
+
+Four persistent room-light slots now use hysteresis and fade-through-zero
+replacement; teleports/captures reset immediately. A separately ranked, fading
+two-light shadow budget renders twelve 256² cube faces into one 768 × 1024 atlas.
+Static/skinned casters share production geometry, coverage and animation. Real
+player/enemy firing events drive at most two unshadowed transient lights; the player
+light follows the displayed muzzle with wall clipping. New settings and diagnostic
+views expose each effect. Atmosphere (step 10) is next.
+
+At 1280 × 720 the new targets add 34.13 MiB on HDR: medium is 207.07 MiB steady /
+230.26 MiB baking, with twenty/twenty-three targets. World geometry adds twelve
+vertices in two pane batches; collision/navigation remain unchanged. SSR cannot
+reflect hidden/offscreen surfaces or transparent panes; glass is thin transmission
+without refractive distortion or solid shadow casting. Other native/mobile targets,
+WebGL floating-point HDR, context recovery and sustained GPU budgets remain separate.
+
+Validation passes 157 Lua checks and native renderer/HDR/temporal/occlusion,
+combat/UI and new reflection/glass/shadow/muzzle-light gates. All 39 supported
+stills match every RGB pixel across three independent launches; a 13-image sweep
+retains continuous temporal history. The WebGL 2 compatibility path passes 107
+stages and pixel checks. The short native street sample rises from 470 to 767 draws
+and 109 to 137 µs median render-script CPU with the new effects enabled. Browser
+GPU windows measure 6.00/10.56 ms disabled/enabled, with concurrent native capture
+work; they are diagnostic samples, not a sustained performance budget. Captures,
+comparisons, provenance and cost scope are in `reflections-verified`,
+`reflections-validation`, `reflections-review-verified` and
+`reflections-browser-verified` under `captures/rendering`.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

@@ -66,6 +66,8 @@ local function restart_encounter(self)
     self.ctx.ai.damage_scale=1
     ai_system.reset(self.ctx)
     self.ctx.fx.hitmarker,self.ctx.fx.damage_flash=0,0
+    self.ctx.fx.flashes={}
+    self.active_lights=nil
     hud_model.reset(self.ctx)
 end
 
@@ -412,28 +414,57 @@ function update(self, dt)
     end
 end
 
-local function update_lights(self,camera)
+local function update_lights(self,camera,dt)
+    local previous=self.light_camera
+    if previous and (camera.x-previous.x)^2+(camera.y-previous.y)^2+(camera.z-previous.z)^2>4 then self.active_lights=nil end
+    self.light_camera={x=camera.x,y=camera.y,z=camera.z}
     if self.active_volumes~=self.ctx.world.lighting_volumes then
         self.active_volumes=self.ctx.world.lighting_volumes
         msg.post("@render:","renderer_volumes",{volumes=self.active_volumes})
     end
-    local lights_source=self.capture and self.capture.shot.laboratory and {} or self.ctx.world.lights
-    local selected=renderer_settings.select_lights(lights_source,camera)
-    local changed=not self.active_lights or #self.active_lights~=#selected
-    for i,light in ipairs(selected) do
-        if not self.active_lights or self.active_lights[i]~=light then changed=true end
+    local lights_source=self.capture and self.capture.shot.laboratory and require("game.render.laboratory").lights or self.ctx.world.lights
+    self.light_selection=require("game.render.local_lights").update(self.light_selection,lights_source,camera,dt,not self.active_lights)
+    local reset=not self.active_lights
+    self.active_lights=true
+    local lights,shadow_candidates={},{}
+    for _,slot in ipairs(self.light_selection.slots) do
+        local light=slot.light
+        if light then
+            shadow_candidates[#shadow_candidates+1]=light
+            local lo,hi=light.minimum,light.maximum
+            local colour,power=light.colour or {1,.76,.48},(light.intensity or 16)*slot.gain
+            lights[#lights+1]={position=vmath.vector4(light.x,light.y,light.z,light.radius),
+                colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,0),
+                minimum=vmath.vector4(lo.x,lo.y,lo.z,0),maximum=vmath.vector4(hi.x,hi.y,hi.z,0)}
+        else
+            lights[#lights+1]={position=vmath.vector4(),colour=vmath.vector4(),minimum=vmath.vector4(),maximum=vmath.vector4()}
+        end
     end
-    if not changed then return end
-    self.active_lights=selected
-    local lights={}
-    for _,light in ipairs(selected) do
-        local lo,hi=light.minimum,light.maximum
-        local colour,power=light.colour or {1,.76,.48},light.intensity or 16
-        lights[#lights+1]={position=vmath.vector4(light.x,light.y,light.z,light.radius),
-            colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,0),
-            minimum=vmath.vector4(lo.x,lo.y,lo.z,0),maximum=vmath.vector4(hi.x,hi.y,hi.z,0)}
+    self.shadow_selection=require("game.render.local_lights").update(self.shadow_selection,shadow_candidates,camera,dt,reset,2)
+    local shadow_positions,shadow_slots={},vmath.vector4(-1,0,-1,0)
+    for i=1,2 do
+        local shadow=self.shadow_selection.slots[i]
+        shadow_positions[i]=vmath.vector4()
+        if shadow and shadow.light then
+            for slot,active in ipairs(self.light_selection.slots) do
+                if active.light==shadow.light then
+                    shadow_positions[i]=lights[slot].position
+                    if i==1 then shadow_slots.x=slot-1;shadow_slots.y=shadow.gain
+                    else shadow_slots.z=slot-1;shadow_slots.w=shadow.gain end
+                end
+            end
+        end
     end
-    msg.post("@render:","renderer_lights",{lights=lights})
+    msg.post("@render:","renderer_lights",{lights=lights,shadow_positions=shadow_positions,shadow_slots=shadow_slots})
+    local positions,colours={},{}
+    for i=1,2 do
+        local flash=not self.capture and self.ctx.fx.flashes[i]
+        local position=flash and (flash.source=="player" and self.player_muzzle or flash.position)
+        positions[i]=position and vmath.vector4(position.x,position.y,position.z,4) or vmath.vector4()
+        local power=flash and 28*math.min(1,flash.life/.025) or 0
+        colours[i]=vmath.vector4(power,power*.58,power*.22,0)
+    end
+    msg.post("@render:","renderer_flashes",{positions=positions,colours=colours})
 end
 
 function late_update(self, dt)
@@ -448,7 +479,6 @@ function late_update(self, dt)
     local view = self.capture and capture_shots.camera(self.capture.shot,self.capture.frame)
         or self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
-    update_lights(self,camera)
     if not self.capture then audio_system.present(self.ctx,dt,camera,view and view.yaw or out.yaw) end
     self.camera_position.x, self.camera_position.y, self.camera_position.z = camera.x, camera.y, camera.z
     go.set_position(self.camera_position, "/camera")
@@ -458,6 +488,17 @@ function late_update(self, dt)
         or not view and self.ctx.world.ready and self.ctx.player.actor.alive
     local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, (self.ctx.paused or self.capture) and 0 or dt,
         visible,self.capture and (self.capture.shot.weapon or "hidden"))
+    local part=weapon_pose.parts.flash.position
+    local r=weapon_pose.rotation
+    local q=vmath.quat_rotation_y(r[2])*vmath.quat_rotation_x(r[1])*vmath.quat_rotation_z(r[3])
+    local origin=weapon_pose.position
+    local local_muzzle=vmath.vector3(origin[1],origin[2],origin[3])+vmath.rotate(q,vmath.vector3(part[1],part[2],part[3]))
+    self.player_muzzle=self.camera_position+vmath.rotate(go.get_rotation("/camera"),local_muzzle)
+    if self.ctx.weapons.flash>0 and not self.capture then
+        local hit=physics.raycast(self.camera_position,self.player_muzzle,{hash("world")})
+        if hit then self.player_muzzle=hit.position+hit.normal*.03 end
+    end
+    update_lights(self,camera,dt)
     go.set("/camera#camera", "fov", view and (view.fov or math.rad(70)) or weapon_pose.world_fov)
     go.set("/viewmodel#camera", "fov", weapon_pose.view_fov)
     local weapon = weapon_system.snapshot(self.ctx)

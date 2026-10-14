@@ -12,6 +12,13 @@ function M.new(mesh_factory, collision_factory)
 end
 
 function M.add_batch(adapter, batch)
+    if batch.glass then
+        local c=batch.centre
+        for i=1,#batch.positions,3 do
+            batch.positions[i]=batch.positions[i]-c.x;batch.positions[i+1]=batch.positions[i+1]-c.y;batch.positions[i+2]=batch.positions[i+2]-c.z
+        end
+        for i,v in ipairs({c.x,c.y,c.z}) do batch.bounds[i]=batch.bounds[i]-v;batch.bounds[i+3]=batch.bounds[i+3]-v end
+    end
     local data = buffer.create(batch.vertex_count, {
         { name = POSITION, type = buffer.VALUE_TYPE_FLOAT32, count = 3 },
         { name = NORMAL, type = buffer.VALUE_TYPE_FLOAT32, count = 3 },
@@ -25,7 +32,8 @@ function M.add_batch(adapter, batch)
     local edges,masks=buffer.get_stream(data,EDGES),buffer.get_stream(data,MASKS)
     for i=1,batch.vertex_count*4 do edges[i]=batch.edges[i];masks[i]=batch.masks[i] end
     buffer.set_metadata(data, "AABB", batch.bounds, buffer.VALUE_TYPE_FLOAT32)
-    local id = factory.create(adapter.mesh_factory)
+    local factory_url=batch.glass and (adapter.mesh_factory=="#capture_mesh" and "#capture_glass" or "#glass_mesh") or adapter.mesh_factory
+    local id = factory.create(factory_url,batch.glass and vmath.vector3(batch.centre.x,batch.centre.y,batch.centre.z) or nil)
     adapter.objects[#adapter.objects + 1] = id
     local path = resource.create_buffer("/generated/world_" .. hash_to_hex(id) .. ".bufferc", { buffer = data })
     adapter.buffers[#adapter.buffers + 1] = path
@@ -36,7 +44,7 @@ function M.add_batch(adapter, batch)
     local s=assert(atlas.surfaces[surface[1]+1])
     go.set(url,"surface_info",vmath.vector4(s.metres,s.size,s.relief,s.last_level))
     local weather=materials[batch.material].weather or 1
-    go.set(url,"surface_effects",vmath.vector4(s.parallax,s.detail,weather,0))
+    if not batch.glass then go.set(url,"surface_effects",vmath.vector4(s.parallax,s.detail,weather,0)) end
     batch.object, batch.resource = id, path
     -- The resource owns the buffer now. Keep only bounds/stats in Lua.
     batch.positions, batch.normals, batch.colors, batch.edges, batch.masks = nil, nil, nil, nil, nil

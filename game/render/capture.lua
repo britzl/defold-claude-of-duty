@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 8, width = 1280, height = 720, settle_frames = 40,
+local M = { version = 9, width = 1280, height = 720, settle_frames = 40,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -45,6 +45,12 @@ shots[#shots+1]={id="contact_furniture",position={7.5,1.7,5.3},target={4.8,.4,2.
     laboratory=true,reference=false,purpose="Table legs, near-ground contacts and silhouette rejection."}
 shots[#shots+1]={id="contact_corner",position={-4.1,1.8,.2},target={-6.7,.5,-3.6},fov=65,
     laboratory=true,reference=false,purpose="Stacked boxes and floor/wall contact without black halos."}
+shots[#shots+1]={id="reflections",position={42,1.35,5.5},target={42,.4,-2},fov=65,
+    laboratory=true,reference=false,purpose="Smooth metal reflects the visible box, with edge fade and roughness fallback."}
+shots[#shots+1]={id="glass",position={43.5,1.8,5.5},target={42,1.2,-2},fov=55,
+    laboratory=true,reference=false,purpose="Two overlapping thin panes, opaque occlusion and sorted linear transparency."}
+shots[#shots+1]={id="local_lights",position={56,3,4},target={54,.3,-1.5},fov=65,
+    laboratory=true,reference=false,purpose="Two bounded point-light shadow cubemaps and occluder contact."}
 local extra=require("game.render.laboratory").extra_materials
 for i,name in ipairs(extra) do
     local x=8.4+i*2.4

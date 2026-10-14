@@ -43,6 +43,7 @@ lua tests/suppression_test.lua
 lua tests/renderer_test.lua
 lua tests/shadows_test.lua
 lua tests/temporal_test.lua
+lua tests/local_lights_test.lua
 lua tests/surface_atlas_test.lua
 lua tests/visible_faces_test.lua
 lua tests/weathering_test.lua
@@ -664,7 +665,7 @@ for every supported shot, recording `repeatability.json` and separate per-launch
 manifests. The overlapping wall/slab and trim surfaces have been repaired and
 buried faces clipped. Shared trim/slab edges also use matching endpoints to
 prevent one-pixel depth ties at grazing angles. No pixels are masked or tolerated.
-Catalogue version 7 expands the repeatability gate to 36 supported shots and retains the 0.1–500 m world clip
+Catalogue version 9 expands the repeatability gate to 39 supported shots and retains the 0.1–500 m world clip
 range; the 0.1 m near plane improves depth precision while remaining inside the
 player's wall clearance. The separate weapon clip range is unchanged.
 
@@ -677,8 +678,10 @@ The generated laboratory has fifteen surface panels, a floor, a corner with crat
 a table and two sphere rows: rear dielectric, front metal, with roughness
 0.08/0.25/0.5/0.75/1 from left to right. It uses the production world shader and
 shadow pass; uniform sphere parameters isolate lighting from the texture recipes.
-Its 28 meshes are released on exit; the shadow fixtures include a perforated
-panel and a remote floor/occluders 160 m from the street.
+Its 31 meshes are released on exit; the shadow fixtures include a perforated
+panel and a remote floor/occluders 160 m from the street. The reflection fixture
+plate shares visibility clipping and edge stitching with its box and floor,
+avoiding depth ties at the reflected contact.
 
 The optional laboratory, grazing-road, weathered-façade, shadow-distance and
 cutout-shadow sweeps each contain 121 frame-addressed camera samples at 30 FPS. Screenshot transport never advances gameplay or the sweep;
@@ -717,8 +720,10 @@ roughness/metalness/occlusion. Concrete flooring has saw-cut joints and power-fl
 variation instead of wall formwork. Brushed metal, chipped paint and insulating
 rust use separate responses. Fabric has warp/weft, folds and pulled threads;
 rubber has pebble grain, scuffs and mould seams; glass has smears and water spots.
-The glass recipe is an opaque material-lab preview: transparency/refraction and
-sorting remain rendering step 9. Weapon/soldier material expansion remains step 11.
+The glass recipe panel remains an opaque material preview. Step 9 uses that recipe
+on separate transparent panes, including the two shop display cases. Thin panes
+use Fresnel reflection and transmission; refractive distortion is not implemented.
+Weapon/soldier material expansion remains step 11.
 
 | Recipe | Tile width (m) | Height relief (m) |
 | --- | ---: | ---: |
@@ -808,13 +813,13 @@ per-prop occlusion; step 7 supplies screen-space AO/contact detail. The eight-vo
 is checked explicitly and is independent of room-light selection. The laboratory
 ignores world volumes so its overlapping test geometry remains neutral.
 
-Up to four authored point lights remain active. The nearest
-room bounds to the displayed camera select those four lights from the eleven
-interior lights, with stable ties; uploads occur when that selection changes.
-This also follows inspection cameras and retains the shader's four-light budget.
-The room lights have warm radiance, finite attenuation and interior bounds to prevent
-lighting across exterior walls/floors. Props do not occlude these local lights. The soldier
-retains procedural camouflage; weapon vertex colours now carry metalness.
+Up to four authored room lights remain active. Distance to room bounds ranks
+candidates, with hysteresis for incumbents and persistent slots. Replacement lights
+fade through zero energy over 0.18 seconds per phase, without moving a light through
+a wall. Camera teleports and capture entry reset selection immediately. A separate
+selection chooses the two most relevant active lights for shadows, using the same
+hysteresis and fading. Bounds prevent room light from crossing exterior walls/floors.
+The soldier retains procedural camouflage; weapon vertex colours carry metalness.
 
 Rendering step 6 replaces the fixed street shadow map with four 1024² cascades
 in one 2048² RGBA8/depth atlas. Camera-depth splits are 8, 22, 52 and 120 metres;
@@ -841,7 +846,7 @@ reads) for bounded contact-hardening softness. Kernels stay fixed in light space
 there is no screen-noise rotation to shimmer before TAA. Close blockers remain
 sharp, distant blockers soften with a 0.022 sun-radius factor, capped at four
 texels. This is a bounded approximation to the reference PCSS, not exact renderer
-parity. Local-light shadows remain step 9.
+parity. Step 9 adds the separate local-light shadow budget described below.
 
 Rendering step 7 adds a full-resolution world prepass with the same static geometry,
 25-bone skinning and binary cutout coverage as colour/shadows. RGBA8 stores
@@ -906,8 +911,40 @@ stops it. Continuous captures must be used when profiling TAA: held captures
 skip the resolve. `tests/temporal_smoke.py` exercises both paths, motion vectors,
 weapon isolation, exact resets and short A/B CPU/draw costs.
 
-Pass order is four sun cascades → depth/normals → AO/contact → bilateral resolve
-→ sky/world → temporal resolve → separate weapon antialiasing → two quarter-resolution
+Rendering step 9 adds a current-frame screen-space reflection resolve. The opaque
+pass exports shaded world normals/roughness and the existing indirect specular
+weight into two RGBA8 attachments. Smooth surfaces trace at most 48 steps over
+24 metres, with five refinement steps at the first depth crossing. Thickness,
+backface, distance, roughness and screen-edge rejection blend toward the existing
+roughness-filtered environment. The resolve replaces the environment contribution
+with matching BRDF, interior, cavity/AO and fog weights, rather than adding another
+highlight. It runs before world TAA; its input never contains its own output.
+Offscreen/hidden surfaces, transparent panes and multiple reflection bounces cannot
+appear in this screen-space solution. Rough surfaces retain environment lighting.
+
+Two 256² six-face point-shadow maps share one 768 × 1024 RGBA8/depth atlas. A
+single clear/render pass preserves every tile on tile GPUs. Static and skinned
+casters share production cutouts and skinning; packed radial depth and a bounded
+3 × 3 comparison filter provide local occlusion. Every face has its own frustum.
+The remaining room lights and transient muzzle flashes are unshadowed. Each flash
+comes from a real player/enemy firing event, lasts at most 60 ms and shares a
+separate two-light budget. The player's displayed muzzle is transformed into world
+space and clipped against walls. Capture mode suppresses live flashes; restart
+clears them. None of these presentation systems consume gameplay RNG.
+
+Glass uses individual centred, two-sided pane objects, sorted back-to-front by
+Defold. Opaque depth rejects hidden fragments. Procedural smudges/normals, dielectric
+Fresnel reflection, scalar absorption and restrained tinted dust scatter give the
+thin panes a distinct response. They do not cast solid shadows or enter opaque
+SSR/history. After world TAA, glass accumulates premultiplied linear light in its own
+target and composites over the world. The RGBA8 compatibility layer stores linear
+radiance divided by eight so blending never operates on square-root encoded light.
+The separate weapon still composites last. Intersecting glass and refractive
+transmission are outside this thin-pane path.
+
+Pass order is sun cascades → two point-shadow cubes → depth/normals → AO/contact
+→ bilateral resolve → sky/world/material data → reflections → temporal resolve
+→ separate weapon AA → glass accumulation/composition → two quarter-resolution
 bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
 height density along the eye ray. Rendering step 2 enables linear RGBA16F for
 scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
@@ -933,9 +970,9 @@ At the 1280 × 720 capture size, estimated HDR target storage is:
 
 | Preset | Atlas size | Steady / bake peak (MiB) | Bake jobs / draws |
 | --- | --- | ---: | ---: |
-| Low | 1024 × 1368 | 125.41 / 131.26 | 825 / 1245 |
-| Medium | 2048 × 2712 | 172.94 / 196.13 | 921 / 1389 |
-| High | 4096 × 5408 | 362.88 / 455.38 | 1017 / 1533 |
+| Low | 1024 × 1368 | 159.54 / 165.38 | 825 / 1245 |
+| Medium | 2048 × 2712 | 207.07 / 230.26 | 921 / 1389 |
+| High | 4096 × 5408 | 397.01 / 489.51 | 1017 / 1533 |
 
 The environment added 1.61 MiB on HDR (0.80 MiB on the compatibility path)
 in step 5. Step 6 adds 24 MiB for cascaded colour/depth storage on both paths.
@@ -944,16 +981,18 @@ occlusion plus half-resolution raw occlusion. Step 8 adds 42.19 MiB on HDR
 (31.64 MiB on the compatibility path) for motion/previous-depth attachments,
 colour histories and weapon AA. AA toggles skip their resolves/jitter but retain
 allocated targets and the motion attachments used by the prepass.
-Ownership is sixteen steady targets and nineteen
-during baking. World materials gain one sampler. Four static and
+Step 9 adds 34.13 MiB on HDR (23.58 MiB on encoded RGBA8): two material
+attachments, three colour targets and the point-shadow atlas. The new toggles
+skip their draws while retaining allocations. Ownership is twenty steady targets
+and twenty-three during baking. World materials gain a local-shadow sampler. Four static and
 four skinned shadow submissions replace the previous one of each, with per-cascade
 frustum culling; frozen captures omit the skinned submissions. These material
 presets currently share the same shadow resolution; mobile budgets remain open.
 The previous six-recipe implementation used 102.49 / 134.60 MiB at this size.
 These are allocation estimates including conservative 32-bit depth, excluding
 meshes and driver overhead; they are not measured process peaks. The world now
-uses 86 material/chunk batches, 36,552 vertices, 2.51 MiB of mesh streams and the
-same 190 colliders. Resize affects eleven screen-sized targets; zero-sized
+uses 88 opaque/glass batches, 36,564 vertices, 2.51 MiB of mesh streams and the
+same 190 colliders. Resize affects fourteen screen-sized targets; zero-sized
 windows skip drawing and finalization releases owned targets.
 
 `renderer.snapshot` reports cascade splits, world texel sizes, atlas dimensions and
@@ -962,11 +1001,15 @@ jobs/draws, current/peak target bytes, local-light count,
 shadow frames, environment dimensions/levels/sample count, volume count and active settings.
 It also reports prepass/effect submissions, occlusion dimensions, sample counts,
 metre-space radius/ray length and the depth/normal format. `renderer.configure` accepts booleans
+`reflections`, `glass`, `local_shadows`, `muzzle_lights`,
 `temporal_aa`, `weapon_aa`, `ambient_occlusion`, `contact_shadows`, `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
 `micro_detail`, `parallax`, `interior_lighting`, `environment_filter`; numeric `exposure` in
 0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
 `environment`, `environment_atlas`, `cascades`, `shadow_visibility`, `hdr_probe`,
-`depth`, `geometry_normals`, `ao`, `contact`, `occlusion_raw`, `motion` or `history`.
+`depth`, `geometry_normals`, `ao`, `contact`, `occlusion_raw`, `motion`, `history`, `reflections`, `local_shadow` or `glass`.
+`reflections` shows accepted ray confidence, `local_shadow` shows all twelve point-shadow
+faces and `glass` shows the raw transparent layer. Snapshots report these pass
+counts, the ray/shadow budgets and current/cumulative muzzle-light frames.
 `depth` shows logarithmic camera depth (white sky); `geometry_normals` shows
 view-space geometry normals (black sky). `ao`/`contact` show resolved visibility;
 `occlusion_raw` shows unfiltered AO in red and contact in green.
@@ -995,6 +1038,7 @@ grazing-road and façade sweeps. Repeated-launch comparisons use every RGB pixel
 PYTHONPATH=automation-bridge-python python3 tests/materials_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weathering_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/lighting_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/reflections_smoke.py
 # After a current native editor build; launches its own low/high engines:
 PYTHONPATH=automation-bridge-python python3 tests/material_presets_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/render_baseline.py --launches 3 --motion --profile
@@ -1132,6 +1176,29 @@ HDR remain the earlier open gates.
 - `captures/rendering/temporal-validation`: motion/history diagnostics, returns, independent-AA checks, continuous sweep and live-resolve A/B costs.
 - `captures/rendering/temporal-review`: labelled comparisons, cutout motion movie and `costs.json` with measurement scope.
 - `captures/rendering/temporal-browser`: WebGL compatibility captures, pixel checks, GPU samples and local-build provenance.
+
+Step 9 passes 157 Lua checks and the native renderer, HDR, temporal, occlusion,
+combat, UI and reflection suites. The new checks cover reflection hits and edge
+fallback, glass transmission, local-shadow toggles, exact feature restoration,
+continuous camera history and real muzzle-light events/expiry. All 39 supported
+stills match every RGB pixel across three fresh engine launches. The reflection
+fixture shares clipped/stitched box edges with its floor to avoid depth ties.
+The WebGL 2 encoded compatibility path passes 107 stages and the material,
+shadow/contact, temporal and new feature pixel checks.
+
+With live TAA at 1280 × 720, a short native Metal street sample increases from
+470 to 767 draws when all four new effects are enabled; median render-script CPU
+is 109/137 µs disabled/enabled. Separate 350 ms browser GPU windows at 1024²
+on Chromium / ANGLE Metal / Apple M3 Pro measure 6.00/10.56 ms respectively
+(33 samples each). The browser validation overlapped the native capture run;
+these timings are diagnostic samples, not isolated or sustained-combat budgets.
+Mobile, other native backends, WebGL floating-point HDR and context recovery
+remain unqualified.
+
+- `captures/rendering/reflections-verified`: 39 stills across three launches, exact-repeat results and source fingerprints.
+- `captures/rendering/reflections-validation`: reflection/glass/shadow diagnostics, toggle returns, a 13-image continuous-history sweep and firing-light checks.
+- `captures/rendering/reflections-review-verified`: labelled step-8/step-9 comparisons and `costs.json` with measurement scope.
+- `captures/rendering/reflections-browser-verified`: 107 WebGL stages, pixel checks, GPU queries and matching-source build provenance.
 
 ## Generated audio
 

@@ -13,3 +13,7 @@ materials { name: "occlusion" material: "/render/occlusion.material" }
 materials { name: "occlusion_filter" material: "/render/occlusion_filter.material" }
 materials { name: "temporal" material: "/render/temporal.material" }
 materials { name: "weapon_aa" material: "/render/weapon_aa.material" }
+materials { name: "local_shadow" material: "/render/local_shadow.material" }
+materials { name: "local_shadow_skinned" material: "/render/local_shadow_skinned.material" }
+materials { name: "reflections" material: "/render/reflections.material" }
+materials { name: "glass_composite" material: "/render/glass_composite.material" }

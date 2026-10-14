@@ -1,0 +1,16 @@
+name: "reflections"
+tags: "fullscreen"
+vertex_program: "/render/composite.vp"
+fragment_program: "/render/reflections.fp"
+vertex_space: VERTEX_SPACE_LOCAL
+fragment_constants { name: "colour_pipeline" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "screen_projection" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "reflection_params" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "environment_layout" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "reflection_view" type: CONSTANT_TYPE_USER_MATRIX4 value { x: 1 y: 0 z: 0 w: 0 } value { x: 0 y: 1 z: 0 w: 0 } value { x: 0 y: 0 z: 1 w: 0 } value { x: 0 y: 0 z: 0 w: 1 } }
+fragment_constants { name: "reflection_inverse_view" type: CONSTANT_TYPE_USER_MATRIX4 value { x: 1 y: 0 z: 0 w: 0 } value { x: 0 y: 1 z: 0 w: 0 } value { x: 0 y: 0 z: 1 w: 0 } value { x: 0 y: 0 z: 0 w: 1 } }
+samplers { name: "source_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_LINEAR filter_mag: FILTER_MODE_MAG_LINEAR }
+samplers { name: "depth_normal_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "reflection_surface_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "reflection_weight_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "environment_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_LINEAR filter_mag: FILTER_MODE_MAG_LINEAR }

@@ -130,7 +130,7 @@ def capture_baseline(output, motion, profile):
         # Re-enter/release the fixture to exercise ownership and deferred deletion.
         cmd("capture.shot", {"name": "laboratory"})
         game.wait_frames(5)
-        assert cmd("capture.snapshot")["lab_meshes"] == 28
+        assert cmd("capture.snapshot")["lab_meshes"] == 31
         cmd("capture.end")
         report["cleanup"] = "Settings restored; laboratory can be recreated and released."
     finally:
