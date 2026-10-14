@@ -75,7 +75,7 @@ try {
     });
   });
   await page.goto('http://127.0.0.1:'+server.address().port,{timeout:120000});
-  const deadline=Date.now()+240000;
+  const deadline=Date.now()+Number(args["timeout-ms"]??600000);
   while(!complete && Date.now()<deadline){
     await new Promise(r=>setTimeout(r,500));
     if(report.errors.length) throw new Error(report.errors.join('\n'));

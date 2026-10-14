@@ -11,8 +11,9 @@ ROOT=Path(__file__).resolve().parents[1]
 def cutout_samples(image):
     """Project known panel holes/solid cells along the sun onto the ground.
 
-    Three unobstructed pairs distinguish true cutout shadows from an opaque
-    rectangle or a wholly missing caster, independent of display resolution.
+    The lower astronomical afternoon sun places one complete pair in this
+    camera's frustum (the old high sun exposed three). Relative contrast tests
+    real holes against opaque/missing casters while allowing the longer soft shadow.
     """
     eye=(5,3.8,7);target=(2,1.1,3)
     forward=[target[i]-eye[i] for i in range(3)]
@@ -27,11 +28,15 @@ def cutout_samples(image):
         x=round(image.width/2+sum(delta[i]*right[i] for i in range(3))*scale)
         y=round(image.height/2-sum(delta[i]*up[i] for i in range(3))*scale)
         return image.getpixel((x,y))[0]
+    import subprocess
+    raw=subprocess.check_output(['lua','-e', 'local d=require("game.render.daylight").sun_direction;print(d[1],d[2],d[3])'],cwd=ROOT,text=True)
+    sun=list(map(float,raw.split()))
+    dx,dz=-sun[0]*2.21/sun[1],-sun[2]*2.21/sun[1]
     result=[]
-    for x in (1.05,1.35,1.65):
-        hole=pixel((x+.6*2.21/.85,0,2.25-.4*2.21/.85))
-        solid=pixel((x+.15+.6*2.21/.85,0,2.4-.4*2.21/.85))
-        assert hole>180 and solid<120,(x,hole,solid)
+    for x in (1.05,):
+        hole=pixel((x+dx,0,2.25+dz))
+        solid=pixel((x+.15+dx,0,2.4+dz))
+        assert hole>160 and solid<160 and hole-solid>35,(x,hole,solid)
         result.append({'hole':hole,'solid':solid})
     return result
 
@@ -61,7 +66,7 @@ def main():
         resize(1280,720)
         initial=cmd('renderer.snapshot')
         assert initial['shadow_cascades']==4 and initial['shadow_atlas_size']==2048
-        assert initial['target_count']==20 and initial['shadow_splits']==[8,22,52,120]
+        assert initial['target_count']==23 and initial['shadow_splits']==[8,22,52,120]
         assert initial['shadow_draw_passes']==8
         for name in ('street','interior','shadow_distance','shadow_cutout','shadow_remote'):
             shot(name);default=save(name)
@@ -105,7 +110,7 @@ def main():
         resize(1280,720);shot('shadow_distance');configure(view='shadow',bloom=False)
         assert ImageChops.difference(atlas,save('atlas-resize-return')).getbbox() is None
         final=cmd('renderer.snapshot')
-        assert final['target_count']==20 and final['bake_draws']==initial['bake_draws']
+        assert final['target_count']==23 and final['bake_draws']==initial['bake_draws']
         assert final['shadow_draw_passes']==4
         report['renderer']=final
         report['camera_return_exact']=True

@@ -18,7 +18,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*6)+960*640*4+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*8+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -28,7 +28,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
     assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
     assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
-    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==30892896)
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==36680544)
 end)
 
 test("camera light selection covers both buildings and every floor within four slots",function()
@@ -129,7 +129,7 @@ dofile("render/game.render_script")
 local self={}
 test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
-    assert(#targets==23)
+    assert(#targets==26)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_a","bloom_b"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -157,18 +157,18 @@ test("recipes, padded mip chains and filtered environment finish before the worl
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
-    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","fullscreen","viewmodel","fullscreen","fullscreen","glass","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
+    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","fullscreen","viewmodel","fullscreen","fullscreen","fullscreen","fullscreen","glass","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
     assert(#draws==#expected,#draws.." != "..#expected)
     for i,name in ipairs(expected) do assert(draws[i].predicate==name,i.." "..draws[i].predicate) end
     assert(draws[1].material=="shadow" and draws[2].material=="shadow_skinned")
     assert(draws[9].material=="prepass" and draws[10].predicate=="soldier_prepass"
         and draws[15].target==self.targets.scene and draws[17].target==self.targets.weapon)
-    assert(draws[24].target=="screen" and draws[24].material==nil)
+    assert(draws[26].target=="screen" and draws[26].material==nil)
     assert(next(bindings)==nil)
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==23 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==26 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -189,7 +189,7 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     update(self);assert(self.shadow_frames==before+1 and self.bake_draws==atlas.draw_count)
 end)
 test("occlusion toggles skip work, diagnostics retain depth, and weapon never samples world AO",function()
-    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false})
+    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false,reflections=false,glass=false,fog=false})
     draws={};update(self)
     assert(self.prepass_draw_passes==0 and self.occlusion_draw_passes==0)
     for _,draw in ipairs(draws) do assert(draw.material~="prepass" and draw.material~="occlusion") end
@@ -198,7 +198,7 @@ test("occlusion toggles skip work, diagnostics retain depth, and weapon never sa
     on_message(self,"renderer_configure",{view="scene",ambient_occlusion=true});update(self)
     assert(self.prepass_draw_passes==3 and self.occlusion_draw_passes==2)
     assert(self.occlusion_constants.occlusion_params.args[3]==1 and self.occlusion_constants.occlusion_params.args[4]==0)
-    on_message(self,"renderer_configure",{contact_shadows=true});update(self)
+    on_message(self,"renderer_configure",{contact_shadows=true,fog=true});update(self)
 end)
 test("capture isolates the laboratory, hides HUD/actors, and restores ordinary passes",function()
     on_message(self,"capture_configure",{active=true,laboratory=true})
@@ -261,10 +261,44 @@ test("temporal diagnostics have their own output and never replace radiance hist
     on_message(self,"renderer_configure",{view="scene"});update(self)
     assert(self.temporal_constants.temporal_params.args[4]==0 and self.temporal_draw_passes==1)
 end)
+test("lighting and cloud changes replace sky and IBL together without rebaking surfaces",function()
+    local previous=self.environment_updates
+    on_message(self,"renderer_configure",{lighting="sunset"})
+    draws={};update(self)
+    assert(self.environment_updates==previous+1 and self.bake_draws==atlas.draw_count)
+    assert(draws[1].material=="atmosphere" and draws[2].material=="environment")
+    assert(self.rig.name=="sunset" and self.temporal.reason=="settings")
+    local sun=daylight.rig("sunset").sun_direction
+    assert(self.lighting.daylight_data[1].args[2]==sun[2])
+    update(self);assert(self.environment_updates==previous+1)
+    on_message(self,"renderer_configure",{clouds=false});update(self)
+    assert(self.environment_updates==previous+2 and self.bake_constants.atmosphere_data[3].args[3]==0)
+    on_message(self,"renderer_configure",{lighting="daylight",clouds=true});update(self)
+    assert(self.environment_updates==previous+3)
+end)
+test("fog uses world depth, supports analytic fallback, and skips all work when disabled",function()
+    on_message(self,"renderer_configure",{fog=true,volumetric_fog=true})
+    draws={};update(self)
+    assert(self.atmosphere_draw_passes==2)
+    local march,resolve,aa
+    for i,d in ipairs(draws) do
+        if d.material=="fog" then march=i;assert(d.target==self.targets.fog_raw) end
+        if d.material=="fog_composite" then resolve=i;assert(d.target==self.targets.fog_scene) end
+        if d.material=="temporal" then aa=i end
+    end
+    assert(march<resolve and resolve<aa)
+    on_message(self,"renderer_configure",{volumetric_fog=false});update(self)
+    assert(self.atmosphere_draw_passes==1)
+    on_message(self,"renderer_configure",{fog=false});update(self)
+    assert(self.atmosphere_draw_passes==0)
+    on_message(self,"renderer_configure",{view="fog_scatter"});update(self)
+    assert(self.atmosphere_draw_passes==1 and self.temporal.age==0)
+    on_message(self,"renderer_configure",{view="scene",fog=true,volumetric_fog=true});update(self)
+end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)
     while self.bake_step<atlas.job_count do update(self) end
-    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==26)
+    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==29)
     final(self)
     for _,target in ipairs(targets) do assert(target.deleted) end
     assert(next(self.targets)==nil and listener==nil)

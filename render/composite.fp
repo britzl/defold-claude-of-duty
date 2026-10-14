@@ -14,7 +14,9 @@ vec3 tone_map(vec3 c) {
     return display_colour(agx_neutral(c*post.x));
 }
 void main() {
-    if(post.z>17.5 && post.z<18.5) {
+    if(post.z>19.5) {
+        gl_FragColor=vec4(tone_map(decode_radiance(texture2D(scene_texture,var_uv).rgb)),1);
+    } else if(post.z>17.5 && post.z<18.5) {
         vec2 d=texture2D(debug_texture,var_uv).rg;gl_FragColor=vec4(vec3(d.r+d.g/255.0),1);
     } else if(post.z>14.5) {
         gl_FragColor=vec4(texture2D(scene_texture,var_uv).rgb,1.0);

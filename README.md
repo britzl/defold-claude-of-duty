@@ -41,6 +41,7 @@ lua tests/ai_test.lua
 lua tests/squads_test.lua
 lua tests/suppression_test.lua
 lua tests/renderer_test.lua
+lua tests/atmosphere_test.lua
 lua tests/shadows_test.lua
 lua tests/temporal_test.lua
 lua tests/local_lights_test.lua
@@ -68,6 +69,7 @@ PYTHONPATH=automation-bridge-python python3 tests/squads_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/atmosphere_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/shadows_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/occlusion_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/temporal_smoke.py
@@ -665,15 +667,18 @@ for every supported shot, recording `repeatability.json` and separate per-launch
 manifests. The overlapping wall/slab and trim surfaces have been repaired and
 buried faces clipped. Shared trim/slab edges also use matching endpoints to
 prevent one-pixel depth ties at grazing angles. No pixels are masked or tolerated.
-Catalogue version 9 expands the repeatability gate to 39 supported shots and retains the 0.1–500 m world clip
+Catalogue version 10 expands the repeatability gate to 46 supported shots and retains the 0.1–500 m world clip
 range; the 0.1 m near plane improves depth precision while remaining inside the
 player's wall clearance. The separate weapon clip range is unchanged.
 
 The catalogue in `game/render/capture.lua` has street, interior, detail, courtyard,
 weapon, ADS and laboratory captures, plus fifteen material close-ups, near/mid/far façade views and a grazing
-road view. Sunset and night are explicitly unsupported
-until rendering step 10; no substitute daylight images are written. Current
-lighting is fixed daylight, not a matched 16:30 astronomical configuration.
+road view. Daylight (16:30), sunset (19:12) and night (01:30) use the reference's
+45° N summer-solstice celestial model, rotated 61° into this partial map. These
+are fixed solar-time states, not the computer's clock. The catalogue also includes
+cloudy sky views, a clear lunar close-up and a room with a real window aperture.
+The reference world rotation/framing still differs; this is not a cross-engine
+pixel or full scene-parity claim.
 The generated laboratory has fifteen surface panels, a floor, a corner with crates,
 a table and two sphere rows: rear dielectric, front metal, with roughness
 0.08/0.25/0.5/0.75/1 from left to right. It uses the production world shader and
@@ -681,7 +686,9 @@ shadow pass; uniform sphere parameters isolate lighting from the texture recipes
 Its 31 meshes are released on exit; the shadow fixtures include a perforated
 panel and a remote floor/occluders 160 m from the street. The reflection fixture
 plate shares visibility clipping and edge stitching with its box and floor,
-avoiding depth ties at the reflected contact.
+avoiding depth ties at the reflected contact. The additional enclosed room has
+an open window, solid sill/lintel/jambs, a mullion and a freestanding occluder.
+It reuses existing material batches, preserving the 31-mesh fixture budget.
 
 The optional laboratory, grazing-road, weathered-façade, shadow-distance and
 cutout-shadow sweeps each contain 121 frame-addressed camera samples at 30 FPS. Screenshot transport never advances gameplay or the sweep;
@@ -1049,7 +1056,8 @@ Then run `tools/validate_rendering_browser.mjs --bundle=/path/to/bundle` with
 Playwright installed (`PLAYWRIGHT_MODULE` can specify its module path), followed
 by `PYTHONPATH=automation-bridge-python python3 tests/rendering_browser_pixels.py`.
 Both tools accept `--output` for a separate capture directory; the browser harness
-also accepts `--browser=/path/to/chromium` to reuse an installed executable. The fixture exercises all recipes,
+also accepts `--browser=/path/to/chromium` to reuse an installed executable
+and `--timeout-ms=600000` to set the overall validation deadline. The fixture exercises all recipes,
 feature toggles, exact atlas pages, interior gating, reflection filtering, laboratory
 volume isolation and camera return.
 The browser harness records the actual GPU/backend and disjoint timer queries
@@ -1199,6 +1207,94 @@ remain unqualified.
 - `captures/rendering/reflections-validation`: reflection/glass/shadow diagnostics, toggle returns, a 13-image continuous-history sweep and firing-light checks.
 - `captures/rendering/reflections-review-verified`: labelled step-8/step-9 comparisons and `costs.json` with measurement scope.
 - `captures/rendering/reflections-browser-verified`: 107 WebGL stages, pixel checks, GPU queries and matching-source build provenance.
+
+## Atmosphere (rendering step 10)
+
+**Escape → Atmosphere** selects **Daylight**, **Sunset** or **Night** and toggles
+cloud layers, fog, volumetric integration and shadowed shafts. The existing
+Display fog control is the same master switch. Automation accepts
+`renderer.configure` with `lighting="daylight"|"sunset"|"night"`, `clouds`,
+`fog`, `volumetric_fog` and `fog_shadows`. All are presentation settings; neither
+simulation time nor gameplay random streams change.
+
+`game/render/daylight.lua` supplies the shared celestial directions and spectral
+key light. A 48-step CPU extinction integral matches the reference Rayleigh/Mie/
+ozone medium. A GPU-generated 768 × 384 sky lookup uses 32 view segments and
+16 quadratic light-path segments, with an approximate isotropic multiple-scatter
+term. The reference's 1.5 km cumulus and 7.8 km cirrus shells supply deterministic
+cloud shapes, deck-specific lighting, self-shadowing and haze. Distant cloud detail
+fades by distance and projected footprint to avoid undersampled horizon streaks.
+The sun has limb darkening; the moon has a geometric terminator, restrained surface
+variation and a static star field. Discs are drawn at screen resolution and excluded
+from indirect illumination. Night uses the reference's deliberately elevated moon
+illumination, rather than literal physical night exposure.
+
+A lighting/cloud change rebuilds the sky and all filtered environment levels in
+the same render update, before drawing the world, and invalidates colour history.
+Surfaces, soldiers, weapons, glass, sun/moon shadows and fog use that same key.
+`environment_updates` counts complete sky/environment rebuilds; material
+`bake_jobs`/`bake_draws` retain the earlier atlas-loading counter contract. The sky
+adds one draw to initial loading, and a later preset/cloud change submits two
+bake draws without regenerating materials. There is no continuous time animation
+or cloud drift in this fixed-state increment.
+
+The world fog replaces the earlier per-material height haze. A half-resolution,
+40-segment quadratic march integrates wavelength-dependent extinction and
+shadowed in-scattering. It uses cheap cascaded-shadow comparisons, blended cascade
+boundaries, a dual-lobe scattering phase and two correlated cloud-shadow samples
+per ray. The full-resolution composite applies analytic height transmittance and
+depth-weighted reconstruction that rejects foreground/background discontinuities.
+Fog follows SSR and precedes world temporal AA, reusing its existing history and
+reset rules. The weapon stays in its independent clear layer. Thin glass uses an
+analytic front-air approximation after world TAA.
+
+`volumetric_fog=false` skips the march but retains analytic distance attenuation;
+`fog=false` skips both passes. `fog_shadows=false` isolates occluder influence.
+`view="fog_scatter"` and `view="fog_transmittance"` expose the reconstructed
+in-scatter and transmittance through the normal display conversion. The laboratory
+window is actual mesh geometry: shafts and their mullion/box occlusion come from
+the production shadow atlas, not a painted beam or a screen-space opening mask.
+The current market's closed upper windows remain closed; existing doorways admit
+light according to their real geometry.
+
+The sky, half-size fog and full-size composite add three targets. At 1280 × 720,
+medium HDR storage is **218.11 MiB steady / 241.29 MiB during material loading**,
+with **23 / 26 targets**, an increase of 11.04 MiB over step 9. The compatibility
+path adds 5.52 MiB. Toggling fog skips work but retains its allocations. The sky
+bake is synchronous on preset changes; its transition-frame GPU cost is separate
+from steady rendering, and is not a smooth time-of-day animation budget.
+
+Validation and review artifacts are under `captures/rendering/atmosphere-*`.
+The native atmosphere suite checks all fixed states, exact preset/cloud/fog return,
+matching environment updates, shadow influence inside the window fixture, odd-size
+reconstruction, a 13-image continuous-history sweep, settings restoration and
+resource ownership. Native renderer, HDR, shadows, occlusion, temporal,
+reflection, combat and UI suites also pass, including the Atmosphere tab.
+The 164 Lua checks include celestial altitudes, spectral
+extinction, strict settings, pass ordering and context-rebake scheduling.
+The short native Metal street sample submits **767 → 769 draws** with fog off/on;
+median render-script CPU is **175 / 169 µs**, with scheduling variance too large
+to infer a speedup. These are submission samples, not GPU or sustained-combat
+budgets. See `atmosphere-review/costs.json` for measurement scope and provenance.
+
+This is a bounded adaptation of the reference atmosphere, not its full LUT and
+multiple-scattering implementation. Cloud detail is lookup-resolution limited;
+surface sunlight does not receive moving cloud shadows. Forced browser context
+recovery, floating-point WebGL HDR, other native backends and physical mobile
+remain separate qualification gates. The local Kaigen engine remains unavailable.
+
+The WebGL 2 encoded compatibility run passes **124 stages**, including all prior
+material, shadow/contact, temporal and reflection pixel checks and the new sky,
+environment, fog and shaft checks. Exact camera/feature return pixels also pass.
+The isolated Chromium / ANGLE Metal / Apple M3 Pro run records separate 350 ms GPU
+windows at 1024²: 8.86 ms median with fog and 19.88 ms without (31/29 samples).
+The slower, highly variable off window prevents a causal fog-cost conclusion;
+these diagnostic windows are retained in the cost report rather than presented
+as a speedup. An earlier concurrent browser/native run timed out; its partial
+report is retained separately. A native repeatability run was interrupted by an
+AVAudioPlayerNode audio-backend exception, recorded beside its incomplete launch. Its fresh retry passed: **all 46 stills
+match every RGB pixel across three successful independent launches**.
+
 
 ## Generated audio
 

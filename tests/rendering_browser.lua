@@ -59,6 +59,18 @@ function M.new()
         {name="glass",id="glass_return"},
         {name="street",id="step9_disabled_cost",live=true,changes={reflections=false,glass=false,local_shadows=false,muzzle_lights=false}},
     }) do steps[#steps+1]=step end
+    for _,step in ipairs({
+        {name="sky_daylight",id="clouds_disabled",changes={clouds=false}},
+        {name="sky_daylight",id="clouds_return"},
+        {name="sunset",id="sunset_fog_disabled",changes={fog=false}},
+        {name="sunset",id="sunset_analytic",changes={volumetric_fog=false}},
+        {name="window_shafts",id="shafts_shadowed",changes={view="fog_scatter"}},
+        {name="window_shafts",id="shafts_unshadowed",changes={view="fog_scatter",fog_shadows=false}},
+        {name="window_shafts",id="shafts_return",changes={view="fog_scatter"}},
+        {name="sunset",id="sunset_environment",changes={view="environment_atlas"}},
+        {name="night",id="night_environment",changes={view="environment_atlas"}},
+        {name="street",id="step10_disabled_cost",live=true,changes={fog=false}},
+    }) do steps[#steps+1]=step end
     steps[#steps+1]={name="street",id="street_return"}
     return {steps=steps,index=0,frames=0,intervals={}}
 end
@@ -77,7 +89,7 @@ function M.update(test,self,dt)
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==20)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==23)
             assert(stats.surface_count==15 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,

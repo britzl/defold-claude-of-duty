@@ -28,6 +28,13 @@ adapt `src/render/gtao.js` and `src/render/contact.js` from the same project.
 The packed depth/normal prepass, fixed spatial samples, bilateral upsampling and
 material-cavity combination are local adaptations; no temporal history is used.
 
+The celestial positions, atmospheric medium and scattering, cloud decks, noise,
+and volumetric integration in `game/render/daylight.lua` and `render/atmosphere*`,
+`render/clouds.glsl`, `render/sky*` and `render/fog*` adapt `src/sky/atmosphere.js`,
+`celestial.js`, `clouds.js`, `noise.js` and `volumetrics.js` from that project.
+The fixed presets, reduced integration budgets, sky lookup and Defold shadow/depth
+reconstruction are local adaptations. Multiple scattering is approximated.
+
 MIT License
 
 Copyright (c) 2026 mshumer

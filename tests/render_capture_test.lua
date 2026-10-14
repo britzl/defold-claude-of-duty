@@ -11,7 +11,7 @@ test("camera samples are frame addressed, bounded and do not mutate definitions"
     for _,frame in ipairs({-1,121,.5,0/0,math.huge}) do assert(not pcall(capture.camera,shot,frame)) end
     capture.catalog().shots[1].position[1]=99
     assert(capture.select("street").position[1]==0)
-    assert(not pcall(capture.select,"night") and not pcall(capture.select,"sunset"))
+    assert(capture.select("night").lighting=="night" and capture.select("sunset").lighting=="sunset")
 end)
 test("laboratory normals, winding, bounds and roughness range are valid",function()
     local batches=lab.batches()

@@ -21,6 +21,14 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
         images[view]=combined;combined.save(output/(view+'.png'))
     validate_maps(images,atlas_layout(stats['material_quality']))
     metrics={}
+    for first,second in [('street','sunset'),('sunset','night'),('sky_daylight','clouds_disabled'),
+                         ('sunset','sunset_fog_disabled'),('shafts_shadowed','shafts_unshadowed'),
+                         ('environment_atlas','sunset_environment'),('sunset_environment','night_environment')]:
+        a=Image.open(output/(first+'.png')).convert('RGB');b=Image.open(output/(second+'.png')).convert('RGB')
+        difference=sum(ImageStat.Stat(ImageChops.difference(a,b)).mean)/3
+        assert difference>.1,(first,second,difference);metrics[first+'_'+second]=difference
+    for first,second in [('sky_daylight','clouds_return'),('shafts_shadowed','shafts_return')]:
+        assert ImageChops.difference(Image.open(output/(first+'.png')),Image.open(output/(second+'.png'))).getbbox() is None
     for name in ('reflections','glass','local_lights'):
         enabled=Image.open(output/(name+'.png')).convert('RGB')
         disabled=Image.open(output/(name+'_disabled.png')).convert('RGB')

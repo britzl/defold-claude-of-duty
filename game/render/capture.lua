@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 9, width = 1280, height = 720, settle_frames = 40,
+local M = { version = 10, width = 1280, height = 720, settle_frames = 40,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -15,9 +15,9 @@ local shots = {
     { id="ads", position={0,1.66,10}, target={0,1.66,-8}, fov=58,
         reference="ads", weapon="ads", purpose="Sight readability, edge stability and weapon exposure." },
     { id="sunset", position={0,1.66,10}, target={0,1.66,-8}, fov=65,
-        reference="sunset", requested_hour=19.2, unsupported="Time-of-day lighting is not implemented (rendering step 10)." },
+        reference="sunset", requested_hour=19.2, lighting="sunset", purpose="Spectral sunset colour, low sun and distance contrast." },
     { id="night", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
-        reference="night", requested_hour=1.5, unsupported="Time-of-day lighting is not implemented (rendering step 10)." },
+        reference="night", requested_hour=1.5, lighting="night", purpose="Moon phase, cool night fill and warm local light." },
     { id="laboratory", position={6.8,4.2,9.5}, target={0,1.3,-1}, fov=65,
         laboratory=true, reference=false, purpose="Fifteen surface recipes, dielectric/metal roughness rows and furniture contact." },
     { id="material_plaster", position={-6,2,-2.4}, target={-6,2,-5.3}, fov=45,
@@ -72,6 +72,16 @@ for _,shot in ipairs({
     shots[#shots+1]=shot
 end
 
+shots[#shots+1]={id="window_shafts",position={82,1.7,2.5},target={79.8,1.4,-3.8},fov=65,
+    laboratory=true,reference=false,lighting="sunset",clouds=false,purpose="Real window aperture, mullion and shadowed room air."}
+shots[#shots+1]={id="sky_daylight",position={0,12,10},target={0,28,-30},fov=65,reference=false,
+    purpose="Atmospheric sky and two procedural cloud decks."}
+shots[#shots+1]={id="sky_sunset",position={0,12,10},target={0,16,-30},fov=65,reference=false,lighting="sunset",
+    purpose="Low solar disc, warm cumulus and thin high cloud."}
+shots[#shots+1]={id="sky_night",position={0,12,10},target={-6,28,-30},fov=65,reference=false,lighting="night",
+    purpose="Phased lunar disc, stars and cloud occlusion."}
+shots[#shots+1]={id="moon",position={0,12,10},target={-7.6,28,-30},fov=20,reference=false,lighting="night",clouds=false,
+    purpose="Clear-sky lunar terminator and stable stars at fixed exposure."}
 local function copy(t)
     if type(t)~="table" then return t end
     local result={};for k,v in pairs(t) do result[k]=copy(v) end;return result
@@ -80,8 +90,8 @@ function M.catalog()
     return {version=M.version, width=M.width, height=M.height, settle_frames=M.settle_frames,
         sweep_frames=M.sweep_frames, sweep_fps=M.sweep_fps, shots=copy(shots),
         world_clip={near=.1,far=500},
-        lighting={mode="fixed_daylight",sun_direction=copy(require("game.render.daylight").sun_direction),rig=require("game.render.daylight").snapshot(),exposure=1,
-            reference_daylight_hour=16.5, matched_time_of_day=false},
+        lighting={mode="fixed_presets",sun_direction=copy(require("game.render.daylight").sun_direction),rig=require("game.render.daylight").snapshot(),exposure=1,
+            presets={"daylight","sunset","night"},reference_daylight_hour=16.5,north_rotation_degrees=61,matched_time_of_day=false},
         comparison="Adapted framing in the unrotated partial map; not cross-engine pixel equality."}
 end
 function M.select(id)

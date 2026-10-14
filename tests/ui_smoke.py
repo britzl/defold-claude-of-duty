@@ -108,6 +108,16 @@ def main():
         key("LEFT")
         assert ui()["renderer"]["view"] == "scene"
         capture("pause_display")
+        click("tab_atmosphere")
+        for lighting in ("sunset", "night", "daylight"):
+            click("setting_lighting")
+            assert ui()["renderer"]["lighting"] == lighting
+            engine.wait_until(lambda: cmd("renderer.snapshot")["atmosphere_preset"] == lighting, timeout=8)
+        for name in ("clouds", "volumetric_fog", "fog_shadows"):
+            click("setting_" + name)
+            assert ui()["renderer"][name] is False
+            click("setting_" + name)
+        capture("pause_atmosphere")
         click("tab_controls")
         click("slider_sensitivity")
         assert abs(ui()["sensitivity"] - 1.63) <= .03

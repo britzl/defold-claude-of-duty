@@ -1,6 +1,6 @@
 local W = require "game.ui.widgets"
 local M = {}
-local tabs = { "audio", "display", "controls" }
+local tabs = { "audio", "display", "atmosphere", "controls" }
 local specs = {
     audio = {
         {key="master",label="MASTER",kind="audio",min=0,max=1,step=.05},
@@ -13,7 +13,7 @@ local specs = {
         {key="shadows",label="SUN SHADOWS",kind="renderer"},
         {key="normal_maps",label="SURFACE DETAIL",kind="renderer"},
         {key="local_lights",label="LOCAL LIGHTS",kind="renderer"},
-        {key="fog",label="HEIGHT FOG",kind="renderer"},
+        {key="fog",label="FOG",kind="renderer"},
         {key="bloom",label="BLOOM",kind="renderer"},
         {key="exposure",label="EXPOSURE",kind="renderer",min=.25,max=4,step=.05},
         {key="view",label="RENDER VIEW",kind="renderer",
@@ -24,6 +24,13 @@ local specs = {
         {key="muzzle_lights",label="MUZZLE LIGHTS",kind="renderer"},
         {key="temporal_aa",label="TEMPORAL ANTIALIASING",kind="renderer"},
         {key="weapon_aa",label="WEAPON ANTIALIASING",kind="renderer"},
+    },
+    atmosphere = {
+        {key="lighting",label="LIGHTING",kind="renderer",choices={"daylight","sunset","night"}},
+        {key="clouds",label="CLOUD LAYERS",kind="renderer"},
+        {key="fog",label="FOG",kind="renderer"},
+        {key="volumetric_fog",label="VOLUMETRIC FOG",kind="renderer"},
+        {key="fog_shadows",label="SHADOWED LIGHT SHAFTS",kind="renderer"},
     },
     controls = {
         {key="sensitivity",label="MOUSE SENSITIVITY",kind="input",min=.25,max=3,step=.05},
@@ -85,7 +92,7 @@ local function rebuild(state)
     button(state,"resume",300,91,318,"RESUME")
     button(state,"restart",660,91,318,"RESTART ENCOUNTER")
     for i,tab in ipairs(tabs) do
-        local item=button(state,"tab_"..tab,250+(i-1)*230,489,216,string.upper(tab))
+        local item=button(state,"tab_"..tab,140+(i-.5)*680/#tabs,489,680/#tabs-10,string.upper(tab))
         item.tab=tab
     end
     for i,spec in ipairs(specs[state.tab]) do

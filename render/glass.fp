@@ -33,6 +33,14 @@ void main() {
     // very small tinted dust scatter gives dirt coverage without opaque glass.
     vec3 radiance=lighting(vec3(.04),roughness,1.0,1.0,var_world,n,geometric);
     radiance+=environment_row(n,environment_layout.z+1.0)*vec3(.65,.85,.78)*absorption*.15;
+    if(features.w>.5) {
+        vec3 ray=var_world-eye_position.xyz;float distance_to_eye=length(ray);
+        float slope=ray.y*.16,base=exp(clamp(-eye_position.y*.16,-40.0,8.0));
+        float od=base*distance_to_eye*(abs(slope)<.0001?1.0:(1.0-exp(clamp(-slope,-40.0,40.0)))/slope);
+        vec3 trans=exp(-vec3(.88,.96,1.08)*.006*od);
+        vec3 ambient=environment_row(vec3(0,1,0),environment_layout.z+1.0)*interior_visibility(var_world);
+        radiance=radiance*trans+ambient*(1.0-trans)*alpha*.55;
+    }
     // Transparent layers store premultiplied LINEAR light on both pipelines.
     gl_FragColor=vec4(clamp(radiance/(colour_pipeline.x>.5?1.0:8.0),0.0,colour_pipeline.x>.5?65504.0:1.0),alpha);
 }

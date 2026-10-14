@@ -1,5 +1,5 @@
 #include "/render/radiance.glsl"
-#include "/render/sky.glsl"
+#include "/render/daylight.glsl"
 #include "/render/environment_sampling.glsl"
 #include "/render/ggx.glsl"
 uniform highp vec4 eye_position;
@@ -104,20 +104,4 @@ vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec
         }
     }
     return result;
-}
-vec3 height_fog(vec3 radiance,vec3 p)
-{
-    if(shadow_data[17].w>.5) return radiance;
-    vec3 ray=p-eye_position.xyz;
-    float distance_to_eye=length(ray);
-    // Three-point integration is stable for horizontal rays and either direction.
-    float density=(exp(-max(eye_position.y,0.0)*0.16)+4.0*exp(-max((p.y+eye_position.y)*0.5,0.0)*0.16)
-        +exp(-max(p.y,0.0)*0.16))/6.0;
-    float fog=(1.0-exp(-distance_to_eye*0.008*density))*features.w;
-    // Sky-lit haze must obey the same enclosure as the surfaces. Otherwise
-    // dark rooms reveal a bright horizon-coloured band through their walls.
-    fog*=(interior_visibility(eye_position.xyz)+4.0*interior_visibility((p+eye_position.xyz)*.5)
-        +interior_visibility(p))/6.0;
-    reflection_weight*=1.0-fog;
-    return mix(radiance,sky_radiance(normalize(ray)),fog);
 }

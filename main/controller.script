@@ -169,7 +169,7 @@ function init(self)
             description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
             output_schema={type="object"}})
         automation_bridge.describe("command","renderer.configure",{
-            description="Set temporal_aa/weapon_aa/ambient_occlusion/contact_shadows/shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
+            description="Set lighting daylight/sunset/night, clouds/volumetric_fog/fog_shadows/temporal_aa/weapon_aa/ambient_occlusion/contact_shadows/shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.validate_suppression",function()

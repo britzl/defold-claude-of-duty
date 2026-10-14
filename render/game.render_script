@@ -1,5 +1,5 @@
 -- Generated maps/sky -> sun shadows -> depth/normals -> AO/contact -> world
--- -> temporal resolve -> isolated weapon AA -> bloom -> tone mapping -> GUI.
+-- -> shadowed atmosphere -> temporal resolve -> isolated weapon AA -> bloom -> tone mapping -> GUI.
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
@@ -49,11 +49,11 @@ local function resize(self)
         self.width,self.height=d.width,d.height
         self.bloom_width,self.bloom_height=d.bloom_width,d.bloom_height
         self.occlusion_width,self.occlusion_height=d.occlusion_width,d.occlusion_height
-        for _,name in ipairs({"scene","weapon","bloom_a","bloom_b","history_a","history_b","weapon_aa","reflected","glass","glass_scene"}) do
+        for _,name in ipairs({"scene","weapon","bloom_a","bloom_b","history_a","history_b","weapon_aa","reflected","glass","glass_scene","fog_scene","fog_raw"}) do
             local small=name=="bloom_a" or name=="bloom_b"
-            local w,h=small and d.bloom_width or d.width,small and d.bloom_height or d.height
+            local w,h=small and d.bloom_width or name=="fog_raw" and d.occlusion_width or d.width,small and d.bloom_height or name=="fog_raw" and d.occlusion_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
-            else self.targets[name]=colour_target(w,h,name=="scene" or name=="weapon",false,false,self.radiance_format,name=="scene") end
+            else self.targets[name]=colour_target(w,h,name=="scene" or name=="weapon",name=="fog_raw",false,self.radiance_format,name=="scene") end
         end
         for _,name in ipairs({"depth_normal","depth_previous","occlusion_raw","occlusion"}) do
             local half=name=="occlusion_raw"
@@ -94,6 +94,27 @@ local function release_bake_scratch(self)
     for _,name in ipairs({"atlas_spare","scratch_a","scratch_b"}) do
         render.delete_render_target(self.targets[name]);self.targets[name]=nil
     end
+end
+local function atmosphere_constants(self)
+    self.rig=daylight.rig(self.options.lighting)
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.reflection_constants,self.fog_constants}) do
+        for name,value in pairs(daylight.constants(vmath.vector4,self.options.lighting,self.options.clouds)) do constants[name]=value end
+    end
+end
+local function bake_environment(self)
+    -- Complete both targets before world draws. Preset changes cannot expose a
+    -- new key light with the previous sky/reflections, even on discard-on-load GPUs.
+    render.set_render_target(self.targets.sky)
+    render.set_viewport(0,0,daylight.sky_width,daylight.sky_height)
+    fullscreen(self,"atmosphere",self.bake_constants)
+    render.set_render_target(self.targets.environment)
+    render.set_viewport(0,0,daylight.environment_width,daylight.environment_height)
+    bind("sky_texture",self.targets.sky)
+    fullscreen(self,"environment",self.bake_constants)
+    render.disable_texture("sky_texture")
+    self.environment_updates=self.environment_updates+1
+    self.environment_dirty=false
+    self.report=true
 end
 local function bake_next(self)
     -- Expensive recipes get their own frame. Cheap copies/mip reductions run
@@ -146,10 +167,7 @@ local function bake_next(self)
                 render.disable_texture("height_texture")
             end
         else
-            -- One complete pass preserves every atlas tile on discard-on-load GPUs.
-            render.set_render_target(self.targets.environment)
-            render.set_viewport(0,0,daylight.environment_width,daylight.environment_height)
-            fullscreen(self,"environment",self.bake_constants)
+            bake_environment(self)
         end
         self.bake_step=self.bake_step+1
         self.bake_draws=self.bake_draws+1
@@ -171,7 +189,7 @@ local function report(self)
         shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
         shadow_draw_passes=self.shadow_draw_passes or 0,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
-        target_count=self.targets.scratch_a and 23 or 20,
+        target_count=self.targets.scratch_a and 26 or 23,
         occlusion_width=self.occlusion_width,occlusion_height=self.occlusion_height,
         prepass_draw_passes=self.prepass_draw_passes or 0,occlusion_draw_passes=self.occlusion_draw_passes or 0,
         occlusion_radius=.85,contact_length=.4,occlusion_slices=4,occlusion_steps=6,contact_steps=12,
@@ -190,6 +208,10 @@ local function report(self)
         local_shadow_lights=local_lights.shadow_count,local_shadow_size=local_lights.shadow_size,
         local_shadow_draw_passes=self.local_shadow_draw_passes or 0,
         glass_draw_passes=self.glass_draw_passes or 0,
+        atmosphere_preset=self.options.lighting,environment_updates=self.environment_updates,
+        sky_width=daylight.sky_width,sky_height=daylight.sky_height,
+        atmosphere_draw_passes=self.atmosphere_draw_passes or 0,fog_steps=daylight.fog_steps,
+        fog_width=self.occlusion_width,fog_height=self.occlusion_height,
         settings=self.options,pipeline=self.pipeline })
 end
 function init(self)
@@ -217,6 +239,8 @@ function init(self)
     self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
     self.bake_jobs=atlas.jobs()
     self.light_count=0
+    self.environment_updates=0
+    self.environment_dirty=true
     self.volume_count=0
     self.lighting=render.constant_buffer()
     self.lighting.surface_rects=atlas.rects(vmath.vector4)
@@ -230,15 +254,14 @@ function init(self)
     self.temporal_constants=render.constant_buffer()
     self.aa_constants=render.constant_buffer()
     self.reflection_constants=render.constant_buffer()
-    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants,self.temporal_constants,self.aa_constants,self.reflection_constants}) do
+    self.fog_constants=render.constant_buffer()
+    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.bloom_constants,self.probe_constants,self.temporal_constants,self.aa_constants,self.reflection_constants,self.fog_constants}) do
         constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
     end
     for _,name in ipairs({"light_positions","light_colours","light_minimums","light_maximums"}) do
         self.lighting[name]={vmath.vector4(),vmath.vector4(),vmath.vector4(),vmath.vector4()}
     end
-    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.reflection_constants}) do
-        for name,value in pairs(daylight.constants(vmath.vector4)) do constants[name]=value end
-    end
+    atmosphere_constants(self)
     self.lighting.flash_positions={vmath.vector4(),vmath.vector4()}
     self.lighting.flash_colours={vmath.vector4(),vmath.vector4()}
     self.flash_positions,self.flash_colours={},{}
@@ -257,6 +280,7 @@ function init(self)
     end
     bake_scratch(self)
     self.targets.environment=colour_target(daylight.environment_width,daylight.environment_height,false,false,false,self.radiance_format)
+    self.targets.sky=colour_target(daylight.sky_width,daylight.sky_height,false,false,false,self.radiance_format)
     resize(self)
     render.set_listener(function(_,event)
         if event==render.CONTEXT_EVENT_CONTEXT_RESTORED then
@@ -275,6 +299,7 @@ function update(self,dt)
     bake_next(self)
     local t,o=self.targets,self.options
     if self.bake_step==atlas.job_count then
+        if self.environment_dirty then bake_environment(self) end
         -- Capture the same interpolated camera used by the world and weapon.
         local view=camera.get_view(WORLD_CAMERA)
         local projection=camera.get_projection(WORLD_CAMERA)
@@ -303,7 +328,7 @@ function update(self,dt)
             o.parallax and atlas.quality~="low" and 1 or 0,atlas.surfaces[atlas.detail_kind+1].size)
         self.lighting.features=vmath.vector4(o.shadows and 1 or 0,o.normal_maps and 1 or 0,
             o.local_lights and 1 or 0,o.fog and 1 or 0)
-        local fits,matrices,data=shadows.update(inverse_view,projection,daylight.sun_direction,vmath.vector4,vmath.matrix4)
+        local fits,matrices,data=shadows.update(inverse_view,projection,self.rig.sun_direction,vmath.vector4,vmath.matrix4)
         data[18].w=o.view=="cascades" and 1 or o.view=="shadow_visibility" and 2 or 0
         self.lighting.shadow_data=data
         self.shadow_texels={fits[1].texel,fits[2].texel,fits[3].texel,fits[4].texel}
@@ -389,7 +414,7 @@ function update(self,dt)
         -- World geometry only; identical skinning and cutouts to colour/shadows.
         -- This data target is deliberately portable RGBA8, independent of HDR.
         local screen_debug=settings.views[o.view]>=10
-        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug or taa or o.reflections or o.glass
+        local need_depth=o.ambient_occlusion or o.contact_shadows or screen_debug or taa or o.reflections or o.glass or o.fog
         self.prepass_draw_passes,self.occlusion_draw_passes=0,0
         render.set_render_target(t.depth_normal)
         render.set_viewport(0,0,self.width,self.height)
@@ -412,7 +437,7 @@ function update(self,dt)
         constants.screen_projection=vmath.vector4(projection.m00,projection.m11,projection.m02,projection.m12)
         constants.screen_size=vmath.vector4(self.width,self.height,self.occlusion_width,self.occlusion_height)
         constants.occlusion_params=vmath.vector4(.85,.4,o.ambient_occlusion and 1 or 0,o.contact_shadows and 1 or 0)
-        local sun=daylight.sun_direction
+        local sun=self.rig.sun_direction
         constants.sun_view=view*vmath.vector4(sun[1],sun[2],sun[3],0)
         render.set_render_target(t.occlusion_raw)
         render.set_viewport(0,0,self.occlusion_width,self.occlusion_height)
@@ -438,7 +463,9 @@ function update(self,dt)
         render.set_viewport(0,0,self.width,self.height)
         render.set_depth_mask(true)
         render.clear({[COLOR]=vmath.vector4(0,0,0,1),[DEPTH]=1})
+        bind("sky_texture",t.sky)
         fullscreen(self,"sky",self.sky_constants)
+        render.disable_texture("sky_texture")
         bind("occlusion_texture",t.occlusion)
         bind("shadow_texture",t.shadow)
         bind("local_shadow_texture",t.local_shadow)
@@ -498,6 +525,36 @@ function update(self,dt)
             fullscreen(self,"hdr_probe",self.probe_constants)
         end
 
+        -- March only world air. Reflection replacement precedes fog; world TAA
+        -- stabilizes both together. The independent weapon target stays clear.
+        self.atmosphere_draw_passes=0
+        local fog_debug=o.view=="fog_scatter" or o.view=="fog_transmittance"
+        if (o.fog and (o.view=="scene" or o.view=="motion" or o.view=="history")) or fog_debug then
+            local c=self.fog_constants
+            c.fog_inverse_view=inverse_view
+            c.screen_projection=vmath.vector4(projection.m00,projection.m11,projection.m02,projection.m12)
+            c.fog_screen=vmath.vector4(self.width,self.height,self.occlusion_width,self.occlusion_height)
+            c.fog_options=vmath.vector4(o.volumetric_fog and 1 or 0,o.fog_shadows and 1 or 0,
+                taa and (frozen and temporal.capture_samples-1 or self.temporal.age)%32 or 0,
+                o.view=="fog_transmittance" and 2 or fog_debug and 1 or 0)
+            c.shadow_data=data;c.features=self.lighting.features
+            bind("depth_normal_texture",t.depth_normal);bind("sky_texture",t.sky)
+            if o.volumetric_fog then
+                render.set_render_target(t.fog_raw)
+                render.set_viewport(0,0,self.occlusion_width,self.occlusion_height)
+                bind("shadow_texture",t.shadow)
+                fullscreen(self,"fog",c)
+                render.disable_texture("shadow_texture")
+                self.atmosphere_draw_passes=1
+            end
+            render.set_render_target(t.fog_scene)
+            render.set_viewport(0,0,self.width,self.height)
+            bind("source_texture",opaque_scene);bind("fog_texture",t.fog_raw)
+            fullscreen(self,"fog_composite",c)
+            for _,name in ipairs({"source_texture","fog_texture","depth_normal_texture","sky_texture"}) do render.disable_texture(name) end
+            opaque_scene=t.fog_scene
+            self.atmosphere_draw_passes=self.atmosphere_draw_passes+1
+        end
         local resolved_scene,resolved_weapon=o.view=="hdr_probe" and t.scene or opaque_scene,t.weapon
         self.temporal_draw_passes,self.weapon_aa_draw_passes=0,0
         if taa then
@@ -636,7 +693,12 @@ function on_message(self,id,message)
         self.capture=message
         temporal.reset(self.temporal,"capture")
     elseif id==hash("renderer_configure") then
-        self.options=settings.configure(self.options,message)
+        local next_options=settings.configure(self.options,message)
+        if next_options.lighting~=self.options.lighting or next_options.clouds~=self.options.clouds then
+            self.environment_dirty=true
+        end
+        self.options=next_options
+        atmosphere_constants(self)
         temporal.reset(self.temporal,"settings")
         self.report=true
     elseif id==hash("renderer_volumes") then

@@ -194,7 +194,8 @@ are now implemented (steps 3–4 below);
 Unified daylight, filtered environment lighting and interior attenuation are
 implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Temporal stability is implemented in rendering step 8. Reflections, transparent
 glass, local-light shadows and muzzle lighting are implemented in rendering step 9.
-Atmosphere and the remaining photographic effects remain later stages.
+Atmosphere is implemented in rendering step 10. Weapon/combat refinements and
+the remaining photographic effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -304,7 +305,7 @@ implemented. Native Metal captures verify exact repeat pixels, frozen simulation
 fixture cleanup and restoration of settings. A Three.js capture adapter uses the
 same level-space cameras through its world transform. Kaigen captures, reference
 laboratory coverage and matching time-of-day lighting remain open; sunset/night
-are explicitly unsupported in the current Defold renderer. See `README.md` for
+were unsupported at that stage and are now implemented in rendering step 10. See `README.md` for
 capture commands and the distinction between visual and pixel comparisons.
 The overlap blocker is fixed: slabs and walls meet at butt joints, trim and
 parapet corners no longer overlap, and box faces buried by adjacent solids are
@@ -511,7 +512,7 @@ two-light shadow budget renders twelve 256² cube faces into one 768 × 1024 atl
 Static/skinned casters share production geometry, coverage and animation. Real
 player/enemy firing events drive at most two unshadowed transient lights; the player
 light follows the displayed muzzle with wall clipping. New settings and diagnostic
-views expose each effect. Atmosphere (step 10) is next.
+views expose each effect. Atmosphere (step 10) is implemented below.
 
 At 1280 × 720 the new targets add 34.13 MiB on HDR: medium is 207.07 MiB steady /
 230.26 MiB baking, with twenty/twenty-three targets. World geometry adds twelve
@@ -531,6 +532,36 @@ work; they are diagnostic samples, not a sustained performance budget. Captures,
 comparisons, provenance and cost scope are in `reflections-verified`,
 `reflections-validation`, `reflections-review-verified` and
 `reflections-browser-verified` under `captures/rendering`.
+
+Step 10 implementation is complete: fixed daylight, sunset and night share the
+reference celestial/atmospheric model across direct lighting, sky, filtered IBL,
+shadows and fog. A generated 768 × 384 spectral sky lookup includes Rayleigh/Mie/
+ozone scattering and a bounded multiple-scatter approximation. Two procedural
+cloud decks, a limb-darkened sun, a phased moon and stars complete the sky.
+Sky/environment changes publish together and reset temporal history. The pause
+menu's Atmosphere tab exposes presets and feature toggles; continuous time and
+cloud animation are deliberately deferred until these fixed states are qualified.
+
+A 40-step half-resolution march adds shadowed volumetric air; analytic spectral
+transmittance and depth-aware reconstruction preserve foreground edges. The
+march uses real cascaded shadow geometry, blended boundaries and cloud visibility.
+It follows reflections and precedes world temporal AA; the weapon stays clear.
+An enclosed laboratory room verifies a true window opening, mullion and separate
+occluder. Market doorways use the same path; opaque upper windows remain opaque.
+Analytic fallback, fog/shadow toggles and two diagnostic views support comparison.
+
+Medium HDR at 1280 × 720 is 218.11 MiB steady / 241.29 MiB during loading, with
+23 / 26 targets. Fog adds two steady draws (767 → 769 in the street sample).
+The native suite passes exact lighting/feature returns, odd resizing, shadowed
+shafts and continuous camera history; all 164 Lua checks pass. Native renderer,
+HDR, shadows, occlusion, temporal, reflections, combat and UI regressions pass.
+Source/capture
+provenance, motion and costs are retained in `captures/rendering/atmosphere-*`.
+All 46 stills match every RGB pixel across three successful native launches.
+The WebGL 2 compatibility path passes 124 stages and the complete pixel gates.
+See `README.md` for validation scope, retained failure logs and remaining backend qualification.
+The sky bake is synchronous on preset changes; full reference multiscattering,
+animated cloud shadows and time-of-day transitions remain future refinements.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

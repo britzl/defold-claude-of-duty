@@ -25,12 +25,13 @@ def main():
         command("renderer.configure", values)
         engine.wait_until(lambda: all(command("renderer.snapshot")["settings"][k] == v
                                       for k, v in values.items()), timeout=5)
-        game.wait_frames(3)
+        game.wait_frames(40)
 
     def capture(name):
         # Native launches may lose focus while the editor compiles another target.
+        command("ui.focus", {"focused": True})
         command("ui.pause", {"paused": False})
-        game.wait_frames(3)
+        game.wait_frames(40)
         shot = game.screenshot(resolution_multiplier=.5)
         path = output / (name + ".png")
         shutil.copyfile(shot.path, path)
@@ -53,7 +54,7 @@ def main():
         expected=atlas_stats()
         assert initial["bake_jobs"] == expected["jobs"] and initial["bake_draws"] == expected["draws"]
         assert initial["environment_faces"] == 6 and initial["local_light_count"] == 4
-        assert initial["target_count"] == 20 and initial["shadow_size"] == 1024
+        assert initial["target_count"] == 23 and initial["shadow_size"] == 1024
         assert initial["atlas_width"] == expected["width"] and initial["atlas_height"] == expected["height"]
         assert initial["shadow_frames"] > 0
 
@@ -140,8 +141,10 @@ def main():
         engine.wait_until(lambda: command("weapons.result")["complete"], timeout=5)
         capture("weapon_ads")
         # Look at the sun to exercise bright-pass extraction, not only dim walls.
-        command("movement.reset", {"x": 0, "y": .01, "z": 4, "yaw": math.atan2(.6, -.4)})
-        command("movement.drive", {"segments": [{"ticks": 1, "look_y": math.atan2(.85, math.sqrt(.52))/.0022}]})
+        sun=command("capture.catalog")["lighting"]["sun_direction"]
+        configure(clouds=False)
+        command("movement.reset", {"x": 0, "y": .01, "z": 4, "yaw": math.atan2(-sun[0], -sun[2])})
+        command("movement.drive", {"segments": [{"ticks": 1, "look_y": math.atan2(sun[1], math.hypot(sun[0],sun[2]))/.0022}]})
         engine.wait_until(lambda: command("movement.result")["complete"], timeout=5)
         game.wait_frames(4)
         bloom = capture("bloom")
@@ -160,7 +163,7 @@ def main():
         assert resized["width"] != before["width"] and resized["height"] != before["height"]
         assert resized["bloom_width"] == resized["width"]//4
         assert resized["bloom_height"] == resized["height"]//4
-        assert resized["bake_draws"] == expected["draws"] and resized["target_count"] == 20
+        assert resized["bake_draws"] == expected["draws"] and resized["target_count"] == 23
         game.resize(960, 640)
         command("world.view", {"name": "street"})
         game.wait_frames(8)

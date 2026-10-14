@@ -78,6 +78,20 @@ function M.batches()
     box("concrete_floor",54,-.1,0,10,.2,12)
     box("plaster_cream",54,1.5,-4.5,10,3,.2)
     box("wood",54,.6,-1.5,1.2,1.2,1.2)
+    -- Enclosed room with a true aperture facing the low sunset. There is no
+    -- transparent wall/depth trick: opaque lintel, sill, jambs and mullion cast
+    -- the same cascaded shadows used by surfaces and the volume march.
+    box("concrete_floor",80,-.1,0,8,.2,8)
+    box("plaster_cream",80,3.1,0,8,.2,8)
+    box("plaster_cream",76.1,1.5,0,.2,3,8)
+    box("plaster_cream",83.9,1.5,0,.2,3,8)
+    box("plaster_cream",80,1.5,3.9,7.6,3,.2)
+    box("plaster_cream",77.7,1.5,-3.9,3,3,.2)
+    box("plaster_cream",82.3,1.5,-3.9,3,3,.2)
+    box("plaster_cream",80,.45,-3.9,1.6,.9,.2)
+    box("plaster_cream",80,2.75,-3.9,1.6,.5,.2)
+    box("wood",80,1.7,-3.9,.12,1.6,.28)
+    box("wood",80.65,.65,-1.2,.5,1.3,.6)
     local mirror=mesh.new("reflection_floor","metal",0,0)
     mirror.surface={3,1,.12,1}
     -- Participate in the same visibility cuts and edge stitching as the box.

@@ -46,8 +46,14 @@ def projection(eye,target,fov,image):
 
 def fixture_samples(depth,normals,ao,contact):
     project,floor_normal=projection((7.5,1.7,5.3),(4.8,.4,2.1),60,depth)
+    import subprocess
+    raw=subprocess.check_output(['lua','-e','local d=require("game.render.daylight").sun_direction;print(d[1],d[2],d[3])'],cwd=ROOT,text=True)
+    sun=list(map(float,raw.split()))
+    # A floor receiver a quarter metre downstream of the front table leg;
+    # derive its side from the active astronomical key, not the old high sun.
+    receiver=(6.2-sun[0]*.25,0,3-sun[2]*.25)
     samples={}
-    for name,point in [('foot',(6.28,0,3.08)),('sun_contact',(6.32,0,2.92)),('open_floor',(6.6,0,3.5))]:
+    for name,point in [('foot',(6.28,0,3.08)),('sun_contact',receiver),('open_floor',(6.6,0,3.5))]:
         pixel,z=project(point)
         expected_depth=255*math.log2(1+z)/math.log2(501)
         assert abs(depth.getpixel(pixel)[0]-expected_depth)<2,(name,pixel,expected_depth)
@@ -96,7 +102,7 @@ def main():
         engine.wait_until(lambda:cmd('world.snapshot')['ready'],timeout=45)
         engine.wait_until(lambda:cmd('renderer.snapshot')['ready'],timeout=60)
         resize(1280,720)
-        initial=cmd('renderer.snapshot');assert initial['target_count']==20
+        initial=cmd('renderer.snapshot');assert initial['target_count']==23
         assert initial['prepass_draw_passes']==3 and initial['occlusion_draw_passes']==2
         for name in ('street','interior','laboratory','contact_furniture','contact_corner','shadow_cutout'):
             shot(name);enabled=save(name)
@@ -117,7 +123,7 @@ def main():
         configure(ambient_occlusion=False);assert save('ao-disabled').getextrema()==((255,255),)*3
         configure(view='contact',contact_shadows=False);assert save('contact-disabled').getextrema()==((255,255),)*3
         assert cmd('renderer.snapshot')['prepass_draw_passes']==1 # diagnostics still need geometry
-        configure(view='scene',temporal_aa=False,reflections=False,glass=False);assert cmd('renderer.snapshot')['prepass_draw_passes']==0
+        configure(view='scene',temporal_aa=False,reflections=False,glass=False,fog=False);assert cmd('renderer.snapshot')['prepass_draw_passes']==0
         shot('interior');shot('contact_furniture');configure(view='ao')
         assert ImageChops.difference(ao,save('ao-camera-return')).getbbox() is None
         resize(800,502);save('ao-resized')

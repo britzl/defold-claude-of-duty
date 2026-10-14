@@ -10,6 +10,6 @@ void main() {
     float camo=mix(0.70,1.10,smoothstep(-0.15,0.28,blotch));
     vec3 albedo=linear_colour(var_color.rgb*mix(1.0,camo,var_color.a));
     vec3 radiance=lighting(albedo,0.85,0.0,1.0,var_world,normalize(var_normal),normalize(var_normal));
-    gl_FragData[0]=vec4(encode_radiance(height_fog(radiance,var_world)),1.0);
+    gl_FragData[0]=vec4(encode_radiance(radiance),1.0);
     gl_FragData[1]=vec4(0);gl_FragData[2]=vec4(0);
 }

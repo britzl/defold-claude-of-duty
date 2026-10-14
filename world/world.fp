@@ -60,7 +60,7 @@ void main() {
     }
     vec3 n=normalize(geometric*bump.z+(tangent*bump.x+bitangent*bump.y)*features.y);
     vec3 radiance=lighting(albedo,max(packed.r,.04),packed.g,packed.b,var_world,n,geometric);
-    gl_FragData[0]=vec4(encode_radiance(height_fog(radiance,var_world)),1.0);
+    gl_FragData[0]=vec4(encode_radiance(radiance),1.0);
     gl_FragData[1]=vec4(pack_view_normal(n),max(packed.r,.04),1);
     gl_FragData[2]=vec4(reflection_weight,0);
 }
