@@ -30,6 +30,7 @@ local VIEW_ACTIONS = { [hash("view_street")] = "street", [hash("view_shop")] = "
 local PLAY, ESCAPE, COURSE = hash("play"), hash("release_mouse"), hash("course")
 
 local function select_view(self, name)
+    msg.post("@render:","renderer_reset_history",{reason="view"})
     self.view = name
     self.ctx.player.enabled = not name
     self.ctx.player.drive = nil
@@ -52,6 +53,7 @@ local function create_range(self)
 end
 
 local function restart_encounter(self)
+    msg.post("@render:","renderer_reset_history",{reason="restart"})
     capture_controller.finish(self)
     self.suppression_validation=nil
     audio_system.reset(self.ctx)
@@ -165,7 +167,7 @@ function init(self)
             description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
             output_schema={type="object"}})
         automation_bridge.describe("command","renderer.configure",{
-            description="Set shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
+            description="Set temporal_aa/weapon_aa/ambient_occlusion/contact_shadows/shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.validate_suppression",function()
@@ -306,6 +308,7 @@ function init(self)
             return { ready = true }
         end)
         automation_bridge.command("movement.reset", function(data)
+            msg.post("@render:","renderer_reset_history",{reason="teleport"})
             assert(self.ctx.world.ready, "World is still loading")
             for _, key in ipairs({ "x", "y", "z" }) do
                 assert(type(data[key]) == "number" and data[key] == data[key] and math.abs(data[key]) < 10000, "Invalid "..key)
@@ -437,6 +440,11 @@ function late_update(self, dt)
     -- Camera and GUI see interpolated presentation, never drive simulation.
     local out = self.ctx.presentation
     ai_system.present(self.ctx)
+    if self.capture and self.capture.playing then
+        local c=self.capture
+        c.frame=c.frame+c.direction
+        if c.frame>=120 then c.frame=120;c.direction=-1 elseif c.frame<=0 then c.frame=0;c.direction=1 end
+    end
     local view = self.capture and capture_shots.camera(self.capture.shot,self.capture.frame)
         or self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
@@ -538,7 +546,9 @@ end
 
 function on_message(self, message_id, message, sender)
     if message_id == hash("ui_action") then ui.action(self, message) end
-    if message_id == hash("renderer_stats") then self.renderer_stats = message end
+    if message_id == hash("renderer_stats") or message_id == hash("renderer_details") then
+        for k,v in pairs(message) do self.renderer_stats[k]=v end
+    end
     if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end
 end
 

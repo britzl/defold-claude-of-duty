@@ -14,7 +14,9 @@ vec3 tone_map(vec3 c) {
     return display_colour(agx_neutral(c*post.x));
 }
 void main() {
-    if(post.z>9.5) {
+    if(post.z>14.5) {
+        gl_FragColor=vec4(texture2D(scene_texture,var_uv).rgb,1.0);
+    } else if(post.z>9.5) {
         vec4 data=texture2D(debug_texture,var_uv);
         vec3 value;
         if(post.z<10.5) value=depth_covered(data)?vec3(log2(1.0+unpack_view_depth(data.rg))/DEPTH_LOG_RANGE):vec3(1.0);

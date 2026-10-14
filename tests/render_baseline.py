@@ -111,6 +111,7 @@ def capture_baseline(output, motion, profile):
                 samples=[]
                 for frame in range(catalog["sweep_frames"]):
                     samples.append(cmd("capture.frame", {"frame": frame}))
+                    game.wait_frames(catalog["settle_frames"])
                     save(f"{directory}/{frame:04d}.png")
                     if frame%30==0:
                         print("SWEEP",shot_name,frame,"/",catalog["sweep_frames"]-1,flush=True)

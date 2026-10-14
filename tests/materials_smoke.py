@@ -80,7 +80,7 @@ def main():
         stats = cmd("renderer.snapshot")
         expected=atlas_stats(stats["material_quality"])
         assert stats["bake_jobs"] == expected["jobs"] and stats["bake_draws"] == expected["draws"]
-        assert stats["target_count"] == 12 and stats["peak_target_bytes"] > stats["target_bytes"]
+        assert stats["target_count"] == 16 and stats["peak_target_bytes"] > stats["target_bytes"]
         width, height = stats["atlas_width"], stats["atlas_height"]
         # Page through 1024-pixel windows, avoiding desktop window-size limits.
         game.resize(1024, 1024);game.wait_frames(35)

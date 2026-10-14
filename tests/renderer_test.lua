@@ -18,7 +18,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==1920*1280*(8*2+12)+960*640*4+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
+    assert(settings.target_bytes(1920,1280)==1920*1280*(8*2+36+4*3)+960*640*4+480*320*4*2+shadows.atlas_size^2*8+atlas.width*atlas.height*12+daylight.environment_width*daylight.environment_height*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -28,7 +28,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
     assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
     assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
-    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==8774496)
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==19833696)
 end)
 
 test("camera light selection covers both buildings and every floor within four slots",function()
@@ -122,14 +122,14 @@ render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
     for _,target in pairs(bindings) do assert(target~=active,"render-target feedback loop") end
     if predicate=="viewmodel" then assert(not bindings.occlusion_texture,"Weapon sampled world AO") end
-    draws[#draws+1]={predicate=predicate,material=material,target=active}
+    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture}
 end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
 dofile("render/game.render_script")
 local self={}
 test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
-    assert(#targets==15)
+    assert(#targets==19)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_a","bloom_b"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -157,18 +157,18 @@ test("recipes, padded mip chains and filtered environment finish before the worl
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
-    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","fullscreen","fullscreen","fullscreen","model","viewmodel","fullscreen","fullscreen","fullscreen","gui","debug_text"}
-    assert(#draws==#expected)
+    local expected={"world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_shadow","world_shadow","soldier_prepass","rigid_prepass","fullscreen","fullscreen","fullscreen","model","viewmodel","fullscreen","fullscreen","fullscreen","fullscreen","fullscreen","gui","debug_text"}
+    assert(#draws==#expected,#draws.." != "..#expected)
     for i,name in ipairs(expected) do assert(draws[i].predicate==name,i.." "..draws[i].predicate) end
     assert(draws[1].material=="shadow" and draws[2].material=="shadow_skinned")
-    assert(draws[9].material=="prepass" and draws[10].material=="prepass_skinned"
-        and draws[14].target==self.targets.scene and draws[15].target==self.targets.weapon)
-    assert(draws[18].target=="screen" and draws[18].material==nil)
+    assert(draws[9].material=="prepass" and draws[10].predicate=="soldier_prepass"
+        and draws[15].target==self.targets.scene and draws[16].target==self.targets.weapon)
+    assert(draws[21].target=="screen" and draws[21].material==nil)
     assert(next(bindings)==nil)
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==15 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==19 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -189,14 +189,14 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     update(self);assert(self.shadow_frames==before+1 and self.bake_draws==atlas.draw_count)
 end)
 test("occlusion toggles skip work, diagnostics retain depth, and weapon never samples world AO",function()
-    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false})
+    on_message(self,"renderer_configure",{ambient_occlusion=false,contact_shadows=false,temporal_aa=false})
     draws={};update(self)
     assert(self.prepass_draw_passes==0 and self.occlusion_draw_passes==0)
     for _,draw in ipairs(draws) do assert(draw.material~="prepass" and draw.material~="occlusion") end
     on_message(self,"renderer_configure",{view="depth"});update(self)
-    assert(self.prepass_draw_passes==2 and self.occlusion_draw_passes==0)
+    assert(self.prepass_draw_passes==3 and self.occlusion_draw_passes==0)
     on_message(self,"renderer_configure",{view="scene",ambient_occlusion=true});update(self)
-    assert(self.prepass_draw_passes==2 and self.occlusion_draw_passes==2)
+    assert(self.prepass_draw_passes==3 and self.occlusion_draw_passes==2)
     assert(self.occlusion_constants.occlusion_params.args[3]==1 and self.occlusion_constants.occlusion_params.args[4]==0)
     on_message(self,"renderer_configure",{contact_shadows=true});update(self)
 end)
@@ -226,10 +226,45 @@ test("volume updates clear stale slots and laboratory capture isolates world vol
     on_message(self,"renderer_configure",{interior_lighting=false,environment_filter=false});update(self)
     assert(self.lighting.lighting_features.args[1]==0 and self.lighting.lighting_features.args[2]==0)
 end)
+test("capture history converges, holds and invalidates without retaining stale targets",function()
+    on_message(self,"renderer_configure",{temporal_aa=true,weapon_aa=true,view="scene"})
+    on_message(self,"capture_configure",{active=true,laboratory=false})
+    for _=1,40 do update(self) end
+    assert(self.temporal.age==32 and self.temporal_draw_passes==0)
+    local held=self.targets.history_b
+    update(self);assert(self.targets.history_b==held)
+    on_message(self,"renderer_reset_history",{reason="teleport"})
+    for _=1,3 do update(self) end;assert(self.temporal.age==1 and self.temporal.reason=="teleport")
+    assert(self.targets.history_b~=held)
+    on_message(self,"capture_configure",{active=true,laboratory=false,temporal_live=true})
+    for _=1,40 do update(self) end
+    assert(self.temporal.age==38 and self.temporal_draw_passes==1)
+    on_message(self,"capture_configure",{active=false,laboratory=false})
+end)
+test("world and weapon antialiasing can be toggled independently",function()
+    on_message(self,"renderer_configure",{temporal_aa=false,weapon_aa=true})
+    update(self);assert(self.temporal.age==0 and self.temporal_draw_passes==0 and self.weapon_aa_draw_passes==1)
+    on_message(self,"renderer_configure",{temporal_aa=true,weapon_aa=false})
+    for _=1,3 do update(self) end;assert(self.temporal.age==1 and self.temporal_draw_passes==1 and self.weapon_aa_draw_passes==0)
+    on_message(self,"renderer_configure",{weapon_aa=true})
+end)
+test("temporal diagnostics have their own output and never replace radiance history",function()
+    on_message(self,"renderer_configure",{view="history"})
+    draws={};update(self)
+    assert(self.temporal_draw_passes==2 and self.weapon_aa_draw_passes==0)
+    local temporal_targets={}
+    for _,draw in ipairs(draws) do
+        if draw.material=="temporal" then temporal_targets[#temporal_targets+1]=draw.target end
+        if draw.target=="screen" and draw.material==nil and draw.predicate=="fullscreen" then assert(draw.scene_texture==self.targets.weapon_aa) end
+    end
+    assert(temporal_targets[1]==self.targets.history_b and temporal_targets[2]==self.targets.weapon_aa)
+    on_message(self,"renderer_configure",{view="scene"});update(self)
+    assert(self.temporal_constants.temporal_params.args[4]==0 and self.temporal_draw_passes==1)
+end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)
     while self.bake_step<atlas.job_count do update(self) end
-    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==18)
+    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==22)
     final(self)
     for _,target in ipairs(targets) do assert(target.deleted) end
     assert(next(self.targets)==nil and listener==nil)

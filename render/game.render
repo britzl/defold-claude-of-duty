@@ -11,3 +11,5 @@ materials { name: "prepass" material: "/render/prepass.material" }
 materials { name: "prepass_skinned" material: "/render/prepass_skinned.material" }
 materials { name: "occlusion" material: "/render/occlusion.material" }
 materials { name: "occlusion_filter" material: "/render/occlusion_filter.material" }
+materials { name: "temporal" material: "/render/temporal.material" }
+materials { name: "weapon_aa" material: "/render/weapon_aa.material" }

@@ -42,6 +42,7 @@ lua tests/squads_test.lua
 lua tests/suppression_test.lua
 lua tests/renderer_test.lua
 lua tests/shadows_test.lua
+lua tests/temporal_test.lua
 lua tests/surface_atlas_test.lua
 lua tests/visible_faces_test.lua
 lua tests/weathering_test.lua
@@ -68,6 +69,7 @@ PYTHONPATH=automation-bridge-python python3 tests/suppression_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/shadows_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/occlusion_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/temporal_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ui_smoke.py
 ```
@@ -113,8 +115,10 @@ The HUD includes a spread-reactive crosshair, hitmarker (mint for a headshot),
 health bar, low-health edge tint, a brief damage flash and a directional hit
 indicator when the attacker is known. It shows the current weapon, fire mode,
 ammunition, reload/inspection status and movement stance. Elimination displays
-a restart prompt. A four-entry killfeed records confirmed deaths through combat
-notifications, expires after six active seconds and clears on encounter restart.
+a restart prompt. A top-right FPS counter averages frame rate over half a second
+and continues updating while paused. A four-entry killfeed records confirmed
+deaths through combat notifications, expires after six active seconds and clears
+on encounter restart.
 
 The compass uses north = world -Z and east = +X. The north-up minimap follows the
 player over a 44-metre square, drawing the generated world's collision footprints
@@ -179,9 +183,11 @@ colour, four joint indices and four normalized skin weights. Some vertices blend
 two joints; rigid equipment follows one. No model or animation is imported.
 
 `soldiers/soldier.vp` performs linear blend skinning with 25 matrix uniforms.
-The palette is 1,600 bytes, uploaded with 25 indexed `go.set` calls per actor
-per presentation frame. One shared generated buffer serves all six soldiers and
-replacement instances; each live soldier uses one mesh, one movement capsule and
+Each palette is 1,600 bytes. Colour and temporal prepasses receive three palettes
+(current colour, current prepass and previous prepass), totalling 4,800 bytes
+and 75 indexed `go.set` calls plus one previous-root matrix per actor per
+presentation frame. One shared generated buffer serves all six soldiers and
+replacement instances; each live soldier uses two mesh components on one GO, one movement capsule and
 seven hit-volume GOs. Conservative bounds include the supported animations and
 death collapse. The fragment shader supplies procedural camouflage, with the
 world's sun, ambient light and fog. `skinning.glsl` is shared by the colour and
@@ -842,8 +848,8 @@ Rendering step 7 adds a full-resolution world prepass with the same static geome
 16-bit logarithmic view depth in RG and octahedral geometric view normals in BA;
 its separate depth attachment resolves visibility. Nearest sampling and explicit
 sky coverage work on both Metal HDR and the WebGL compatibility pipeline.
-Weapons, particles and GUI are excluded. Material normal maps stay in the colour
-pass, avoiding false occlusion from small surface bumps.
+Weapons and GUI are excluded; step 8 also supplies rigid-effect depth.
+Material normal maps stay in the colour pass, avoiding false occlusion from small surface bumps.
 
 Half-resolution AO integrates horizon arcs over four fixed slices with six
 quadratically spaced samples on each side, within a 0.85 m radius. Short contact
@@ -853,7 +859,7 @@ bilateral resolve uses full-resolution normals and surface-plane distance to
 filter and upsample both channels. Incompatible thin-edge samples fall back to
 lit visibility; sky remains white. Offscreen/hidden occluders cannot contribute.
 Fixed samples are deterministic but retain some spatial banding in the isolated
-AO view; motion-vector temporal accumulation remains step 8.
+AO view; step 8 accumulates the resulting world radiance over time.
 
 AO affects indirect diffuse and roughness-weighted indirect specular. Taking the
 minimum of material cavity visibility and screen AO prevents multiplying the
@@ -861,11 +867,47 @@ same cavity twice. Contact visibility takes the minimum with cascaded sun
 visibility and affects only direct sunlight; local room lights retain their
 existing response. The weapon samples neither screen-space effect.
 `ambient_occlusion` and `contact_shadows` independently toggle the effects; both
-off skips prepass/effect draws unless a depth diagnostic needs the prepass.
+off skips AO/contact draws; the prepass remains necessary while TAA or a depth
+diagnostic is enabled.
 Buffers are cleared to lit visibility when disabled and retain bounded ownership.
 
+Rendering step 8 adds an eight-sample Halton projection jitter and two alternating
+HDR/compatibility colour histories. The expanded prepass writes three portable
+RGBA8 attachments: current depth/normal, two 16-bit signed UV motion components,
+and the corresponding previous depth/normal. Two alternating prepass targets
+retain visibility from the previous frame. Static geometry uses previous camera
+matrices; soldiers retain the previous displayed root transform and all 25 bone
+matrices. Rigid particles, tracers and cases retain their own prior transforms.
+The extra mesh components share their existing generated vertex resources.
+The laboratory uses the production face-clipping and edge-stitching routines
+at table/floor joints; subpixel jitter exposed an instability in its old boxes.
+
+The resolve removes projection jitter, reprojects geometry and sky, rejects
+incompatible depth/normal samples per bilinear tap, and clips history to a 3×3
+variance neighbourhood in luminance-compressed YCoCg. Motion and radiance changes
+reduce history weight. Explicit teleports, camera cuts, encounter restarts,
+projection jumps, setting changes, resize and context restoration invalidate it.
+Previous pose data is owned per actor; the viewmodel never samples world history.
+`temporal_aa` and `weapon_aa` are independent Display-menu/automation settings.
+The weapon uses spatial edge-directed antialiasing in premultiplied linear light,
+with decode-before-filtering on the encoded path, and is composited after world
+TAA/bloom. It has no temporal history or projection jitter.
+
+`view="motion"` displays signed velocity around neutral grey (±4 pixels fills
+one colour channel); `view="history"` displays the accepted history weight.
+`renderer.snapshot` reports history age, reset count/reason and AA pass counts.
+After two current-only frames for camera/component transforms to settle, ordinary
+captures converge for exactly 32 history samples, then hold
+the result, preserving frame/order-independent comparisons. `capture.frame`
+resets that convergence for independently addressed samples. For continuous
+history, select `capture.shot` with `temporal_live=true`; `capture.play` with
+`playing=true` runs a repeating 0–120–0 frame camera sweep, and `playing=false`
+stops it. Continuous captures must be used when profiling TAA: held captures
+skip the resolve. `tests/temporal_smoke.py` exercises both paths, motion vectors,
+weapon isolation, exact resets and short A/B CPU/draw costs.
+
 Pass order is four sun cascades → depth/normals → AO/contact → bilateral resolve
-→ sky/world → isolated weapon → two quarter-resolution
+→ sky/world → temporal resolve → separate weapon antialiasing → two quarter-resolution
 bloom passes → composition/tone mapping → GUI. Height fog integrates an exponential
 height density along the eye ray. Rendering step 2 enables linear RGBA16F for
 scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
@@ -891,15 +933,19 @@ At the 1280 × 720 capture size, estimated HDR target storage is:
 
 | Preset | Atlas size | Steady / bake peak (MiB) | Bake jobs / draws |
 | --- | --- | ---: | ---: |
-| Low | 1024 × 1368 | 83.22 / 89.07 | 825 / 1245 |
-| Medium | 2048 × 2712 | 130.76 / 153.94 | 921 / 1389 |
-| High | 4096 × 5408 | 320.69 / 413.19 | 1017 / 1533 |
+| Low | 1024 × 1368 | 125.41 / 131.26 | 825 / 1245 |
+| Medium | 2048 × 2712 | 172.94 / 196.13 | 921 / 1389 |
+| High | 4096 × 5408 | 362.88 / 455.38 | 1017 / 1533 |
 
 The environment added 1.61 MiB on HDR (0.80 MiB on the compatibility path)
 in step 5. Step 6 adds 24 MiB for cascaded colour/depth storage on both paths.
 Step 7 adds 11.43 MiB at this size for the full-resolution prepass and resolved
-occlusion plus half-resolution raw occlusion. Ownership is twelve steady targets
-and fifteen during baking. World materials gain one sampler. Four static and
+occlusion plus half-resolution raw occlusion. Step 8 adds 42.19 MiB on HDR
+(31.64 MiB on the compatibility path) for motion/previous-depth attachments,
+colour histories and weapon AA. AA toggles skip their resolves/jitter but retain
+allocated targets and the motion attachments used by the prepass.
+Ownership is sixteen steady targets and nineteen
+during baking. World materials gain one sampler. Four static and
 four skinned shadow submissions replace the previous one of each, with per-cascade
 frustum culling; frozen captures omit the skinned submissions. These material
 presets currently share the same shadow resolution; mobile budgets remain open.
@@ -907,19 +953,20 @@ The previous six-recipe implementation used 102.49 / 134.60 MiB at this size.
 These are allocation estimates including conservative 32-bit depth, excluding
 meshes and driver overhead; they are not measured process peaks. The world now
 uses 86 material/chunk batches, 36,552 vertices, 2.51 MiB of mesh streams and the
-same 190 colliders. Resize affects seven screen-sized targets; zero-sized
+same 190 colliders. Resize affects eleven screen-sized targets; zero-sized
 windows skip drawing and finalization releases owned targets.
 
 `renderer.snapshot` reports cascade splits, world texel sizes, atlas dimensions and
-shadow submissions, plus bake jobs/draws, current/peak target bytes, local-light count,
+shadow submissions, temporal history/reset status and AA passes, plus bake
+jobs/draws, current/peak target bytes, local-light count,
 shadow frames, environment dimensions/levels/sample count, volume count and active settings.
 It also reports prepass/effect submissions, occlusion dimensions, sample counts,
 metre-space radius/ray length and the depth/normal format. `renderer.configure` accepts booleans
-`ambient_occlusion`, `contact_shadows`, `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
+`temporal_aa`, `weapon_aa`, `ambient_occlusion`, `contact_shadows`, `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`, `weathering`,
 `micro_detail`, `parallax`, `interior_lighting`, `environment_filter`; numeric `exposure` in
 0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
 `environment`, `environment_atlas`, `cascades`, `shadow_visibility`, `hdr_probe`,
-`depth`, `geometry_normals`, `ao`, `contact` or `occlusion_raw`.
+`depth`, `geometry_normals`, `ao`, `contact`, `occlusion_raw`, `motion` or `history`.
 `depth` shows logarithmic camera depth (white sky); `geometry_normals` shows
 view-space geometry normals (black sky). `ao`/`contact` show resolved visibility;
 `occlusion_raw` shows unfiltered AO in red and contact in green.
@@ -1057,6 +1104,34 @@ colour pipeline. Browser timing scope and before/after samples are recorded in
 `captures/rendering/occlusion-review/costs.json`. Physical mobile, other native
 backends, forced browser context recovery and sustained-combat budgets remain
 unqualified. These checks do not qualify WebGL floating-point HDR.
+
+Step 8 passes 152 Lua checks and the native renderer, HDR, occlusion, soldier,
+UI and temporal suites. The temporal checks verify static jitter cancellation,
+camera and skinned movement, accumulated history, independent weapon AA, exact
+camera/resize/toggle returns and restart/teleport invalidation. All 36 supported
+stills match every RGB pixel across three independent launches. A 61-image
+frame-addressed sweep retains continuous history; capture latency can add held
+frames, so its movie is a visual comparison rather than a real-time benchmark.
+
+The WebGL 2 encoded compatibility run passes 97 stages, including all material,
+shadow/contact and temporal pixel checks, with exact camera return. Diagnostic
+values bypass radiance encoding and have a separate output, so they never enter
+colour history. On Chromium / ANGLE Metal / Apple M3 Pro, separate 18-frame GPU
+windows at 1024² measure 6.55 ms median with TAA off and 6.25 ms live; their
+variance is too large to infer a speedup. See `temporal-review/costs.json` for
+scope and percentiles. These results do not qualify WebGL floating-point HDR.
+
+The continuous street A/B sample has 470 draws with both AA passes enabled and
+468 disabled; render-script median CPU is 122.5/96 µs respectively. This short
+sample is not a sustained combat or GPU-time budget. The soldier adapter now
+uploads 76 matrix properties per actor; physical mobile and other native
+backends remain unqualified. Browser context restoration and floating-point
+HDR remain the earlier open gates.
+
+- `captures/rendering/temporal-final`: three-launch stills, fingerprints and held-capture profiles.
+- `captures/rendering/temporal-validation`: motion/history diagnostics, returns, independent-AA checks, continuous sweep and live-resolve A/B costs.
+- `captures/rendering/temporal-review`: labelled comparisons, cutout motion movie and `costs.json` with measurement scope.
+- `captures/rendering/temporal-browser`: WebGL compatibility captures, pixel checks, GPU samples and local-build provenance.
 
 ## Generated audio
 

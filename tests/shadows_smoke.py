@@ -44,7 +44,7 @@ def main():
     def configure(**changes):
         cmd('renderer.configure',changes)
         engine.wait_until(lambda: all(cmd('renderer.snapshot')['settings'][k]==v for k,v in changes.items()),timeout=5)
-        game.wait_frames(4)
+        game.wait_frames(36)
     def shot(name):
         snapshot=cmd('capture.shot',{'name':name});game.wait_frames(35);return snapshot
     def save(name):
@@ -61,7 +61,7 @@ def main():
         resize(1280,720)
         initial=cmd('renderer.snapshot')
         assert initial['shadow_cascades']==4 and initial['shadow_atlas_size']==2048
-        assert initial['target_count']==12 and initial['shadow_splits']==[8,22,52,120]
+        assert initial['target_count']==16 and initial['shadow_splits']==[8,22,52,120]
         assert initial['shadow_draw_passes']==8
         for name in ('street','interior','shadow_distance','shadow_cutout','shadow_remote'):
             shot(name);default=save(name)
@@ -105,7 +105,7 @@ def main():
         resize(1280,720);shot('shadow_distance');configure(view='shadow',bloom=False)
         assert ImageChops.difference(atlas,save('atlas-resize-return')).getbbox() is None
         final=cmd('renderer.snapshot')
-        assert final['target_count']==12 and final['bake_draws']==initial['bake_draws']
+        assert final['target_count']==16 and final['bake_draws']==initial['bake_draws']
         assert final['shadow_draw_passes']==4
         report['renderer']=final
         report['camera_return_exact']=True

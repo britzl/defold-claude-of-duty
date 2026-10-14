@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 7, width = 1280, height = 720, settle_frames = 32,
+local M = { version = 8, width = 1280, height = 720, settle_frames = 40,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,

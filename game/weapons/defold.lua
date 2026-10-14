@@ -25,7 +25,11 @@ local function upload(adapter,batch,factory_url)
     return {id=id,url=msg.url(nil,id,"mesh"),visible=true}
 end
 local function visible(part,enabled)
-    if part.visible~=enabled then msg.post(part.url,enabled and "enable" or "disable");part.visible=enabled end
+    if part.visible~=enabled then
+        msg.post(part.url,enabled and "enable" or "disable")
+        if part.prepass then msg.post(part.prepass,enabled and "enable" or "disable") end
+        part.visible=enabled
+    end
 end
 function M.new(ctx,mesh_factory,effect_factory)
     local a={models={},objects={},buffers={},effects={},effect_cursor=0,vertices=0}
@@ -43,13 +47,15 @@ function M.new(ctx,mesh_factory,effect_factory)
     local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,0})
     for _=1,24 do
         local part=upload(a,cube,effect_factory);part.life=0
+        part.prepass=msg.url(nil,part.id,"prepass")
+        go.set(part.prepass,"vertices",a.buffers[#a.buffers])
         visible(part,false);a.effects[#a.effects+1]=part
     end
     local function effect(position,velocity,color,size,life)
         a.effect_cursor=a.effect_cursor%#a.effects+1
         local e=a.effects[a.effect_cursor]
         e.position=V.copy(position);e.velocity=velocity;e.life=life;e.duration=life;e.size=size
-        e.tracer=false;e.shell=false
+        e.tracer=false;e.shell=false;e.previous_world=nil
         go.set(e.url,"tint",vmath.vector4(color[1],color[2],color[3],0))
         go.set_rotation(vmath.quat(),e.id)
         visible(e,true)
@@ -107,6 +113,14 @@ function M.update(a,ctx,dt,shown,capture_pose)
             end
             go.set_position(vmath.vector3(e.position.x,e.position.y,e.position.z),e.id)
             go.set_scale(vmath.vector3(e.size,e.size,e.tracer and e.length or e.size*(e.shell and 2.5 or 1)),e.id)
+            local transform=vmath.matrix4_quat(go.get_rotation(e.id))
+            local scale={e.size,e.size,e.tracer and e.length or e.size*(e.shell and 2.5 or 1)}
+            for col=0,2 do for row=0,2 do
+                local key="m"..row..col;transform[key]=transform[key]*scale[col+1]
+            end end
+            transform.m03,transform.m13,transform.m23=e.position.x,e.position.y,e.position.z
+            go.set(e.prepass,"previous_world",e.previous_world or transform)
+            e.previous_world=transform
             visible(e,e.life>0)
         end
     end

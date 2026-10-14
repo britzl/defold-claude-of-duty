@@ -52,7 +52,7 @@ def main():
     def configure(**changes):
         cmd('renderer.configure', changes)
         engine.wait_until(lambda: all(cmd('renderer.snapshot')['settings'][k] == v for k, v in changes.items()), timeout=5)
-        game.wait_frames(4)
+        game.wait_frames(36)
 
     def save(name):
         path = output / (name + '.png')
@@ -79,7 +79,7 @@ def main():
         resize(1280, 720)
         initial = cmd('renderer.snapshot')
         assert initial['volume_count'] == 4 and initial['reflection_levels'] == 6
-        assert initial['target_count'] == 12
+        assert initial['target_count'] == 16
         shot('interior')
         default = save('interior')
         configure(interior_lighting=False)
@@ -150,7 +150,7 @@ def main():
         shot('street')
         assert ImageChops.difference(before,save('street-return')).getbbox() is None
         final=cmd('renderer.snapshot')
-        assert initial['bake_draws']==final['bake_draws'] and final['target_count']==12
+        assert initial['bake_draws']==final['bake_draws'] and final['target_count']==16
         report['renderer']=final
         report['scope']='Frozen production cameras; GPU pixel assertions. CPU/draw profiles are in the baseline manifests.'
         cmd('capture.end')

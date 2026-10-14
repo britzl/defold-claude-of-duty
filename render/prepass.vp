@@ -8,9 +8,19 @@ varying mediump vec3 var_normal;
 varying highp float var_depth;
 varying mediump vec3 var_view_normal;
 varying lowp float var_coverage;
+uniform highp mat4 previous_view_proj;
+uniform highp mat4 previous_view;
+varying highp vec4 var_current_clip;
+varying highp vec4 var_previous_clip;
+varying highp float var_previous_depth;
+varying mediump vec3 var_previous_normal;
 void main() {
     var_position=position;var_normal=normal;var_coverage=color.a;
     var_depth=-(view*vec4(position,1.0)).z;
     var_view_normal=(view*vec4(normal,0.0)).xyz;
-    gl_Position=view_proj*vec4(position,1.0);
+    var_current_clip=view_proj*vec4(position,1.0);
+    var_previous_clip=previous_view_proj*vec4(position,1.0);
+    var_previous_depth=-(previous_view*vec4(position,1.0)).z;
+    var_previous_normal=(previous_view*vec4(normal,0.0)).xyz;
+    gl_Position=var_current_clip;
 }

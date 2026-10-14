@@ -47,7 +47,7 @@ def main():
         assert soldier()["travel"] > before + .25
         render = state()["render"]
         assert render["vertices"] == 7140 and render["buffers"] == 1 and render["active_hitboxes"] == 42, render
-        assert render["palette_uploads"] > 10 and render["palette_bytes"] == 1600, render
+        assert render["palette_uploads"] > 10 and render["palette_bytes"] == 4800, render
         print("PASS generated mesh, 25-bone palette uploads and native patrol", render, flush=True)
 
         player(z=-1)

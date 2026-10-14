@@ -1,0 +1,15 @@
+name: "temporal"
+tags: "fullscreen"
+vertex_program: "/render/composite.vp"
+fragment_program: "/render/temporal.fp"
+vertex_space: VERTEX_SPACE_LOCAL
+samplers { name: "source_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_LINEAR filter_mag: FILTER_MODE_MAG_LINEAR }
+samplers { name: "history_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_LINEAR filter_mag: FILTER_MODE_MAG_LINEAR }
+samplers { name: "depth_normal_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "previous_depth_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "motion_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "expected_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+fragment_constants { name: "temporal_params" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "jitter" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "colour_pipeline" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+fragment_constants { name: "sky_reprojection" type: CONSTANT_TYPE_USER_MATRIX4 value { x: 1 y: 0 z: 0 w: 0 } value { x: 0 y: 1 z: 0 w: 0 } value { x: 0 y: 0 z: 1 w: 0 } value { x: 0 y: 0 z: 0 w: 1 } }

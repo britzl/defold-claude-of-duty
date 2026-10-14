@@ -192,8 +192,8 @@ combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
 physical mobile validation is still outstanding. All fifteen planned surface recipes, material mip filtering and world weathering
 are now implemented (steps 3–4 below);
 Unified daylight, filtered environment lighting and interior attenuation are
-implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Local-light
-shadows and temporal effects remain later stages.
+implemented in rendering step 5. Stable cascaded sun shadows are implemented in rendering step 6. Depth/normals, ambient occlusion and contact shadows are implemented in rendering step 7. Temporal stability is implemented in rendering step 8. Local-light
+shadows and the remaining photographic effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
 **Rendering quality sequence — agreed 2026-10-14.** The target is the visual
@@ -469,6 +469,32 @@ open. Validation passes 146 Lua checks, native renderer/HDR and projected
 contact/depth checks, 36 views with exact pixels across three launches, five
 121-frame sweeps and 89 WebGL stages with pixel assertions. See `README.md`
 for costs, limitations and local before/after artifacts.
+
+Step 8 implementation adds camera, rigid-object and skinned motion vectors,
+eight-sample projection jitter and a world TAA resolve with per-tap depth/normal
+history rejection and variance neighbourhood clipping. Previous displayed bone
+palettes and root transforms preserve actor motion independently of simulation
+interpolation. Teleports, restart, camera/projection cuts, resize, settings and
+context restoration invalidate history. The weapon has its own spatial AA pass
+in linear premultiplied colour and is composited after world temporal processing.
+
+The laboratory now shares production face clipping and edge stitching at its
+table/floor joints, which removes a subpixel capture instability.
+Independent toggles and motion/history diagnostics are exposed in the menu and
+automation. Still captures allow two transform-settling frames, converge for 32 history
+samples, then hold; live capture sweeps
+retain continuous history and expose the resolve's real cost. The extra targets
+add 42.19 MiB on HDR at 1280 × 720 (31.64 MiB on encoded RGBA8): medium HDR is
+172.94 MiB steady / 196.13 MiB baking, with sixteen/nineteen targets. Each actor
+uploads current/previous palettes through 76 matrix-property calls per displayed
+frame. Native validation passes 152 Lua checks, renderer/HDR/occlusion, combat/UI
+and temporal suites. All 36 supported views match exactly across three launches;
+a 61-image sweep retains continuous history. The short street A/B sample is
+468 → 470 draws and 96 → 122.5 µs median render-script CPU, not a GPU budget.
+The WebGL 2 compatibility path passes 97 stages with material, contact and
+temporal pixel checks; diagnostics remain separate from radiance history.
+Step 9, reflections, glass and local lights, is next. Cross-backend/mobile
+qualification and the earlier outstanding reference/HDR gates remain separate.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

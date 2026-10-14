@@ -66,6 +66,22 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
     first=Image.open(output/'street.png').convert('RGB')
     returned=Image.open(output/'street_return.png').convert('RGB')
     assert ImageChops.difference(first,returned).getbbox() is None,'Browser return pixels differ'
+    if 'temporal_motion' in report['shots']:
+        def opened(name): return Image.open(output/(name+'.png')).convert('RGB')
+        for a,b in [('street','temporal_disabled'),('shadow_cutout','cutout_temporal_disabled'),
+                    ('weapon','weapon_aa_disabled'),('ads','ads_aa_disabled')]:
+            difference=sum(ImageStat.Stat(ImageChops.difference(opened(a),opened(b))).mean)/3
+            assert difference>.005,(a,b,difference);metrics[b]=difference
+        motion=opened('temporal_motion')
+        pixels=list(motion.getdata())
+        bad=sum(abs(r-128)>2 or abs(g-128)>2 for r,g,b in pixels)
+        assert bad/len(pixels)<.025,(bad,len(pixels))
+        history_mean=ImageStat.Stat(opened('temporal_history')).mean[0]
+        assert history_mean>70,history_mean
+        moving=sum(abs(r-128)>3 or abs(g-128)>3 for r,g,b in opened('temporal_camera_motion').getdata())
+        assert moving>1000,moving
+        metrics['temporal']={'static_velocity_bad_fraction':bad/len(pixels),'history_weight_mean':history_mean/255,
+            'camera_motion_pixels':moving}
     if report.get('restored'):
         restored=Image.open(output/'street_restored.png').convert('RGB')
         assert ImageChops.difference(first,restored).getbbox() is None,'Context restoration changed pixels'

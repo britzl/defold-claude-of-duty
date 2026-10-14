@@ -40,6 +40,16 @@ function M.new()
             steps[#steps+1]={name="laboratory",id=view.."_page_"..page,changes={view=view,atlas_page=page},page=page,view=view}
         end
     end
+    for _,step in ipairs({
+        {name="street",id="temporal_disabled",changes={temporal_aa=false}},
+        {name="shadow_cutout",id="cutout_temporal_disabled",changes={temporal_aa=false}},
+        {name="weapon",id="weapon_aa_disabled",changes={weapon_aa=false}},
+        {name="ads",id="ads_aa_disabled",changes={weapon_aa=false}},
+        {name="street",id="temporal_motion",changes={view="motion"}},
+        {name="street",id="temporal_history",changes={view="history"}},
+        {name="shadow_cutout",id="temporal_camera_motion",changes={view="motion"},play=true},
+        {name="street",id="temporal_live_cost",live=true},
+    }) do steps[#steps+1]=step end
     steps[#steps+1]={name="street",id="street_return"}
     return {steps=steps,index=0,frames=0,intervals={}}
 end
@@ -58,7 +68,7 @@ function M.update(test,self,dt)
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==12)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==16)
             assert(stats.surface_count==15 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,
@@ -66,7 +76,8 @@ function M.update(test,self,dt)
                 frame_interval_p95_ms=test.intervals[math.ceil(#test.intervals*.95)]}))
             test.done=true;return
         end
-        capture.select(self,{name=step.name})
+        capture.select(self,{name=step.name,temporal_live=step.live or step.play})
+        if step.play then self.capture.playing=true;self.capture.direction=1 end
         test.tick=test.tick or self.ctx.time.tick
         if step.changes then msg.post("@render:","renderer_configure",step.changes) end
     end

@@ -45,6 +45,8 @@ function init(self)
     end
     W.box(nil,480,591,2,6,W.accent,"hud",TOP)
     self.bearing=W.text("heading",480,578,"000",.85,W.white,nil,"hud",TOP)
+    self.fps=W.text("fps",936,610,"FPS --",.8,W.white,gui.PIVOT_E,"hud",TR)
+    self.fps_frames,self.fps_elapsed=0,0
     self.feed=W.text("killfeed",936,572,"",.87,W.white,gui.PIVOT_NE,"hud",TR)
     W.box(nil,118,55,212,62,W.panel,"hud",BL)
     self.health=W.text("health",24,66,"HEALTH 100",1.15,W.white,gui.PIVOT_W,"hud",BL)
@@ -63,6 +65,17 @@ function init(self)
     gui.set_enabled(self.hit,false)
     self.loading=W.text("loading",480,280,"GENERATING MARKET STREET...",1,W.white)
     self.death=W.text("death",480,350,"",1.5,W.white)
+end
+
+function update(self,dt)
+    -- Sample GUI frames independently of the fixed simulation and pause state.
+    if dt<=0 then return end
+    self.fps_frames=self.fps_frames+1
+    self.fps_elapsed=self.fps_elapsed+dt
+    if self.fps_elapsed>=.5 then
+        gui.set_text(self.fps,string.format("FPS %d",math.floor(self.fps_frames/self.fps_elapsed+.5)))
+        self.fps_frames,self.fps_elapsed=0,0
+    end
 end
 
 local function update_hud(self,state)

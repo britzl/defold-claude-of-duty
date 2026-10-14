@@ -1,0 +1,5 @@
+material: "/render/prepass_skinned.material"
+vertices: "/soldiers/empty.buffer"
+primitive_type: PRIMITIVE_TRIANGLES
+position_stream: "position"
+normal_stream: "normal"

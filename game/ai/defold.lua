@@ -37,6 +37,8 @@ function M.create(a,e)
         mover=factory.create(a.mover_factory,vector(e.position)),hits={},born=a.ctx.time.frame}
     item.url=msg.url(nil,item.mesh,"mesh")
     go.set(item.url,"vertices",a.resource)
+    item.prepass=msg.url(nil,item.mesh,"prepass")
+    go.set(item.prepass,"vertices",a.resource)
     local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id)
     for _,shape in ipairs(volumes) do
         local id=factory.create(a.hit_factory,vector(shape))
@@ -112,7 +114,18 @@ function M.present(a,e,palette,position,yaw)
     local item=a.instances[e.id]
     go.set_position(vector(position),item.mesh)
     go.set_rotation(vmath.quat_rotation_y(yaw),item.mesh)
-    for i,t in ipairs(palette) do go.set(item.url,"bone_palette",matrix(t,a.mat),{index=i}) end
+    local current_world=vmath.matrix4_rotation_y(yaw)
+    current_world.m03,current_world.m13,current_world.m23=position.x,position.y,position.z
+    go.set(item.prepass,"previous_world",item.previous_world or current_world)
+    item.previous_bones=item.previous_bones or {}
+    for i,t in ipairs(palette) do
+        local current=matrix(t)
+        go.set(item.url,"bone_palette",current,{index=i})
+        go.set(item.prepass,"bone_palette",current,{index=i})
+        go.set(item.prepass,"previous_bones",item.previous_bones[i] or current,{index=i})
+        item.previous_bones[i]=current
+    end
+    item.previous_world=current_world
     a.uploads=a.uploads+1
     local elapsed=os.clock()-started
     a.present_seconds=a.present_seconds+elapsed;a.peak_present=math.max(a.peak_present,elapsed)
@@ -132,8 +145,8 @@ function M.snapshot(a)
         if not item.disabled then boxes=boxes+#item.hits end
     end
     return {actors=actors,objects=objects,active_hitboxes=boxes,buffers=a.resource and 1 or 0,
-        vertices=a.vertices or 0,mesh_bytes=a.bytes or 0,palette_bytes=rig.count*64,
-        palette_uploads=a.uploads,palette_calls_per_actor=rig.count,
+        vertices=a.vertices or 0,mesh_bytes=a.bytes or 0,palette_bytes=rig.count*64*3,
+        palette_uploads=a.uploads,palette_calls_per_actor=rig.count*3+1,
         mean_upload_ms=a.uploads>0 and a.present_seconds*1000/a.uploads or 0,peak_upload_ms=a.peak_present*1000}
 end
 function M.final(a)

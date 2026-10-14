@@ -11,6 +11,20 @@ varying mediump vec3 var_normal;
 varying highp float var_depth;
 varying mediump vec3 var_view_normal;
 varying lowp float var_coverage;
+uniform highp mat4 previous_view_proj;
+uniform highp mat4 previous_view;
+varying highp vec4 var_current_clip;
+varying highp vec4 var_previous_clip;
+varying highp float var_previous_depth;
+varying mediump vec3 var_previous_normal;
+uniform highp mat4 previous_world;
+uniform highp mat4 previous_bones[25];
+mat4 previous_skin() {
+    return previous_bones[int(joint_indices.x)]*joint_weights.x
+        +previous_bones[int(joint_indices.y)]*joint_weights.y
+        +previous_bones[int(joint_indices.z)]*joint_weights.z
+        +previous_bones[int(joint_indices.w)]*joint_weights.w;
+}
 void main() {
     mat4 transform=world*skin_matrix(joint_indices,joint_weights);
     vec4 p=transform*vec4(position,1.0);
@@ -18,5 +32,11 @@ void main() {
     var_coverage=1.0; // Soldier alpha is camouflage, not coverage.
     var_depth=-(view*p).z;
     var_view_normal=(view*vec4(var_normal,0.0)).xyz;
-    gl_Position=view_proj*p;
+    mat4 previous_transform=previous_world*previous_skin();
+    vec4 old=previous_transform*vec4(position,1.0);
+    var_current_clip=view_proj*p;
+    var_previous_clip=previous_view_proj*old;
+    var_previous_depth=-(previous_view*old).z;
+    var_previous_normal=(previous_view*previous_transform*vec4(normal,0.0)).xyz;
+    gl_Position=var_current_clip;
 }

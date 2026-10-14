@@ -1,5 +1,6 @@
 -- Optional visual fixture. No collision, gameplay registration or RNG consumption.
 local mesh=require "game.world.mesh"
+local visible=require "game.world.visible_faces"
 local M={roughness={.08,.25,.5,.75,1},
     extra_materials={"concrete_floor","brick","tile","dirt","gravel","metal_painted","metal_rust","rubber","glass"},
     batch_count=28}
@@ -31,11 +32,12 @@ function M.sphere(batch,centre,radius)
     end end
 end
 function M.batches()
-    local list,by_material={},{}
+    local list,by_material,boxes,bounds={},{},{},{}
     local function box(material,x,y,z,w,h,d)
         local batch=by_material[material]
         if not batch then batch=mesh.new(material,material,0,0);by_material[material]=batch;list[#list+1]=batch end
-        mesh.box(batch,{material=material,x=x,y=y,z=z,w=w,h=h,d=d},1)
+        local shape={material=material,x=x,y=y,z=z,w=w,h=h,d=d}
+        boxes[#boxes+1]=shape;bounds[#bounds+1]=visible.bounds(shape)
     end
     box("concrete_floor",3,-.1,0,64,.2,14)
     box("plaster_cream",0,1.8,-5.5,16,3.6,.2)
@@ -64,6 +66,14 @@ function M.batches()
     box("concrete_floor",160,-.1,0,14,.2,14)
     box("wood",160,1,0,1,2,1)
     box("metal",163,1,-2,.12,2,.12)
+    -- Match production clipping/tessellation at table feet and wall/floor joints.
+    -- Subpixel camera jitter exposes otherwise hidden T-junctions here.
+    local faces,edges={},{}
+    for i=1,#boxes do
+        faces[i]=visible.for_box(i,bounds)
+        visible.register_edges(edges,bounds[i],faces[i])
+    end
+    for i,shape in ipairs(boxes) do mesh.box(by_material[shape.material],shape,1,faces[i],edges) end
     -- Perforated overhead panel: colour and shadow must show identical holes.
     local cutout=mesh.new("cutout","metal",0,0)
     mesh.box(cutout,{material="metal",x=2,y=2.2,z=3,w=2.4,h=.02,d=1.8},1)
