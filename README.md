@@ -553,13 +553,13 @@ Slabs own the top of each storey, and walls/trim use butt joints at corners.
 `visible_faces.lua` subtracts buried surfaces and gives coincident outward faces
 one owner before triangulation. This removes depth ties at slab edges, trim
 undersides and kerbs without changing collision proxies. The slice generates
-519 boxes, 77 mesh batches, 21,030 vertices and 190
-collision objects. Vertex streams occupy 841,200 bytes (CPU/GPU resource overhead
+519 boxes, 77 mesh batches, 36,552 vertices and 190
+collision objects. Vertex streams occupy 1,462,080 bytes (CPU/GPU resource overhead
 is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
-settling frame before `ready`. Geometry first collects recipes, then clips/meshes
-them, handling at most 24 jobs per frame across both stages;
+settling frame before `ready`. Geometry collects recipes, clips faces and indexes shared edge endpoints, then
+meshes them, handling at most 24 jobs per frame across these three stages;
 collision creation at most eight; uploads at most one bounded batch. A soft
 2 ms CPU deadline is checked between geometry/collision jobs. A single upload
 is indivisible. `world.snapshot` reports total CPU work and the peak loading
@@ -609,7 +609,8 @@ and `costs.json` to `build/market-validation`. `world.view` also accepts `courty
 and standing capsule clearance along every new edge, cover clearance, deterministic
 loading and the existing GUI/resource budgets. The 77 world batches are up from
 50; stream storage was about 0.71 MiB, up from 0.51 MiB, before face clipping
-raised it to 0.80 MiB. The existing mesh, physics,
+raised it to 0.80 MiB. Matching trim/slab edge subdivisions now bring it to
+1.39 MiB (36,552 vertices); the 77 batches and 190 colliders are unchanged. The existing mesh, physics,
 GUI, texture and render-target limits are unchanged. A macOS/Metal debug run at
 1920 × 1280 measured 29.1 ms of world-loading CPU work (1.03 ms peak job). Short
 90-frame inspection captures reported 154 submitted draws for the street, 121
@@ -649,16 +650,19 @@ The contact sheet is `contact-sheet.jpg`; complete metadata is `manifest.json`.
 `--launches 3` starts three independent engines and asserts exact RGB equality
 for every supported shot, recording `repeatability.json` and separate per-launch
 manifests. The overlapping wall/slab and trim surfaces have been repaired and
-buried faces clipped; all seven shots now pass this gate on Metal. No pixels are
-masked or tolerated. Catalogue version 2 also records the 0.1–500 m world clip
+buried faces clipped. Shared trim/slab edges also use matching endpoints to
+prevent one-pixel depth ties at grazing angles. No pixels are masked or tolerated.
+All 12 supported shots pass across three independent Metal launches.
+Catalogue version 3 retains the 0.1–500 m world clip
 range; the 0.1 m near plane improves depth precision while remaining inside the
 player's wall clearance. The separate weapon clip range is unchanged.
 
 The catalogue in `game/render/capture.lua` has street, interior, detail, courtyard,
-weapon, ADS and laboratory captures. Sunset and night are explicitly unsupported
+weapon, ADS and laboratory captures, plus four material close-ups and a grazing
+road view. Sunset and night are explicitly unsupported
 until rendering step 10; no substitute daylight images are written. Current
 lighting is fixed daylight, not a matched 16:30 astronomical configuration.
-The generated laboratory has five surface panels, a floor, a corner with crates,
+The generated laboratory has six surface panels, a floor, a corner with crates,
 a table and two sphere rows: rear dielectric, front metal, with roughness
 0.08/0.25/0.5/0.75/1 from left to right. It uses the production world shader and
 shadow pass; uniform sphere parameters isolate lighting from the texture recipes.
@@ -694,15 +698,44 @@ defaults while capturing and are restored on exit. A restart exits capture mode.
 
 ## Generated materials and rendering
 
-The renderer owns nine targets. During the first nine rendered frames it bakes
-one 1280 × 256 atlas per frame (albedo variation, tangent-space normals, and
-roughness/metalness/cavity), then one 64 × 64 sky cubemap face per frame. Each atlas
-contains five 256² surface tiles with periodic padding. Reduced recipes adapt the
-reference's plaster mottling, asphalt aggregate, wood fibres, worn metal and cloth
-weave; these are not a complete port of its high-resolution material library.
-World-space projection keeps the generated geometry independent of UV assets.
-The GPU bakes never advance gameplay random streams and do not repeat on resize
-or encounter restart. Context restoration schedules the nine jobs again.
+The renderer generates four reference surface recipes at 1024²: plaster trowel
+coats, pinholes and chips; concrete aggregate, pores, formwork and tie holes;
+asphalt binder, mixed aggregate, repairs and oil; and wood planks, grain, knots,
+splits and nails. Concrete now has independent maps. The older metal and cloth
+recipes remain at 256²; dirt still uses a temporary tinted road recipe.
+
+| Recipe | Tile width | Height relief |
+| --- | ---: | ---: |
+| Plaster | 2.2 m | 0.060 m |
+| Concrete | 2.5 m | 0.090 m |
+| Asphalt | 3.0 m | 0.075 m |
+| Wood | 2.0 m | 0.038 m |
+
+These are the reference library's physical parameters: height-field differences,
+not the full relief value, determine the actual surface slope. A Sobel pass
+reconstructs normals from height stored across two RGBA8 alpha channels. Colour
+and packed roughness/metalness/cavity stay linear. Painted variants use sRGB
+tints; wood and asphalt retain the recipe's base colour instead of being darkened
+twice. The source adaptations are credited in `THIRD_PARTY_NOTICES.md`.
+
+Three 3080 × 2052 atlases hold six complete mip chains, each level with its own
+wrapped one-texel border. GPU box reductions preserve linear colour and normal
+variance. The world shader computes LOD before wrapping UVs, blends adjacent
+levels, takes two samples along the major footprint axis, and broadens roughness
+where normal detail is lost. World-space projection needs no mesh UV assets.
+Integer periodic noise lattices, wrapped board/coating IDs and defined descending
+ramps avoid texture discontinuities and undefined shader behaviour.
+
+Loading schedules 372 jobs / 558 draws: expensive recipes run one per frame;
+up to eight copy/filter/environment jobs run per frame. Defold 1.14's Lua render
+targets use discard-on-load attachments, so partial atlas updates first copy the
+whole atlas to a spare and patch it in the same render pass. This prevents tile
+GPUs from destroying adjacent mip regions. The two scratch maps and spare atlas
+are released on the frame after baking: twelve targets during loading, nine in
+ordinary play. Context restoration allocates scratch again and regenerates the
+maps. Bakes never consume gameplay RNG or repeat on resize/restart. Additional
+recipes, a separate concrete-floor variant, fine detail maps and world-scale
+variation remain later work in steps 3–4.
 
 World geometry, the soldier and weapons share GGX direct lighting, ambient light,
 approximate sky reflections and up to four authored point lights. The nearest
@@ -726,7 +759,7 @@ bloom passes → composition/tone mapping → GUI. Height fog integrates an expo
 height density along the eye ray. Rendering step 2 enables linear RGBA16F for
 scene, weapon, bloom and environment on Metal. Radiance interpolation and blending
 remain linear and are no longer limited to 0..8. Authored vertex colours use the
-piecewise sRGB transfer function; generated atlas values remain linear multipliers.
+piecewise sRGB transfer function; generated atlas values are linear albedo.
 The final pass composites world/weapon light, applies one fixed exposure and the
 references' neutral AgX curve, then performs one accurate sRGB display conversion
 with deterministic 8-bit dithering. Bloom affects only the world; GUI stays
@@ -739,26 +772,31 @@ float renderability, filtering and blending are qualified there. The presence of
 on Metal; the default is `auto`. Both paths share AgX and sRGB conversion.
 `renderer.snapshot.pipeline` records the selected format, backend and reason.
 Environment reflections currently use
-an analytic broadening approximation rather than prefiltered roughness mipmaps;
-the material atlas also has no mip chain yet. `game.project` sets the default
+an analytic broadening approximation rather than prefiltered environment mipmaps. `game.project` sets the default
 GLSL ES float precision to `highp` for noise, packed shadows and lighting. Using
 the project setting also keeps precision declarations ahead of Defold's generated
 fragment output in WebGL shaders.
 
-At a 1920 × 1280 backbuffer (the default window on a 2× display), target storage
-is approximately 70.5 MiB with HDR, excluding driver overhead and generated meshes. This
-includes conservatively budgeted 32-bit depth attachments. At 960 × 640 it is
-approximately 26.6 MiB; at the 1280 × 720 capture size it is 33.91 MiB, versus
-26.35 MiB on the compatibility path. Resize updates the four screen-dependent targets while
-retaining the atlas, cubemap and shadow targets. Zero-sized windows skip rendering;
-finalization deletes every target.
+At a 1920 × 1280 backbuffer, steady target storage is approximately 139.11 MiB
+with HDR, excluding driver overhead and generated meshes. At 960 × 640 it is
+95.16 MiB; at the 1280 × 720 capture size it is 102.49 MiB (94.92 MiB on the
+compatibility path). The temporary bake targets add 32.11 MiB, giving a
+134.60 MiB peak at capture resolution. These estimates conservatively include
+32-bit depth. The 1K recipes substantially increase memory over step 2; quality
+presets, mobile budgets and GPU timings remain unqualified. Resize changes the
+four screen-dependent targets; atlas, cubemap and shadow data persist.
+`peak_target_bytes` estimates baking at the current viewport size; it is not a
+measured lifetime/process peak. Zero-sized
+windows skip rendering and finalization releases every owned target.
 
-`renderer.snapshot` reports bake jobs, target dimensions/bytes, local-light count,
+`renderer.snapshot` reports bake jobs/draws, current/peak target bytes, local-light count,
 shadow frames and active settings. `renderer.configure` accepts booleans
 `shadows`, `normal_maps`, `local_lights`, `fog`, `bloom`; numeric `exposure` in
 0.25..4; and `view` equal to `scene`, `albedo`, `normals`, `material`, `shadow`,
 `environment` or `hdr_probe`. The last view renders diagnostic HDR stripes into
 the actual scene/weapon targets and displays transfer/filter/blend samples.
+`atlas_half` is 0 for the full debug atlas, 1 for its lower half or 2 for its
+upper half, allowing unscaled texel inspection within desktop height limits.
 Configuration applies on the next render message dispatch, so tests
 wait for the snapshot to reflect it. All controls affect presentation only.
 
@@ -766,8 +804,11 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 128 Lua checks pass. The
-new `tests/hdr_smoke.py` verifies radiance above 8, hardware alpha blending,
+with review images in `build/renderer-validation`. All 132 Lua checks pass.
+`tests/materials_smoke.py` checks all 62 GPU mip regions for preserved mean values
+and exact wrapped borders, plus recipe channels and temporary resource release;
+outputs go to `captures/rendering/material-validation`.
+`tests/hdr_smoke.py` verifies radiance above 8, hardware alpha blending,
 linear filtering, world/weapon composition, sRGB knees and reference AgX goldens
 at three exposures; results go to `captures/rendering/hdr-validation`.
 The native renderer/HDR suites and full W2/E2 building traversal suite pass on

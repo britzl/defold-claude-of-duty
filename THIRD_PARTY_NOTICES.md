@@ -3,6 +3,12 @@
 `render/agx.glsl` adapts the neutral AgX implementation in
 Claude-of-Duty's `src/render/glsl.js`, also used by the Kaigen reference.
 
+`render/surface_noise.glsl` and the plaster, concrete, asphalt and wood recipes
+in `render/surfaces.glsl` adapt `src/materials/glsl/noise.js`, `surfaces-arch.js`,
+`surfaces-ground.js` and `surfaces-organic.js` from the same project. The Kaigen
+reference uses the same recipes. Adaptations include integer periodic lattices,
+wrapped board/coating IDs, band-limited noise and defined descending ramps.
+
 MIT License
 
 Copyright (c) 2026 mshumer

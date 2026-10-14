@@ -44,4 +44,17 @@ test("clipped faces retain winding and remove geometry below a raised kerb",func
         assert((ay*bz-az*by)*n[i]+(az*bx-ax*bz)*n[i+1]+(ax*by-ay*bx)*n[i+2]>0)
     end
 end)
+test("shared edge endpoints include both box boundaries and clipped window cuts",function()
+    local bounds={{6.5,3.145,-12,20.2,3.255,2},{6.4,3.255,-12.1,6.8,3.345,2.1}}
+    local registry={}
+    for i,b in ipairs(bounds) do visible.register_edges(registry,b,visible.for_box(i,bounds)) end
+    local points=visible.edge_vertices(registry,{6.5,3.255,-12.1},{6.5,3.255,2.1})
+    assert(#points==2 and points[1][3]==-12 and points[2][3]==2)
+    -- These endpoints were introduced by clipping: they are absent from the
+    -- original wall bounds, but must split the adjacent roof's longer edge.
+    local wall={6.5,0,-12,6.8,9.545,2}
+    visible.register_edges(registry,wall,{{},{{9.325,-5.975,9.545,-4.025}},{},{},{},{}})
+    points=visible.edge_vertices(registry,{6.5,9.545,-12},{6.5,9.545,2})
+    assert(#points==2 and points[1][3]==-5.975 and points[2][3]==-4.025)
+end)
 print(count.." visible-face tests passed")

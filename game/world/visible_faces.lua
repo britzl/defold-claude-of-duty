@@ -53,4 +53,47 @@ function M.for_box(index, bounds)
     end
     return faces
 end
+-- Index the endpoints of all visible, collinear edges, including edges created
+-- by clipping windows/trim. Merely consulting the original box bounds misses
+-- those new T-junctions. Keys tolerate the same arithmetic noise as face clipping.
+local function edge_key(a,b)
+    local axis=a[1]~=b[1] and 1 or a[2]~=b[2] and 2 or 3
+    local u,v=axis%3+1,(axis+1)%3+1
+    return axis,string.format("%d/%.7f/%.7f",axis,a[u],a[v])
+end
+function M.register_edges(registry,bounds,faces)
+    for face,rects in ipairs(faces) do
+        local pair=axes[face];local k,u,v=pair[1],pair[2],pair[3]
+        local plane=bounds[k+(face%2==1 and 3 or 0)]
+        for _,r in ipairs(rects) do
+            local points={}
+            for i,uv in ipairs({{r[1],r[2]},{r[3],r[2]},{r[3],r[4]},{r[1],r[4]}}) do
+                local p={};p[k]=plane;p[u]=uv[1];p[v]=uv[2];points[i]=p
+            end
+            for i,a in ipairs(points) do
+                local b=points[i%4+1];local axis,key=edge_key(a,b)
+                local line=registry[key] or {};registry[key]=line
+                line[#line+1]=a[axis];line[#line+1]=b[axis]
+            end
+        end
+    end
+end
+function M.edge_vertices(registry,a,b)
+    local axis,key=edge_key(a,b)
+    local line=registry[key]
+    if not line then return {} end
+    if not line.sorted then table.sort(line);line.sorted=true end
+    local lo,hi=math.min(a[axis],b[axis]),math.max(a[axis],b[axis])
+    local result,last={},-math.huge
+    for _,value in ipairs(line) do
+        if value>lo+epsilon and value<hi-epsilon and value>last+epsilon then
+            local p={a[1],a[2],a[3]};p[axis]=value;result[#result+1]=p;last=value
+        end
+    end
+    if a[axis]>b[axis] then
+        for i=1,math.floor(#result/2) do result[i],result[#result-i+1]=result[#result-i+1],result[i] end
+    end
+    return result
+end
+
 return M

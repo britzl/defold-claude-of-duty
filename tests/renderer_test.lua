@@ -1,11 +1,12 @@
 -- Render scheduling/resource contracts without a GPU. Pixel/shader checks live
 -- in renderer_smoke.py and run against Defold itself.
 local settings=require "game.render.settings"
+local atlas=require "game.render.surface_atlas"
 local tests=0
 local function test(name,fn) fn();tests=tests+1;print("PASS "..name) end
 test("settings reject unknown, mistyped and nonfinite values atomically",function()
     local original=settings.defaults()
-    for _,invalid in ipairs({{exposure=0/0},{exposure=math.huge},{exposure=0},{shadows=1},{view="missing"},{unknown=true}}) do
+    for _,invalid in ipairs({{exposure=0/0},{exposure=math.huge},{exposure=0},{shadows=1},{view="missing"},{unknown=true},{atlas_half=3},{atlas_half=.5},{atlas_half=0/0}}) do
         assert(not pcall(settings.configure,original,invalid))
     end
     local changed=settings.configure(original,{exposure=2,shadows=false,view="shadow"})
@@ -15,7 +16,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==52969472)
+    assert(settings.target_bytes(1920,1280)==1920*1280*8*2+480*320*4*2+1024^2*8+atlas.width*atlas.height*12+64^2*6*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -90,29 +91,33 @@ end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
 dofile("render/game.render_script")
 local self={}
-test("loading spreads three atlas and six cubemap passes across nine frames",function()
+test("recipes, padded mip chains and cube faces finish before the world draws",function()
     init(self)
-    assert(#targets==9)
+    assert(#targets==12)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_a","bloom_b"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
     end
-    for _,name in ipairs({"shadow","albedo","normal","material"}) do
-        assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA)
+    local frames=0
+    while self.bake_step<atlas.job_count do
+        local previous=self.bake_step
+        update(self);frames=frames+1
+        assert(self.bake_step>previous and self.bake_step-previous<=8)
+        assert(self.bake_draws>=self.bake_step)
+        if self.bake_step<atlas.job_count then assert(self.shadow_frames==0) end
+        assert(frames<atlas.job_count)
     end
-    for frame=1,9 do
-        update(self)
-        assert(self.bake_step==frame and self.bake_draws==frame)
-    end
-    local atlas,cube=0,0
+    local recipes,filters,cube=0,0,0
     for _,draw in ipairs(draws) do
-        if draw.material=="bake" then atlas=atlas+1 end
+        if draw.material=="bake" then recipes=recipes+1 end
+        if draw.material=="surface_filter" then filters=filters+1 end
         if draw.material=="environment" then cube=cube+1 end
     end
-    assert(atlas==3 and cube==6)
+    assert(recipes==12 and filters==540 and cube==6)
     assert(self.shadow_frames==1)
     update(self)
-    assert(self.bake_draws==9)
+    assert(self.targets.scratch_a==nil and self.targets.atlas_spare==nil)
+    assert(self.bake_draws==atlas.draw_count)
 end)
 test("shadow, world, weapon, post and HUD execute in order without texture feedback",function()
     draws={};update(self)
@@ -126,11 +131,11 @@ test("shadow, world, weapon, post and HUD execute in order without texture feedb
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==9 and self.resizes==2 and self.bake_draws==9)
+    assert(#targets==12 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.targets.shadow.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1024)
-    assert(self.targets.albedo.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1280)
+    assert(self.targets.albedo.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==atlas.width)
     local count=#draws;w=0;update(self);assert(#draws==count)
     w=1279;update(self);assert(self.resizes==2)
 end)
@@ -141,7 +146,7 @@ test("disabled effects stop their passes and re-enable without rebaking",functio
     assert(self.shadow_frames==before)
     for _,draw in ipairs(draws) do assert(draw.material~="shadow" and draw.material~="shadow_skinned" and draw.material~="bloom") end
     on_message(self,"renderer_configure",{shadows=true,bloom=true})
-    update(self);assert(self.shadow_frames==before+1 and self.bake_draws==9)
+    update(self);assert(self.shadow_frames==before+1 and self.bake_draws==atlas.draw_count)
 end)
 test("capture isolates the laboratory, hides HUD/actors, and restores ordinary passes",function()
     on_message(self,"capture_configure",{active=true,laboratory=true})
@@ -156,8 +161,8 @@ test("capture isolates the laboratory, hides HUD/actors, and restores ordinary p
 end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)
-    for _=1,9 do update(self) end
-    assert(self.bake_step==9 and self.bake_draws==18 and #targets==9)
+    while self.bake_step<atlas.job_count do update(self) end
+    assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2 and #targets==15)
     final(self)
     for _,target in ipairs(targets) do assert(target.deleted) end
     assert(next(self.targets)==nil and listener==nil)

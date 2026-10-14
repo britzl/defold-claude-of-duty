@@ -1,6 +1,7 @@
 -- Generated surface maps + sky environment -> sun shadow -> world -> isolated
 -- weapon -> bloom -> shared tone mapping -> GUI. Every target is owned here.
 local settings=require "game.render.settings"
+local atlas=require "game.render.surface_atlas"
 local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local WORLD_CAMERA="main:/camera#camera"
@@ -49,36 +50,91 @@ local function fullscreen(self,material,constants,blend)
     if material then render.disable_material() end
 end
 local function bind(name,target) render.enable_texture(name,target,COLOR) end
-local function bake_next(self)
-    if self.bake_step>=9 then return end
-    local step=self.bake_step
-    if step<3 then
-        local target=({"albedo","normal","material"})[step+1]
-        render.set_render_target(self.targets[target])
-        render.set_viewport(0,0,settings.atlas_tile*settings.surface_count,settings.atlas_tile)
-        self.bake_constants.bake=vmath.vector4(step,0,0,0)
-        fullscreen(self,"bake",self.bake_constants)
-    else
-        local face=step-3
-        render.set_render_target(self.targets.environment,{face=self.faces[face+1]})
-        render.set_viewport(0,0,settings.environment_size,settings.environment_size)
-        self.bake_constants.bake=vmath.vector4(face,0,0,0)
-        fullscreen(self,"environment",self.bake_constants)
+local function bake_scratch(self)
+    self.targets.atlas_spare=colour_target(atlas.width,atlas.height)
+    self.targets.scratch_a=colour_target(atlas.scratch_size,atlas.scratch_size)
+    self.targets.scratch_b=colour_target(atlas.scratch_size,atlas.scratch_size)
+end
+local function release_bake_scratch(self)
+    for _,name in ipairs({"atlas_spare","scratch_a","scratch_b"}) do
+        render.delete_render_target(self.targets[name]);self.targets[name]=nil
     end
-    self.bake_step=step+1
-    self.bake_draws=self.bake_draws+1
-    self.report=true
+end
+local function bake_next(self)
+    -- Expensive recipes get their own frame. Cheap copies/mip reductions run
+    -- eight at a time, with no world draws until every map is complete.
+    if self.bake_step==0 then
+        if not self.targets.scratch_a then bake_scratch(self) end
+        for _,name in ipairs({"albedo","normal","material"}) do
+            render.set_render_target(self.targets[name])
+            render.clear({[COLOR]=vmath.vector4()})
+        end
+    end
+    for _=1,8 do
+        if self.bake_step>=atlas.job_count then return end
+        local job=self.bake_jobs[self.bake_step+1]
+        if job then
+            if job.op=="recipe" and _>1 then return end
+            if job.target~="scratch_a" and job.target~="scratch_b" then
+                -- Defold 1.14 Lua targets use DONT_CARE load operations. On
+                -- tile GPUs a partial viewport discards neighbouring pixels.
+                -- Copy the complete old atlas to a spare, then patch it in the
+                -- SAME render pass. Swap ownership; never sample the target.
+                local previous=self.targets[job.target]
+                render.set_render_target(self.targets.atlas_spare)
+                render.set_viewport(0,0,atlas.width,atlas.height)
+                self.bake_constants.filter_params=vmath.vector4(0,3,0,0)
+                bind("source_texture",previous)
+                bind("height_texture",self.targets.scratch_b)
+                fullscreen(self,"surface_filter",self.bake_constants)
+                render.disable_texture("source_texture")
+                render.disable_texture("height_texture")
+                self.targets[job.target],self.targets.atlas_spare=self.targets.atlas_spare,previous
+                self.bake_draws=self.bake_draws+1
+            end
+            render.set_render_target(self.targets[job.target])
+            if job.op=="recipe" then
+                render.set_viewport(0,0,job.size,job.size)
+                self.bake_constants.bake=vmath.vector4(job.channel,job.kind,0,0)
+                fullscreen(self,"bake",self.bake_constants)
+            else
+                local r,src=job.rect,job.source_rect
+                render.set_viewport(r.x,r.y,r.size+2,r.size+2)
+                self.bake_constants.source_rect=vmath.vector4(src.x/job.source_width,src.y/job.source_height,
+                    src.size/job.source_width,src.size/job.source_height)
+                self.bake_constants.filter_params=vmath.vector4(r.size,job.op=="normal" and 2 or job.op=="reduce" and 1 or 0,
+                    job.relief or 0,src.size)
+                bind("source_texture",self.targets[job.source])
+                bind("height_texture",self.targets.scratch_b)
+                fullscreen(self,"surface_filter",self.bake_constants)
+                render.disable_texture("source_texture")
+                render.disable_texture("height_texture")
+            end
+        else
+            local face=self.bake_step-#self.bake_jobs
+            render.set_render_target(self.targets.environment,{face=self.faces[face+1]})
+            render.set_viewport(0,0,settings.environment_size,settings.environment_size)
+            self.bake_constants.bake=vmath.vector4(face,0,0,0)
+            fullscreen(self,"environment",self.bake_constants)
+        end
+        self.bake_step=self.bake_step+1
+        self.bake_draws=self.bake_draws+1
+        self.report=true
+        if job and job.op=="recipe" then return end
+    end
 end
 local function report(self)
     if not self.report and self.frames%30~=0 then return end
     self.report=false
     msg.post("main:/controller#script","renderer_stats",{
-        ready=self.bake_step==9, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
-        atlas_width=settings.atlas_tile*settings.surface_count,atlas_height=settings.atlas_tile,
-        environment_faces=math.max(0,self.bake_step-3), environment_size=settings.environment_size,
+        ready=self.bake_step==atlas.job_count, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
+        atlas_width=atlas.width,atlas_height=atlas.height,
+        environment_faces=math.max(0,self.bake_step-#self.bake_jobs), environment_size=settings.environment_size,
         shadow_size=settings.shadow_size, shadow_frames=self.shadow_frames,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
-        target_count=9,target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr),resizes=self.resizes,
+        target_count=self.targets.scratch_a and 12 or 9,
+        target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,self.targets.scratch_a~=nil),
+        peak_target_bytes=settings.target_bytes(self.width,self.height,self.pipeline.hdr,true),resizes=self.resizes,
         local_light_count=self.light_count,frames=self.frames,settings=self.options,
         radiance_range=self.pipeline.hdr and 65504 or settings.radiance_range,pipeline=self.pipeline })
 end
@@ -100,8 +156,10 @@ function init(self)
     self.radiance_format=self.pipeline.hdr and G.TEXTURE_FORMAT_RGBA16F or G.TEXTURE_FORMAT_RGBA
     self.targets={}
     self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
+    self.bake_jobs=atlas.jobs()
     self.light_count=0
     self.lighting=render.constant_buffer()
+    self.lighting.surface_rects=atlas.rects(vmath.vector4)
     self.bake_constants=render.constant_buffer()
     self.sky_constants=render.constant_buffer()
     self.post_constants=render.constant_buffer()
@@ -124,8 +182,9 @@ function init(self)
     self.shadow_constants.sun_matrix=self.sun_matrix
     self.targets.shadow=colour_target(settings.shadow_size,settings.shadow_size,true,true)
     for _,name in ipairs({"albedo","normal","material"}) do
-        self.targets[name]=colour_target(settings.atlas_tile*settings.surface_count,settings.atlas_tile)
+        self.targets[name]=colour_target(atlas.width,atlas.height)
     end
+    bake_scratch(self)
     self.targets.environment=colour_target(settings.environment_size,settings.environment_size,false,false,true,self.radiance_format)
     self.faces={G.CUBEMAP_FACE_POSITIVE_X,G.CUBEMAP_FACE_NEGATIVE_X,G.CUBEMAP_FACE_POSITIVE_Y,
         G.CUBEMAP_FACE_NEGATIVE_Y,G.CUBEMAP_FACE_POSITIVE_Z,G.CUBEMAP_FACE_NEGATIVE_Z}
@@ -141,9 +200,11 @@ end
 function update(self)
     if not resize(self) then return end
     self.frames=self.frames+1
+    -- Previous frame's queued bake draws have now consumed these resources.
+    if self.bake_step==atlas.job_count and self.targets.scratch_a then release_bake_scratch(self) end
     bake_next(self)
     local t,o=self.targets,self.options
-    if self.bake_step==9 then
+    if self.bake_step==atlas.job_count then
         -- Capture the same interpolated camera used by the world and weapon.
         local view=camera.get_view(WORLD_CAMERA)
         local projection=camera.get_projection(WORLD_CAMERA)
@@ -238,7 +299,7 @@ function update(self)
         end
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
         render.set_viewport(0,0,self.width,self.height)
-        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,settings.views[o.view],0)
+        self.post_constants.post=vmath.vector4(o.exposure,o.bloom and .12 or 0,settings.views[o.view],o.atlas_half)
         bind("scene_texture",t.scene)
         bind("weapon_texture",t.weapon)
         bind("bloom_texture",t.bloom_b)

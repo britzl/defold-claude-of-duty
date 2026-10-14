@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 from PIL import Image, ImageChops, ImageStat
 from automation_bridge import editor, engine
+from materials_smoke import atlas_layout
 
 
 def main():
@@ -46,26 +47,28 @@ def main():
         command("ai.configure", {"enabled": False})
         command("world.view", {"name": "street"})
         initial = command("renderer.snapshot")
-        assert initial["bake_jobs"] == initial["bake_draws"] == 9
+        assert initial["bake_jobs"] == 372 and initial["bake_draws"] == 558
         assert initial["environment_faces"] == 6 and initial["local_light_count"] == 4
         assert initial["target_count"] == 9 and initial["shadow_size"] == 1024
-        assert initial["atlas_width"] == 1280 and initial["atlas_height"] == 256
+        assert initial["atlas_width"] == 3080 and initial["atlas_height"] == 2052
         assert initial["shadow_frames"] > 0
 
         for view in ("albedo", "normals", "material"):
             configure(view=view)
             image = capture(view)
             w, h = image.size
-            for tile in range(5):
-                patch = image.crop((int(w*(tile+.15)/5), int(h*.2), int(w*(tile+.85)/5), int(h*.8)))
+            for name, level, x, y, size in atlas_layout():
+                if level != 0: continue
+                patch = image.crop((round(w*(x+.15*size)/3080), round(h*(1-(y+.85*size)/2052)),
+                                    round(w*(x+.85*size)/3080), round(h*(1-(y+.15*size)/2052))))
                 mean = ImageStat.Stat(patch).mean
                 if view == "albedo":
-                    assert 140 < min(mean) < 255 and max(mean)-min(mean) < 1, (tile, mean)
+                    assert 2 < min(mean) < 255, (name, mean)
                 elif view == "normals":
-                    assert 115 < mean[0] < 140 and 115 < mean[1] < 140 and mean[2] > 245, (tile, mean)
+                    assert 115 < mean[0] < 140 and 115 < mean[1] < 140 and mean[2] > 215, (name, mean)
                 else:
-                    assert mean[0] > 50 and mean[2] > 210, (tile, mean)
-                    assert mean[1] > 150 if tile == 3 else mean[1] < 2, (tile, mean)
+                    assert mean[0] > 50 and mean[2] > 170, (name, mean)
+                    assert mean[1] > 100 if name == "metal" else mean[1] < 10, (name, mean)
         configure(view="environment")
         environment = capture("environment")
         assert min(ImageStat.Stat(region(environment)).stddev) > 8
@@ -153,7 +156,7 @@ def main():
         assert resized["width"] != before["width"] and resized["height"] != before["height"]
         assert resized["bloom_width"] == resized["width"]//4
         assert resized["bloom_height"] == resized["height"]//4
-        assert resized["bake_draws"] == 9 and resized["target_count"] == 9
+        assert resized["bake_draws"] == 558 and resized["target_count"] == 9
         game.resize(960, 640)
         command("world.view", {"name": "street"})
         game.wait_frames(8)

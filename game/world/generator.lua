@@ -111,7 +111,7 @@ local function add(world, shape, faces)
         world.batch_lookup[key] = batch
     end
     local before=batch.vertex_count
-    mesh.box(batch, shape, 0.94 + world.decoration_rng() * 0.12, faces)
+    mesh.box(batch, shape, 0.94 + world.decoration_rng() * 0.12, faces, world.edge_points)
     if shape.surface then
         world.colliders[#world.colliders + 1] = shape
         world.minimap[#world.minimap + 1] = { id = shape.id, x = shape.x, z = shape.z, w = shape.w, d = shape.d,
@@ -140,18 +140,28 @@ function M.step(world, max_jobs, deadline, now)
             assert(ok, shape)
             if coroutine.status(world.job) == "dead" then
                 world.job=nil
-                world.mesh_index=1
+                world.face_index=1
+                world.shape_faces,world.edge_points={},{}
             else
                 world.shapes[#world.shapes+1]=shape
                 world.shape_bounds=world.shape_bounds or {}
                 world.shape_bounds[#world.shapes]=visible_faces.bounds(shape)
             end
+        elseif world.face_index then
+            local i=world.face_index
+            if i<=#world.shapes then
+                local faces=visible_faces.for_box(i,world.shape_bounds)
+                world.shape_faces[i]=faces
+                visible_faces.register_edges(world.edge_points,world.shape_bounds[i],faces)
+                world.face_index=i+1
+            else world.face_index=nil;world.mesh_index=1 end
         elseif world.mesh_index<=#world.shapes then
             local i=world.mesh_index
-            add(world,world.shapes[i],visible_faces.for_box(i,world.shape_bounds))
+            add(world,world.shapes[i],world.shape_faces[i])
             world.mesh_index=i+1
         else
             world.batch_lookup,world.decoration_rng,world.shape_bounds=nil,nil,nil
+            world.shape_faces,world.edge_points=nil,nil
             world.phase="meshes"
             break
         end

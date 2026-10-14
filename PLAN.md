@@ -181,7 +181,7 @@ For navigation, generate a layered walkable graph from the building descriptions
 **6. Generate materials on the GPU and develop the renderer in stages.**
 
 Initial renderer implemented: three GPU-baked material atlases cover plaster,
-asphalt, wood, metal and cloth; a six-face procedural sky environment is generated
+concrete, asphalt, wood, metal and cloth; a six-face procedural sky environment is generated
 one face per frame. World, soldier and weapon share roughness/metalness lighting,
 sunlight, ambient/reflection terms and up to four bounded local lights. A 1024²
 sun shadow map uses the same animated soldier skinning as the colour pass.
@@ -189,8 +189,9 @@ Height fog, quarter-resolution bloom, shared tone mapping and an isolated weapon
 colour/depth pass precede the GUI. Diagnostic views and effect toggles are exposed
 through the Automation Bridge. The 72 Lua tests, native macOS/Metal renderer and
 combat smoke suites pass, as does a focused HTML5/WebGL 2 visual/input check;
-physical mobile validation is still outstanding. Surface recipes and environment lighting are
-bounded approximations; full material parity, mip/roughness filtering, local-light
+physical mobile validation is still outstanding. The four main surface recipes
+and material mip filtering are now ported (step 3 below); full material parity,
+environment filtering, local-light
 shadows, cascades, ambient occlusion and temporal effects remain later stages.
 See `README.md` for resource budgets and validation scope.
 
@@ -334,6 +335,39 @@ and [Kaigen look configuration](/Users/bjornritzl/Downloads/kaigen-claude-of-dut
 are the source references. Kaigen's engine implementation is not included in the
 local checkout; its renderer integration must not be mistaken for a locally
 verified engine build.
+
+Step 3 is in progress: plaster, concrete, asphalt and wood now use adapted 1K
+reference recipes with their original tile scales and relief. Concrete has its
+own maps; plaster has trowel/coating variation, pores and chips; asphalt has
+binder, aggregate, patches and stains; wood has planks, grain, knots and nails.
+Two-channel height storage feeds physical-scale Sobel normals. Three atlases hold
+six full mip chains with periodic borders, linear box reductions, trilinear
+sampling, two-tap anisotropic filtering and normal-variance roughness correction.
+Paint tints follow the reference palette without double-darkening wood/asphalt.
+
+The low-angle capture exposed a one-pixel trim/slab T-junction depth tie.
+Shared edges now use matching endpoints; geometry rises to 36,552 vertices /
+1.39 MiB while the 77 batches and 190 colliders remain unchanged.
+The native GPU check validates all 62 mip regions and wrapped borders in all
+three atlases. Lua checks cover non-overlap, pass feedback, resource ownership,
+context restoration and physical parameters. Capture catalogue v3 adds concrete
+to the six-panel laboratory, four material close-ups and a grazing road view.
+Defold's discard-on-load render targets required full-atlas preservation before
+partial updates; the temporary maps are released after baking. At 1280 × 720,
+HDR target storage is 102.49 MiB steady / 134.60 MiB during baking, compared with
+33.91 MiB before the 1K recipes. Loading uses 372 jobs / 558 draws; normal play
+still owns nine targets and does not rebake on resize/restart.
+
+Remaining step-3 work: the concrete-floor variant; brick, tile, dirt and gravel;
+painted/rusted/brushed metal, fabric, rubber and glass; fine detail maps; wider
+motion/filtering review; WebGL/mobile qualification and memory quality presets.
+Validation on macOS/Metal passes 132 Lua checks, the native renderer/HDR
+suites, all atlas mip/border checks, and exact pixels for all 12 captures across
+three independent launches. A 121-frame laboratory sweep and per-shot costs are
+saved under `captures/rendering/materials-verified`; before/after images and
+`report.md` are in `captures/rendering/materials-review-final`.
+The full near/mid/far visual gate remains open. Metre-scale de-tiling, mesh wear
+masks and accumulated world-space grime belong to step 4.
 
 **7. Synthesize audio at load and rebuild the interface in Defold GUI.**
 

@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 2, width = 1280, height = 720, settle_frames = 32,
+local M = { version = 3, width = 1280, height = 720, settle_frames = 32,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -19,7 +19,17 @@ local shots = {
     { id="night", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
         reference="night", requested_hour=1.5, unsupported="Time-of-day lighting is not implemented (rendering step 10)." },
     { id="laboratory", position={6.8,4.2,9.5}, target={0,1.3,-1}, fov=65,
-        laboratory=true, reference=false, purpose="Five current surface recipes, dielectric/metal roughness rows and furniture contact." },
+        laboratory=true, reference=false, purpose="Six current surface recipes, dielectric/metal roughness rows and furniture contact." },
+    { id="material_plaster", position={-6,2,-2.4}, target={-6,2,-5.3}, fov=45,
+        laboratory=true, reference=false, purpose="Plaster trowel relief, pinholes and coating variation at close range." },
+    { id="material_concrete", position={-3.6,2,-2.4}, target={-3.6,2,-5.3}, fov=45,
+        laboratory=true, reference=false, purpose="Concrete aggregate, pores, formwork and tie holes." },
+    { id="material_asphalt", position={-1.2,2,-2.4}, target={-1.2,2,-5.3}, fov=45,
+        laboratory=true, reference=false, purpose="Asphalt binder, aggregate, patches and roughness." },
+    { id="material_wood", position={1.2,2,-2.4}, target={1.2,2,-5.3}, fov=45,
+        laboratory=true, reference=false, purpose="Wood planks, grain, knots, joints and nails." },
+    { id="material_grazing", position={0,.3,4}, target={0,.1,-8}, fov=70,
+        reference=false, purpose="Road minification and grazing-angle filtering." },
 }
 local function copy(t)
     if type(t)~="table" then return t end

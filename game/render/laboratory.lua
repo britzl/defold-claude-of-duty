@@ -37,8 +37,8 @@ function M.batches()
     box("concrete",0,-.1,0,16,.2,14)
     box("plaster_cream",0,1.8,-5.5,16,3.6,.2)
     box("plaster_cream",-7.5,1.8,-1,.2,3.6,9)
-    for i,material in ipairs({"plaster_sand","asphalt","wood","metal","awning_red"}) do
-        box(material,(i-3)*2.6,2,-5.32,2.3,2.6,.12)
+    for i,material in ipairs({"plaster_sand","concrete","asphalt","wood","metal","awning_red"}) do
+        box(material,(i-3.5)*2.4,2,-5.32,2.1,2.6,.12)
     end
     box("wood",5.2,.95,2.5,2.4,.12,1.3)
     for _,x in ipairs({4.2,6.2}) do for _,z in ipairs({2,3}) do box("wood",x,.445,z,.12,.89,.12) end end
