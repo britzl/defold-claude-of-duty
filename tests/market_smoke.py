@@ -74,7 +74,7 @@ def main(ai_only=False, views_only=False):
 
     try:
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=25)
-        engine.wait_until(lambda: len(cmd("ai.snapshot")["actors"]) == 1, timeout=5)
+        engine.wait_until(lambda: len(cmd("ai.snapshot")["actors"]) == 6, timeout=5)
         cmd("ai.configure", {"enabled": False})
         world = cmd("world.snapshot")
         assert world["batches"] < 100 and world["mesh_bytes"] < 1024*1024, world

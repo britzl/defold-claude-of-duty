@@ -3,7 +3,7 @@
 local V = require "game.weapons.math"
 local M = {}
 function M.distance(a,b) return V.length({x=a.x-b.x,y=a.y-b.y,z=a.z-b.z}) end
-function M.route(graph,from,to,query)
+function M.route(graph,from,to,query,cache)
     if query:walkable(from,to) then return {V.copy(to)} end
     local nodes={V.copy(from),V.copy(to)}
     local names,edges={},{}
@@ -15,7 +15,18 @@ function M.route(graph,from,to,query)
             edges[a][b]=cost;edges[b][a]=cost
         end
     end
-    for _,e in ipairs(graph.edges) do connect(names[e.from],names[e.to]) end
+    -- Only authored edges are cached, and only when the caller opts into a
+    -- static-world encounter cache. Moving endpoints always get fresh probes.
+    if cache and cache.graph~=graph then cache.graph=graph;cache.edges={} end
+    for index,e in ipairs(graph.edges) do
+        local a,b=names[e.from],names[e.to]
+        if cache and a and b then
+            if cache.edges[index]==nil then cache.edges[index]=query:walkable(nodes[a],nodes[b]) end
+            if cache.edges[index] then
+                local cost=M.distance(nodes[a],nodes[b]);edges[a][b]=cost;edges[b][a]=cost
+            end
+        else connect(a,b) end
+    end
     local function attach(endpoint,i)
         local n,p=nodes[i],nodes[endpoint]
         local flight=n.stair and graph.stairs and graph.stairs[n.stair]

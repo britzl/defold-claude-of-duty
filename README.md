@@ -12,9 +12,10 @@ a west courtyard and alley linked by a rear lane around W2.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
-reloads and generated viewmodels in an isolated render pass. One runtime-generated,
-25-bone soldier now patrols the street, detects and pursues the player, fires
-physical rounds and dies. GPU-generated surface maps, shared material lighting,
+reloads and generated viewmodels in an isolated render pass. Six runtime-generated,
+25-bone soldiers patrol as two squads, share alerts, claim cover and coordinate
+a rear-lane flank while firing physical rounds. GPU-generated surface maps,
+shared material lighting,
 animated sun shadows, a procedural sky, height fog, tone mapping and bloom are
 implemented. A runtime-generated sound bank now supplies weapon fire, reloads,
 surface footsteps/impacts, movement foley and ambience through a bounded spatial
@@ -35,6 +36,7 @@ lua tests/world_test.lua
 lua tests/movement_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
+lua tests/squads_test.lua
 lua tests/renderer_test.lua
 lua tests/audio_test.lua
 lua tests/ui_test.lua
@@ -52,6 +54,7 @@ PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/ai_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/squads_smoke.py
 # Requires Pillow for GPU pixel assertions:
 PYTHONPATH=automation-bridge-python python3 tests/renderer_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
@@ -147,10 +150,11 @@ restart and window resizing, saving review images in `build/ui-validation`.
 Physical mobile and browser UI/input validation remain separate work; this
 increment does not add gamepad or touch adapters.
 
-One soldier patrols the far end of the street. Approach it to trigger detection
-and combat. **9** restarts the encounter with full player/enemy health, fresh
-weapons and ammunition. Inspection cameras pause enemy simulation. The separate
-world/movement/weapon smoke suites explicitly pause AI to isolate their fixtures.
+Two squads of three patrol the street and west courtyard/rear lane. Approach a
+patrol to trigger detection, shared squad alerts and combat. **9** restarts the
+encounter with full player/enemy health, fresh weapons and ammunition.
+Inspection cameras pause enemy simulation. The separate world/movement/weapon
+smoke suites explicitly pause AI to isolate their fixtures.
 
 ## Procedural soldier and combat
 
@@ -158,45 +162,67 @@ world/movement/weapon smoke suites explicitly pause AI to isolate their fixtures
 proportions, rotating the source's +Z-facing carry pose into this project's -Z
 convention. The bind axes are identity rotations; they do not yet reproduce the
 reference ragdoll joint frames. `geometry.lua` generates cloth limbs, helmet,
-goggles, carrier, pouches, boots, gloves and a simplified carried rifle. The mesh
-has 7,140 vertices and 514,080 bytes of float streams: position, normal, colour,
-four joint indices and four normalized skin weights. Some vertices blend two
-joints; rigid equipment follows one. No model or animation is imported.
+goggles, carrier, pouches, boots, gloves and a simplified carried rifle. The
+mesh has 7,140 vertices and 514,080 bytes of float streams: position, normal,
+colour, four joint indices and four normalized skin weights. Some vertices blend
+two joints; rigid equipment follows one. No model or animation is imported.
 
 `soldiers/soldier.vp` performs linear blend skinning with 25 matrix uniforms.
-The palette is 1,600 bytes, uploaded with 25 indexed `go.set` calls per actor per
-presentation frame. One shared generated buffer serves replacement instances;
-each live soldier uses one mesh, one movement capsule and seven hit-volume GOs.
-Conservative bounds include the supported animations and death collapse. The
-fragment shader supplies procedural camouflage, with the world's sun, ambient
-light and fog. `skinning.glsl` is shared by the colour and animated sun shadow
-passes introduced in renderer step 6.
+The palette is 1,600 bytes, uploaded with 25 indexed `go.set` calls per actor
+per presentation frame. One shared generated buffer serves all six soldiers and
+replacement instances; each live soldier uses one mesh, one movement capsule and
+seven hit-volume GOs. Conservative bounds include the supported animations and
+death collapse. The fragment shader supplies procedural camouflage, with the
+world's sun, ambient light and fog. `skinning.glsl` is shared by the colour and
+animated sun shadow passes introduced in renderer step 6.
 
 Idle breathing, distance-driven walking, upper-body aiming, recoil and a bounded
-0.85-second death collapse are evaluated in Lua. Simulation poses advance at
-120 Hz. Presentation interpolates position, heading and pose parameters without
+0.85-second death collapse are evaluated in Lua. Simulation poses advance at 120
+Hz. Presentation interpolates position, heading and pose parameters without
 changing collision transforms. This is a deliberately simplified animation
 prototype: runtime foot/hand IK, source clip parity and physics ragdolls remain
-later work. Death disables hit volumes and leaves one visible corpse until restart.
+later work. Death disables hit volumes and leaves one visible corpse until
+restart.
 
-`game/systems/ai.lua` owns the enemy and a separate bounded projectile pool. A
-patrol detects a visible player within 14 metres and a 130-degree field of view,
-after four perception checks at roughly 10 Hz. An alerted actor remembers the
-last seen point for five seconds and can see up to 24 metres. It pursues until
-within ten metres with a clear muzzle path, then aims and fires one 400 m/s round
-every 0.55 seconds. A round starts at the animated rifle muzzle, uses existing
-travel/drop/penetration code and queries the actual player capsule. Health still
-changes only through `game/combat.lua`, on the following fixed tick. Enemy fire
-has its own seeded random stream. Dead players cannot be reacquired or fired on.
+`game/systems/ai.lua` owns six ordered actors and a shared bounded enemy
+projectile pool (128 live rounds). The layout supplies stable
+`enemy_1`–`enemy_6` IDs, squad membership, supported spawn positions and
+individual patrol endpoints. A patrol detects a visible player within 14 metres
+and a 130-degree field of view, after four perception checks at roughly 10 Hz.
+An alerted squad remembers an observed position for eight seconds and can see up
+to 24 metres. Visual acquisition or player damage shares the point with living
+squad members. Receiving a report does not renew or rebroadcast it; lost contact
+expires even behind walls. Single-soldier test fixtures retain their five-second
+memory. Each actor pursues until within ten metres with a clear muzzle path,
+then aims and fires one 400 m/s round every 0.55 seconds. A round starts at the
+animated rifle muzzle, uses existing travel/drop/penetration code and queries
+the actual player capsule. Health still changes only through `game/combat.lua`,
+on the following fixed tick. Each actor has its own seeded random stream.
+Friendly firing lanes are checked before shooting; enemy projectiles damage the
+player and do not damage allies. Dead players cannot be reacquired or fired on.
 
 Patrol/pursuit routes use shortest paths over the existing authored, layered
 navigation graph, including temporary start/goal links. Native queries validate
 floor support and capsule clearance before accepting a connection. Movement then
 uses the same swept capsule controller as the player, including kerb step-up,
-wall sliding and overlap recovery. Routes are refreshed for moved targets or
-after one second. Unreachable goals leave the soldier in place and retry; this
-is not a generated navmesh or a squad navigation implementation. The movement
-capsule collides with the world; actor-to-actor movement blocking is not implemented.
+wall sliding and overlap recovery. Perception checks are staggered across
+actors. Routes refresh when goals move, a route fails, or movement stalls;
+accepted static-world graph edges are cached for the encounter while endpoint
+connections are always probed. Unreachable paths retry at most once per second.
+Nearby actors use local separation steering; world collision remains
+capsule-swept. This is not rigid actor-to-actor blocking.
+
+`game/ai/tactics.lua` coordinates the encounter. Cover selection requires an
+unclaimed, reachable position within firing range that shields the lower body
+and gives a standing firing lane. Claims are exclusive across both squads and
+release on death, lost contact, invalid cover, stalled movement or restart. This
+is standing fire over low cover; crouch/peek animation and suppression remain
+future work. With a visible ally engaging, one other squad member can claim the
+generated west loop, follow its approach, rear lane and opposite exit, then
+rejoin combat. One actor may claim that lane at a time. Target displacement,
+lost contact and movement failure cancel the tactic; a cooldown prevents
+immediate repeated circuits. The route is generated from the same layout as
+navigation.
 
 Head, chest, hips, thighs and shins have kinematic Bullet boxes transformed by
 the same skeleton as the mesh. Projectile thickness is measured in each box's
@@ -206,16 +232,50 @@ proxies; arms, hands and equipment do not have separate damage volumes yet.
 
 The 13 soldier Lua tests check mesh winding and weights, bind/deformed poses,
 animated bounds, rotated hit volumes, headshot/duplicate-damage rules, routing,
-perception, occlusion, death/reset and 30/60/144-FPS equivalence. Native Metal
-validation checks patrol, actual head/body shots, return fire, wall occlusion,
-shop entry, repeated replacement, keyboard restart and clean teardown. The
-snapshot reports Lua-side palette upload time and AI tick cost; these are not
-GPU timings or whole-frame performance measurements. A debug `wasm-web` bundle
-also passed a manual WebGL 2 browser check for world/soldier rendering, walking,
-enemy return fire, player death and key-9 restart, with no new console errors.
-That check caught and fixed a GLSL ES reserved-word error accepted by Metal.
-The browser check is narrower than the native automated suites; physical mobile
+perception, occlusion, death/reset and 30/60/144-FPS equivalence. Eleven
+additional squad tests cover stable spawns, report expiry, exclusive claims and
+death handoff, flank waypoints, ally avoidance, multi-target damage, repeated
+reset cleanup and six-actor frame-rate equivalence. Native Metal validation
+checks patrol, actual head/body shots, return fire, wall occlusion, shop entry,
+repeated replacement, keyboard restart and clean teardown. The snapshot reports
+Lua-side palette upload time and AI tick cost; these are not GPU timings or
+whole-frame performance measurements. `tests/squads_smoke.py` checks six native
+actors, protected cover fire, a completed rear flank during ongoing combat,
+pause, all six deaths and eight full replacements. Its profiler and review
+images are saved in `build/squad-validation`. The six soldiers use 54 game
+objects, 42 live hit volumes and one shared 0.49 MiB mesh buffer; the existing
+mesh/collision/audio limits are unchanged. A debug `wasm-web` bundle also passed
+a manual WebGL 2 browser check for world/soldier rendering, walking, enemy
+return fire, player death and key-9 restart, with no new console errors. That
+check caught and fixed a GLSL ES reserved-word error accepted by Metal. The
+browser check is narrower than the native automated suites; physical mobile
 devices and full browser regression coverage remain untested.
+
+The six-actor HTML5/WebGL 2 fixture also passes protected cover fire, a full
+rear flank during 245 enemy shots, all six deaths and eight full resets, with no
+runtime errors. Build a debug `wasm-web` bundle with Bob's `--settings
+tests/squads_browser.project` to opt into this scenario. It prints
+`SQUAD_BROWSER START/COVER/FLANK/DEATHS/PASS` records and freezes the successful
+encounter for review. Normal builds omit the setting and run normal gameplay.
+
+Measured on this Mac on 2026-10-14, with diagnostic health damage disabled while
+physical bullets, impacts, sound and rendering continue:
+
+| Measurement | Native Metal debug | HTML5/WebGL 2 debug |
+|---|---:|---:|
+| Mean AI fixed-tick CPU | 0.98 ms | 1.62 ms |
+| Peak AI fixed-tick CPU across the scenario | 24.07 ms | 35.50 ms |
+| Frame/engine-step p95 | 9.07 ms | 8.90 ms |
+| Frame/engine-step p99 | 9.39 ms | 9.30 ms |
+
+Native frame figures are the profiler's `Step` scope over a 360-frame capture;
+browser figures are update intervals across 4,256 combat frames. These are
+different measurements, at different viewport sizes, and do not establish a
+backend speed comparison or a mobile budget. Native submitted draws averaged
+157.3 (maximum 160) in the combat view. The shared soldier mesh stays at 0.49
+MiB; going from one to six adds 45 game objects and 35 hit volumes. Occasional
+route planning spikes remain a future optimization target. Reports are saved in
+`build/squad-validation/native.json` and `browser.json`.
 
 ## Capsule movement
 
@@ -404,7 +464,8 @@ z=-10. Yard walls close the outer edges. `layout.ground`, `routes`, `walls` and
 `covers` describe the extension; tiled ground and cover solids feed collision,
 surface audio and minimap output. Two low barriers and a rear crate provide cover
 without obstructing the walking route. Seven cover candidates have supported,
-capsule-clear positions; AI cover selection is still subsequent work.
+capsule-clear positions; squad AI selects and exclusively claims protected
+positions with a firing lane.
 
 W2 has an open ground-floor shop and a furnished upper apartment; E2 has a shop
 and two furnished upper apartments. This is not the full map or the complete
@@ -571,7 +632,7 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 99 Lua checks and the
+with review images in `build/renderer-validation`. All 110 Lua checks and the
 native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
 HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no
@@ -709,3 +770,12 @@ assert game.command("gameplay.snapshot", {})["result"]["health"] == 75
 
 Run Python with `PYTHONPATH=automation-bridge-python`. Application commands are
 registered only when the Automation Bridge Lua API is available.
+
+Squad automation: `ai.snapshot` returns actors in ID order, squad reports,
+cover/flank claims, actor roles, memory, replans and completed flanks.
+`ai.reset` with no position restores all six; an explicit `position` retains the
+single-soldier fixture used by weapon/navigation suites. `ai.route` and `ai.patrol`
+accept an optional actor `id`. `ai.volumes` includes each volume's actor ID.
+`ai.configure` accepts `enabled` and a diagnostic `damage_scale` in 0..1; zero
+preserves physical bullets/impacts while suppressing their health damage for
+sustained profiles. Normal encounter restart restores the scale to 1.

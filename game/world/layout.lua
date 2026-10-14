@@ -81,6 +81,14 @@ return {
     crates = { { x = -10, z = -5.5, normal_x = 1 }, { x = -11.2, z = -5.5 }, { x = 5.4, z = -4.5 },
         { x = -24.8, z = 1.5, y = 0, normal_x = 1, normal_z = 0 } },
     spawn = { x = 0, y = 0, z = 10 },
+    enemies = {
+        { id="enemy_1", squad="alpha", x=0, y=0, z=-12, patrol={x=0,y=0,z=-5} },
+        { id="enemy_2", squad="alpha", x=-2, y=0, z=-15, patrol={x=-2,y=0,z=-6} },
+        { id="enemy_3", squad="alpha", x=2, y=0, z=-16, patrol={x=2,y=0,z=-5} },
+        { id="enemy_4", squad="bravo", x=-18, y=0, z=7.5, patrol={x=-8,y=0,z=7.5} },
+        { id="enemy_5", squad="bravo", x=-23.5, y=0, z=3, patrol={x=-23.5,y=0,z=-5} },
+        { id="enemy_6", squad="bravo", x=-18, y=0, z=-10, patrol={x=-8,y=0,z=-10} },
+    },
     views = {
         courtyard = { position = { x = -7.8, y = 1.66, z = 7.4 }, yaw = 1.5, pitch = 0, title = "WEST COURTYARD" },
         alley = { position = { x = -8, y = 1.66, z = -10 }, yaw = 1.57, pitch = 0, title = "WEST ALLEY" },

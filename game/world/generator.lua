@@ -6,7 +6,7 @@ local M = {}
 
 local function metadata(layout)
     local s, base = layout.street, layout.street.walk_height
-    local nav = { nodes = {}, edges = {}, surfaces = {
+    local nav = { nodes = {}, edges = {}, flanks = {}, surfaces = {
         { id="street",layer=0,y=0,x0=-s.half_width,x1=s.half_width,z0=s.z_min,z1=s.z_max },
         { id="west_walk",layer=0,y=base,x0=-s.kerb,x1=-s.half_width,z0=s.z_min,z1=s.z_max },
         { id="east_walk",layer=0,y=base,x0=s.half_width,x1=s.kerb,z0=s.z_min,z1=s.z_max },
@@ -40,19 +40,28 @@ local function metadata(layout)
     end
     for _,route in ipairs(layout.routes or {}) do
         local previous
+        local flank={id=route.id,points={}}
         for i,p in ipairs(route.points) do
             local id=route.id.."/"..p.id
-            node(id,p.x,p.y,p.z)
+            flank.points[#flank.points+1]=node(id,p.x,p.y,p.z)
             if previous then nav.edges[#nav.edges+1]={from=previous,to=id,kind="walk"} end
             previous=id
             if i==1 or i==#route.points then
                 local side=p.x<0 and -1 or 1
                 hubs[#hubs+1]=node(id.."/street",0,0,p.z)
                 node(id.."/walk",side*(s.half_width+s.kerb)/2,base,p.z)
+                local street={x=0,y=0,z=p.z}
+                local walk={x=side*(s.half_width+s.kerb)/2,y=base,z=p.z}
+                if i==1 then
+                    table.insert(flank.points,1,walk);table.insert(flank.points,1,street)
+                else
+                    flank.points[#flank.points+1]=walk;flank.points[#flank.points+1]=street
+                end
                 nav.edges[#nav.edges+1]={from=id.."/street",to=id.."/walk",kind="step",rise=base}
                 nav.edges[#nav.edges+1]={from=id.."/walk",to=id,kind="step",rise=base-p.y}
             end
         end
+        nav.flanks[#nav.flanks+1]=flank
     end
     -- The street spine and flank endpoints together form a traversable cycle.
     table.sort(hubs,function(a,b) return a.z==b.z and a.id<b.id or a.z<b.z end)
@@ -65,8 +74,7 @@ end
 function M.new(layout, options)
     options = options or {}
     local world = {
-        spawn = layout.spawn, spawn_points = { { id = "player", position = layout.spawn },
-            { id = "enemy", position = { x = 0, y = 0, z = -12 } } },
+        spawn = layout.spawn, spawn_points = { { id = "player", position = layout.spawn } },
         views = layout.views, layout = layout, seed = options.seed or layout.seed,
         batches = {}, colliders = {}, shapes = {}, navigation = metadata(layout),
         lights = { { kind = "sun", direction = { x = -0.6, y = 0.85, z = 0.4 } } },
@@ -74,6 +82,10 @@ function M.new(layout, options)
         stats = { boxes = 0, vertices = 0, mesh_bytes = 0, batches = 0, colliders = 0 },
         batch_lookup = {},
     }
+    for _,e in ipairs(layout.enemies or {{id="enemy_1",x=0,y=0,z=-12}}) do
+        world.spawn_points[#world.spawn_points+1]={id=e.id,squad=e.squad,
+            position={x=e.x,y=e.y,z=e.z},yaw=e.yaw or math.pi,patrol=e.patrol}
+    end
     for _, b in ipairs(layout.buildings) do
         if b.room then
             for _, light in ipairs(interior.lights(layout,b)) do world.lights[#world.lights+1]=light end

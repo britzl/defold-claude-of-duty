@@ -138,8 +138,19 @@ checks cover animation bounds, head/body hits, occlusion, return fire, navigatio
 replacement and cleanup. A debug HTML5 bundle also passes a manual WebGL 2
 rendering/movement/return-fire/restart check; physical mobile testing remains
 outstanding. The skinning function is now shared with the shadow
-pass added in step 6; runtime IK, ragdolls, squads and source visual parity are still
-subsequent work. See `README.md` for costs, controls and validation scope.
+pass added in step 6; runtime IK, ragdolls, suppression and source visual parity
+are still subsequent work. The encounter now has two squads of three with stable
+actor IDs, staggered perception, observed-position radio reports, exclusive protected cover claims,
+friendly firing-lane checks and local separation. One actor can take the generated
+west loop while a squad member engages. Claims release on death, invalidation and
+restart; six independent health/animation states share one mesh buffer. This
+advances milestone 4 with basic squad tactics; it does not complete combat parity.
+The 110 Lua checks pass. Native Metal and HTML5/WebGL 2 scenarios verify protected
+cover fire, a full rear flank during live engagement, six deaths and eight resets
+without resource growth. Mean AI fixed-tick CPU is 0.98 ms native and 1.62 ms in
+the browser on this Mac, with occasional route-planning spikes still to optimize.
+These are debug measurements, not mobile budgets. See `README.md` for costs,
+controls and validation scope.
 
 The original soldiers use a generated mesh, a 25-bone skeleton, procedural pose layers and IK. Importing a prebuilt animated model would sidestep the runtime-generation requirement.
 

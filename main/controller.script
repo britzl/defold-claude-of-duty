@@ -57,6 +57,7 @@ local function restart_encounter(self)
     player_system.reset(self.ctx,self.ctx.world.spawn,0)
     weapon_system.init(self.ctx)
     self.ctx.ai.enabled=true
+    self.ctx.ai.damage_scale=1
     ai_system.reset(self.ctx)
     self.ctx.fx.hitmarker,self.ctx.fx.damage_flash=0,0
     hud_model.reset(self.ctx)
@@ -122,6 +123,9 @@ function init(self)
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
     self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id},
         {groups={hash("world"),hash("player")},actors={[hash("/player")]="player"}})
+    if sys.get_sys_info().system_name=="HTML5" and sys.get_config_int("squad_validation.enabled",0)==1 then
+        self.squad_validation=require("tests.squads_browser").new()
+    end
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -154,8 +158,15 @@ function init(self)
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.configure",function(data)
-            assert(type(data.enabled)=="boolean","enabled must be a boolean")
-            self.ctx.ai.enabled=data.enabled
+            assert(data.enabled~=nil or data.damage_scale~=nil,"Expected enabled or damage_scale")
+            if data.enabled~=nil then
+                assert(type(data.enabled)=="boolean","enabled must be a boolean")
+                self.ctx.ai.enabled=data.enabled
+            end
+            if data.damage_scale~=nil then
+                assert(type(data.damage_scale)=="number" and data.damage_scale>=0 and data.damage_scale<=1,"Invalid damage_scale")
+                self.ctx.ai.damage_scale=data.damage_scale
+            end
             return ai_system.snapshot(self.ctx)
         end)
         automation_bridge.command("ai.reset",function(data)
@@ -174,12 +185,12 @@ function init(self)
         automation_bridge.command("ai.volumes",function()
             local result={}
             for _,shape in pairs(self.ctx.services.soldiers.by_id) do
-                if not shape.disabled then result[#result+1]={id=shape.id,x=shape.x,y=shape.y,z=shape.z,headshot=shape.headshot or false} end
+                if not shape.disabled then result[#result+1]={id=shape.id,actor=shape.actor,x=shape.x,y=shape.y,z=shape.z,headshot=shape.headshot or false} end
             end
             return result
         end)
         automation_bridge.command("ai.route",function(data)
-            local e=self.ctx.ai.actors.enemy_1
+            local e=self.ctx.ai.actors[data.id or "enemy_1"]
             assert(e and e.actor.alive,"No living soldier")
             local q=soldier_adapter.query(self.ctx.services.soldiers,e)
             assert(q,"Soldier physics is settling")
@@ -192,7 +203,7 @@ function init(self)
             return {points=require("game.ai.navigation").route(self.ctx.world.navigation,e.position,target,q) or {}}
         end)
         automation_bridge.command("ai.patrol",function(data)
-            local e=self.ctx.ai.actors.enemy_1
+            local e=self.ctx.ai.actors[data.id or "enemy_1"]
             assert(e and e.actor.alive,"No living soldier")
             assert(type(data.points)=="table" and #data.points>0 and #data.points<=8,"Expected 1-8 patrol points")
             local points={}
@@ -203,6 +214,7 @@ function init(self)
                 end
                 points[i]={x=p.x,y=p.y,z=p.z}
             end
+            require("game.ai.tactics").release(self.ctx.ai,e)
             e.patrol_points=points;e.patrol=1;e.route=nil;e.route_goal=nil;e.memory=0;e.notice=0;e.think=0
             return ai_system.snapshot(self.ctx)
         end)
@@ -212,13 +224,13 @@ function init(self)
             return snapshot(self.ctx)
         end)
         for name,description in pairs({
-            ["ai.snapshot"]="Read the soldier state, health, navigation, shots, mesh and palette costs.",
-            ["ai.configure"]="Pause/resume AI with {enabled}; frozen soldiers remain shootable.",
-            ["ai.reset"]="Replace the soldier, optionally at {position={x,y,z},yaw}; preserve AI pause state.",
+            ["ai.snapshot"]="Read all six actors, squad reports, cover/flank claims, navigation, shots and CPU/resource costs.",
+            ["ai.configure"]="Set enabled boolean and/or damage_scale 0..1 for repeatable combat profiles; frozen soldiers remain shootable.",
+            ["ai.reset"]="Reset both squads; an explicit {position={x,y,z},yaw} creates a single test soldier. Preserves AI pause and damage scale.",
             ["ai.volumes"]="Read current skeleton-driven Bullet hit-volume centres.",
-            ["ai.route"]="Find a supported, capsule-clear route from the soldier to {target={x,y,z}}.",
-            ["ai.patrol"]="Set 1-8 {points={{x,y,z},...}} for repeatable navigation scenarios; clear current alert.",
-            ["gameplay.restart"]="Restart the encounter, restoring player, weapons and the soldier.",
+            ["ai.route"]="Find a supported, capsule-clear route to {target={x,y,z},id=enemy_1..enemy_6}; id defaults to enemy_1.",
+            ["ai.patrol"]="Set 1-8 {points={{x,y,z},...},id=enemy_1..enemy_6} for repeatable navigation scenarios; clear actor alert and claims.",
+            ["gameplay.restart"]="Restart the encounter, restoring player, weapons and both squads.",
         }) do
             automation_bridge.describe("command",name,{description=description,input_schema={type="object"},output_schema={type="object"}})
         end
@@ -361,6 +373,9 @@ end
 
 function update(self, dt)
     runtime.update(self.ctx, dt)
+    if self.squad_validation then
+        require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
+    end
     if automation_bridge and self.world_phase ~= self.ctx.world.phase then
         self.world_phase = self.ctx.world.phase
         automation_bridge.publish("world", world_snapshot(self.ctx.world))

@@ -24,7 +24,7 @@ local function impact(ctx,sim,p,hit,point,exiting)
         weapon=p.def.id,source=p.source,damage=damage(p),distance=p.travelled,collider=hit.id})
     if not exiting and hit.actor and not p.hit_actors[hit.actor] then
         p.hit_actors[hit.actor]=true
-        combat.request(ctx.combat,{target=hit.actor,source=p.source,amount=damage(p)*(hit.headshot and 2 or 1),
+        combat.request(ctx.combat,{target=hit.actor,source=p.source,amount=damage(p)*(hit.headshot and 2 or 1)*(p.damage_scale or 1),
             headshot=hit.headshot,point=V.copy(point)})
     end
 end

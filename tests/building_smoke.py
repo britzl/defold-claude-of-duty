@@ -68,7 +68,7 @@ def main(ai_only=False, e2_only=False, w2_only=False):
 
     try:
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=25)
-        engine.wait_until(lambda: len(cmd("ai.snapshot")["actors"]) == 1, timeout=5)
+        engine.wait_until(lambda: len(cmd("ai.snapshot")["actors"]) == 6, timeout=5)
         errors = [line for line in project.console.read().lines if "ERROR:" in line]
         assert not errors, "\n".join(errors)
         cmd("ai.configure", {"enabled": False})

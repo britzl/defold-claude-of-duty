@@ -8,6 +8,7 @@ local nav = require "game.ai.navigation"
 local V = require "game.weapons.math"
 local rng = require "game.rng"
 local ballistics = require "game.weapons.ballistics"
+local tactics = require "game.ai.tactics"
 local M = {}
 local SHOT={id="enemy_rifle",muzzleVelocity=400,damage=10,penetration=.45,dropoff=.6,maxRange=60,dragK=.01}
 local function eye(enemy) return {x=enemy.position.x,y=enemy.position.y+1.665,z=enemy.position.z} end
@@ -24,27 +25,46 @@ end
 local function sample(e)
     return {time=e.age,phase=e.phase,walk=e.walk,aim=e.aim,pitch=e.pitch,recoil=e.recoil,death=e.death}
 end
-local function spawn(ctx,position,yaw)
-    local e={id="enemy_1",actor=combat.register(ctx.combat,"enemy_1",100),
+local function spawn(ctx,point)
+    local position,yaw,id=point.position,point.yaw or math.pi,point.id
+    local index=#ctx.ai.order+1
+    local e={id=id,actor=combat.register(ctx.combat,id,100),index=index,squad=point.squad,role="patrol",
+        flanks_completed=0,stuck=0,replans=0,
         position=V.copy(position),previous=V.copy(position),yaw=yaw or math.pi,previous_yaw=yaw or math.pi,
         state="patrol",age=0,phase=0,walk=0,aim=0,pitch=0,recoil=0,death=0,
-        think=0,notice=0,memory=0,cooldown=1,route=nil,route_age=0,patrol=2,shots=0,travel=0,
-        random=rng.new(ctx.world.seed,"enemy_1"),
-        patrol_points={V.copy(position),{x=0,y=0,z=-5}}}
+        think=(index-1)/60,notice=0,memory=0,cooldown=1,route=nil,route_age=0,patrol=2,shots=0,travel=0,
+        random=rng.new(ctx.world.seed,id),
+        patrol_points={V.copy(position),V.copy(point.patrol or {x=0,y=0,z=-5})}}
     e.motion=capsule.new(e.position);e.motion.yaw=e.yaw
     e.previous_pose=sample(e)
     e.palette=rig.pose(e.previous_pose)
     ctx.ai.actors[e.id]=e
+    ctx.ai.order[#ctx.ai.order+1]=e.id
+    if e.squad then
+        local squad=ctx.ai.squads[e.squad] or {members={}}
+        ctx.ai.squads[e.squad]=squad;squad.members[#squad.members+1]=e.id
+    end
     local service=ctx.services.soldiers
     if service then service.api.create(service,e) end
     return e
 end
 function M.init(ctx)
-    ctx.ai={actors={},enabled=true,spawned=false,sim=ballistics.new(),work_seconds=0,peak_tick=0}
+    ctx.ai={actors={},order={},squads={},cover_claims={},flank_claims={},nav_cache={},enabled=true,spawned=false,
+        sim=ballistics.new(),damage_scale=1,work_seconds=0,peak_tick=0,ticks=0}
     events.on(ctx.events,events.DAMAGE_DEALT,ctx.ai,function(_,hit)
         local e=ctx.ai.actors[hit.target]
         if e and hit.source=="player" and e.actor.alive then
-            e.memory=5;e.last_seen=V.copy(ctx.player.position);e.notice=1;e.think=0
+            tactics.alert(ctx,e,ctx.player.position)
+        end
+    end)
+    events.on(ctx.events,events.ACTOR_DEATH,ctx.ai,function(_,hit)
+        local e=ctx.ai.actors[hit.actor]
+        if e then tactics.release(ctx.ai,e) end
+        if hit.actor=="player" then
+            for _,id in ipairs(ctx.ai.order) do
+                local ally=ctx.ai.actors[id]
+                tactics.release(ctx.ai,ally);ally.memory=0;ally.visible=false
+            end
         end
     end)
 end
@@ -57,24 +77,52 @@ local function think(ctx,e,query)
         and (aware or math.abs(delta)<math.rad(65)) and query:visible(eye(e),target)
     e.visible=sees
     e.notice=sees and math.min(1,e.notice+.25) or math.max(0,e.notice-.2)
-    if sees and e.notice>=1 then e.memory=5;e.last_seen=V.copy(ctx.player.position) end
+    if sees and e.notice>=1 then tactics.alert(ctx,e,ctx.player.position) end
     local goal
     if e.memory>0 and e.last_seen and ctx.player.actor.alive then
         local origin=muzzle(e)
-        e.state=sees and distance<10 and query:visible(eye(e),origin)
-            and query:visible(origin,target) and "fire" or "pursuit"
-        if e.state~="fire" then goal=e.last_seen end
+        local can_fire=sees and distance<10 and query:visible(eye(e),origin) and query:visible(origin,target)
+        goal=tactics.flank(ctx,e)
+        if goal then e.state="flank";e.role="flank"
+        else
+            local cover=e.squad and tactics.cover(ctx,e,query)
+            if cover and nav.distance(e.position,cover)>.32 then
+                goal=cover;e.state="cover";e.role="cover"
+            elseif can_fire then e.state="fire";e.role=cover and "cover" or "engage"
+            else
+                -- A protected position without a firing lane is not a permanent
+                -- hiding place: leave it and close on the last observed position.
+                tactics.release_cover(ctx.ai,e)
+                goal=e.last_seen;e.state="pursuit";e.role="engage"
+            end
+        end
     else
+        tactics.release(ctx.ai,e)
         e.state="patrol"
         goal=e.patrol_points[e.patrol]
         if nav.distance(e.position,goal)<.4 then
             e.patrol=e.patrol%#e.patrol_points+1;goal=e.patrol_points[e.patrol]
         end
     end
-    if goal and (not e.route_goal or nav.distance(goal,e.route_goal)>.65 or e.route_age>1) then
-        e.route=nav.route(ctx.world.navigation,e.position,goal,query)
-        e.route_goal=V.copy(goal);e.route_age=0
-    elseif not goal then e.route=nil;e.route_goal=nil end
+    if goal and (not e.route_goal or nav.distance(goal,e.route_goal)>.25
+        or (not e.route and e.route_age>1) or e.stuck>1.5) then
+        if e.stuck>1.5 then
+            if e.cover then
+                e.bad_cover=e.cover.id;e.bad_cover_until=e.age+6
+                tactics.release_cover(ctx.ai,e);e.cover_retry=e.age+2
+            end
+            if e.flank then tactics.release_flank(ctx.ai,e);e.flank_retry=e.age+6 end
+            e.stuck=0
+        end
+        e.route=nav.route(ctx.world.navigation,e.position,goal,query,ctx.ai.nav_cache)
+        e.route_goal=V.copy(goal);e.route_age=0;e.replans=e.replans+1
+        if not e.route then
+            -- A failed approach must not reserve the only flank indefinitely
+            -- while another squad member keeps renewing the radio report.
+            if e.flank then tactics.release_flank(ctx.ai,e);e.flank_retry=e.age+6 end
+            if e.cover then tactics.release_cover(ctx.ai,e);e.cover_retry=e.age+2 end
+        end
+    elseif not goal then e.route=nil;e.route_goal=nil;e.stuck=0 end
 end
 local function fire(ctx,e,query)
     if e.state~="fire" or not e.visible or e.cooldown>0 or e.aim<.85 then return end
@@ -83,10 +131,12 @@ local function fire(ctx,e,query)
     -- Trace from the animated rifle's muzzle and confirm that the muzzle itself
     -- is reachable from the chest. A barrel pushed through a wall cannot shoot.
     local origin=muzzle(e)
-    if not query:visible(eye(e),origin) or not query:visible(origin,target) then return end
+    if not query:visible(eye(e),origin) or not query:visible(origin,target)
+        or not tactics.clear_shot(ctx.ai,e,origin,target) then return end
     local offset=(e.random()-.5)*.32
     local direction=V.normalize({x=target.x-origin.x+offset,y=target.y-origin.y+(e.random()-.5)*.22,z=target.z-origin.z})
-    ballistics.spawn(ctx.ai.sim,SHOT,origin,direction,e.id,true)
+    local round=ballistics.spawn(ctx.ai.sim,SHOT,origin,direction,e.id,true)
+    round.damage_scale=ctx.ai.damage_scale
     events.emit(ctx.events,events.WEAPON_FIRE,{weapon=SHOT.id,source=e.id,position=origin,direction=direction})
     e.shots=e.shots+1;e.cooldown=.55;e.recoil=1
 end
@@ -96,17 +146,19 @@ function M.fixed_update(ctx,dt)
     local service=ctx.services.soldiers
     if not ai.spawned and service then
         for _,point in ipairs(ctx.world.spawn_points) do
-            if point.id=="enemy" then spawn(ctx,point.position);break end
+            if point.id~="player" then spawn(ctx,point) end
         end
         ai.spawned=true
     end
     local started=os.clock()
-    for _,e in pairs(ai.actors) do
+    for _,id in ipairs(ai.order) do
+        local e=ai.actors[id]
         e.previous=V.copy(e.position);e.previous_yaw=e.yaw;e.previous_pose=sample(e)
         local query=service and service.api.query(service,e) or e.query
         if query then
             if not e.actor.alive then
                 if e.state~="dead" then
+                    tactics.release(ai,e)
                     e.state="dead";e.route=nil;e.walk=0;e.aim=0
                     if service then service.api.disable(service,e) end
                 end
@@ -132,15 +184,18 @@ function M.fixed_update(ctx,dt)
                     local distance=math.sqrt(dx*dx+dz*dz)
                     local speed=e.state=="patrol" and 1.1 or 2.2
                     if distance>.001 then
-                        dx,dz=dx/distance,dz/distance
+                        -- Brake at the goal and keep neighbouring capsules apart.
+                        speed=math.min(speed,distance*4)
+                        dx,dz=tactics.steer(ai,e,dx/distance*speed,dz/distance*speed)
                         local c,s=math.cos(e.yaw),math.sin(e.yaw)
-                        intent.move_x=(c*dx-s*dz)*speed/(tuning.stances.stand.speed*tuning.strafe_scale)
+                        intent.move_x=(c*dx-s*dz)/(tuning.stances.stand.speed*tuning.strafe_scale)
                         local z=s*dx+c*dz
-                        intent.move_z=z*speed/(tuning.stances.stand.speed*(z>0 and tuning.back_scale or 1))
+                        intent.move_z=z/(tuning.stances.stand.speed*(z>0 and tuning.back_scale or 1))
                     end
                 end
                 capsule.update(e.motion,intent,dt,query)
                 e.travel=e.travel+e.motion.travel;e.phase=e.phase+e.motion.travel*2*math.pi/1.25
+                e.stuck=waypoint and (e.motion.travel<dt*.15 and e.stuck+dt or 0) or 0
                 local speed=e.motion.travel/dt
                 e.walk=e.walk+(math.min(1,speed/1.1)-e.walk)*math.min(1,dt*9)
                 e.aim=e.aim+((e.state=="fire" and 1 or 0)-e.aim)*math.min(1,dt*8)
@@ -156,13 +211,14 @@ function M.fixed_update(ctx,dt)
     end
     if ai.enabled and ctx.player.enabled then ballistics.update(ctx,ai.sim,dt,ctx.services.enemy_bullets) end
     local elapsed=os.clock()-started
-    ai.work_seconds=ai.work_seconds+elapsed;ai.peak_tick=math.max(ai.peak_tick,elapsed)
+    ai.work_seconds=ai.work_seconds+elapsed;ai.peak_tick=math.max(ai.peak_tick,elapsed);ai.ticks=ai.ticks+1
 end
 function M.present(ctx)
     local service=ctx.services.soldiers
     if not service then return end
     local alpha=ctx.time.alpha
-    for _,e in pairs(ctx.ai.actors) do
+    for _,id in ipairs(ctx.ai.order) do
+        local e=ctx.ai.actors[id]
         local state=sample(e)
         for key,value in pairs(state) do state[key]=V.lerp(e.previous_pose[key],value,alpha) end
         local p={x=V.lerp(e.previous.x,e.position.x,alpha),y=V.lerp(e.previous.y,e.position.y,alpha),z=V.lerp(e.previous.z,e.position.z,alpha)}
@@ -175,16 +231,28 @@ function M.reset(ctx,position,yaw)
         if service then service.api.remove(service,e) end
         combat.remove(ctx.combat,id)
     end
-    ctx.ai.actors={};ctx.ai.sim=ballistics.new();ctx.ai.spawned=true
-    return spawn(ctx,position or ctx.world.spawn_points[2].position,yaw)
+    local ai=ctx.ai
+    ai.actors={};ai.order={};ai.squads={};ai.cover_claims={};ai.flank_claims={};ai.nav_cache={}
+    ai.sim=ballistics.new();ai.spawned=true;ai.work_seconds=0;ai.peak_tick=0;ai.ticks=0
+    if position then return spawn(ctx,{id="enemy_1",position=position,yaw=yaw}) end
+    for _,point in ipairs(ctx.world.spawn_points) do
+        if point.id~="player" then spawn(ctx,point) end
+    end
+    return ai.actors[ai.order[1]]
 end
 function M.snapshot(ctx)
-    local out={enabled=ctx.ai.enabled,actors={},fired=ctx.ai.sim.fired,live=#ctx.ai.sim.live,peak_tick_ms=ctx.ai.peak_tick*1000}
-    for _,e in pairs(ctx.ai.actors) do
+    local out={enabled=ctx.ai.enabled,damage_scale=ctx.ai.damage_scale,actors={},squads=ctx.ai.squads,cover_claims=ctx.ai.cover_claims,
+        flank_claims=ctx.ai.flank_claims,fired=ctx.ai.sim.fired,live=#ctx.ai.sim.live,
+        peak_tick_ms=ctx.ai.peak_tick*1000,mean_tick_ms=ctx.ai.work_seconds*1000/math.max(1,ctx.ai.ticks)}
+    for _,id in ipairs(ctx.ai.order) do
+        local e=ctx.ai.actors[id]
         out.actors[#out.actors+1]={id=e.id,health=e.actor.health,alive=e.actor.alive,state=e.state,
             x=e.position.x,y=e.position.y,z=e.position.z,yaw=e.yaw,visible=e.visible or false,
             phase=e.phase,aim=e.aim,death=e.death,shots=e.shots,travel=e.travel,route=e.route and #e.route or 0,
-            bones=rig.count,hitboxes=#rig.hitboxes,recovery_failed=e.motion.recovery_failed}
+            bones=rig.count,hitboxes=#rig.hitboxes,recovery_failed=e.motion.recovery_failed,
+            squad=e.squad,role=e.role,cover=e.cover and e.cover.id,flank=e.flank and e.flank.id,
+            flank_index=e.flank and e.flank.index,flanks_completed=e.flanks_completed,
+            memory=e.memory,last_seen=e.last_seen,replans=e.replans,stuck=e.stuck}
     end
     local service=ctx.services.soldiers
     if service then out.render=service.api.snapshot(service) end
