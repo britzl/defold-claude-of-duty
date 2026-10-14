@@ -318,7 +318,7 @@ function init(self)
             ["world.navigation"] = "Read generated layered nodes, stair/doorway edges and floor surfaces.",
             ["world.validate"] = "Compare all installed collision dimensions and positions; ray-check navigation support and connections.",
             ["world.raycast"] = "Cast from/to {x,y,z} through generated collision; returns the hit surface identifier and position.",
-            ["world.view"] = "Select street, shop, room, stairs, upstairs, e2_shop, e2_stairs, e2_upstairs or e2_top inspection camera.",
+            ["world.view"] = "Select street, courtyard, rear, alley, shop, room, stairs, upstairs, e2_shop, e2_stairs, e2_upstairs or e2_top inspection camera.",
         }) do
             automation_bridge.describe("command", name, { description = description,
                 input_schema = { type = "object" }, output_schema = { type = "object" } })

@@ -76,18 +76,20 @@ end)
 test("both street-facing doorways are open at foot and head height with walls and lintels", function()
     local world=generate(24)
     for _,b in ipairs(layout.buildings) do
-        local front=b.x+b.side*b.w/2
-        local function blocked(z,y)
-            for _,shape in ipairs(world.colliders) do
-                if math.abs(shape.x-front)<shape.w/2+.5 and math.abs(shape.z-z)<shape.d/2
-                    and math.abs(shape.y-y)<shape.h/2 then return shape.id end
+        if b.room then
+            local front=b.x+b.side*b.w/2
+            local function blocked(z,y)
+                for _,shape in ipairs(world.colliders) do
+                    if math.abs(shape.x-front)<shape.w/2+.5 and math.abs(shape.z-z)<shape.d/2
+                        and math.abs(shape.y-y)<shape.h/2 then return shape.id end
+                end
             end
+            for _,y in ipairs({.2,1,1.9,2.7}) do
+                for _,dz in ipairs({-.9,0,.9}) do assert(not blocked(b.door.z+dz,y),b.id) end
+            end
+            assert(blocked(b.door.z+3,1))
+            assert(blocked(b.door.z,3)==b.id.."/door_lintel")
         end
-        for _,y in ipairs({.2,1,1.9,2.7}) do
-            for _,dz in ipairs({-.9,0,.9}) do assert(not blocked(b.door.z+dz,y),b.id) end
-        end
-        assert(blocked(b.door.z+3,1))
-        assert(blocked(b.door.z,3)==b.id.."/door_lintel")
     end
 end)
 
@@ -187,22 +189,24 @@ test("all three flights have matching treads and standing headroom under stacked
     end
     for _,s in ipairs(world.colliders) do shapes[s.id]=s end
     for _,b in ipairs(layout.buildings) do
-        for level=1,b.floors-1 do
-            local prefix=interior.prefix(b,level)
-            for i=1,b.stairs.steps do
-                local node,tread=nodes[prefix.."stair/"..i],shapes[prefix.."stair/"..i]
-                assert(math.abs(node.y-tread.y-tread.h/2)<1e-7)
-                assert(math.abs(node.z-tread.z)<1e-7)
-                for _,s in ipairs(world.shapes) do
-                    if math.abs(node.x-s.x)<s.w/2+.32 and math.abs(node.z-s.z)<s.d/2+.32 then
-                        assert(s.y+s.h/2<=node.y+.43 or s.y-s.h/2>=node.y+1.78,
-                            "Blocked stair headroom: "..s.id.." above "..node.id)
+        if b.room then
+            for level=1,b.floors-1 do
+                local prefix=interior.prefix(b,level)
+                for i=1,b.stairs.steps do
+                    local node,tread=nodes[prefix.."stair/"..i],shapes[prefix.."stair/"..i]
+                    assert(math.abs(node.y-tread.y-tread.h/2)<1e-7)
+                    assert(math.abs(node.z-tread.z)<1e-7)
+                    for _,s in ipairs(world.shapes) do
+                        if math.abs(node.x-s.x)<s.w/2+.32 and math.abs(node.z-s.z)<s.d/2+.32 then
+                            assert(s.y+s.h/2<=node.y+.43 or s.y-s.h/2>=node.y+1.78,
+                                "Blocked stair headroom: "..s.id.." above "..node.id)
+                        end
                     end
                 end
+                assert(nodes[prefix.."stair_bottom"].layer==level-1 and nodes[prefix.."stair_top"].layer==level)
             end
-            assert(nodes[prefix.."stair_bottom"].layer==level-1 and nodes[prefix.."stair_top"].layer==level)
+            assert(not shapes[b.id.."/mass"],"Enterable building must not have a solid facade")
         end
-        assert(not shapes[b.id.."/mass"],"Enterable building must not have a solid facade")
     end
     assert(not shapes["E2/upper/guard/end"],"Middle-floor guard must not block the next flight")
     assert(shapes["E2/floor2/guard/end"],"Top-floor opening needs its end guard")
@@ -274,6 +278,89 @@ test("E2 minimap distinguishes both upper floors and leaves the top stair openin
         local r=hud.map_rect(s,18.1,y,-6,176)
         assert(not r or math.abs(r.x)>=r.w/2 or math.abs(r.y)>=r.h/2,"Filled E2 opening: "..s.id)
     end
+end)
+
+test("west flank forms a second route even when the central street connection is removed",function()
+    local world=generate(24)
+    local nav=world.navigation
+    local function reachable(flank,street)
+        local found={["west_loop/north_entry/street"]=true}
+        for _=1,#nav.nodes do
+            for _,edge in ipairs(nav.edges) do
+                local rear=edge.from:match("^west_loop/") and edge.to:match("^west_loop/")
+                    and not edge.from:match("/street$") and not edge.to:match("/street$")
+                local centre=edge.from=="E2/street" and edge.to=="W2/street"
+                if (flank or not rear) and (street or not centre) then
+                    if found[edge.from] then found[edge.to]=true end
+                    if found[edge.to] then found[edge.from]=true end
+                end
+            end
+        end
+        return found["west_loop/south_entry/street"]
+    end
+    assert(reachable(true,false),"Rear alley must bypass the main street")
+    assert(reachable(false,true),"Main street must remain independently connected")
+    assert(not reachable(false,false),"Test must cut both routes")
+end)
+
+test("flank edges have continuous ground and full standing capsule clearance",function()
+    local world=generate(24)
+    local nodes={}
+    for _,n in ipairs(world.navigation.nodes) do nodes[n.id]=n end
+    for _,edge in ipairs(world.navigation.edges) do
+        if edge.from:match("^west_loop/") or edge.to:match("^west_loop/") then
+            local a,b=nodes[edge.from],nodes[edge.to]
+            local steps=math.ceil(math.sqrt((b.x-a.x)^2+(b.z-a.z)^2)/.1)
+            for i=0,steps do
+                local t=i/steps
+                local x,z=a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t
+                for _,dx in ipairs({-.32,0,.32}) do
+                    for _,dz in ipairs({-.32,0,.32}) do
+                        local supported=false
+                        for _,s in ipairs(world.colliders) do
+                            if math.abs(x+dx-s.x)<=s.w/2+1e-7 and math.abs(z+dz-s.z)<=s.d/2+1e-7 then
+                                local top,bottom=s.y+s.h/2,s.y-s.h/2
+                                supported=supported or (top>=-1e-7 and top<=.146)
+                                assert(top<=.43 or bottom>=1.78,"Blocked flank: "..edge.from.." by "..s.id)
+                            end
+                        end
+                        assert(supported,"Ground gap: "..edge.from.." at "..x..","..z)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+test("cover positions have support and clearance; closed shopfronts face the street",function()
+    local world=generate(24)
+    local shapes={}
+    for _,s in ipairs(world.shapes) do shapes[s.id]=s end
+    for _,cover in ipairs(world.cover) do
+        local shape=shapes[cover.id]
+        assert(cover.height==shape.h)
+        local support=false
+        for _,s in ipairs(world.colliders) do
+            if math.abs(cover.x-s.x)<=s.w/2+.32 and math.abs(cover.z-s.z)<=s.d/2+.32 then
+                assert(s.y+s.h/2<=cover.y+.43 or s.y-s.h/2>=cover.y+1.78,"Blocked cover: "..cover.id.." by "..s.id)
+            end
+            if math.abs(cover.x-s.x)<=s.w/2 and math.abs(cover.z-s.z)<=s.d/2 then
+                support=support or math.abs(s.y+s.h/2-cover.y)<1e-7
+            end
+        end
+        assert(support,"Unsupported cover: "..cover.id)
+    end
+    for _,b in ipairs(layout.buildings) do
+        if not b.room then
+            local mass=shapes[b.id.."/mass"]
+            assert(mass and math.abs(mass.y-mass.h/2)<1e-7,"Facade floats above alley")
+            local shop=shapes[b.id.."/shop/1"]
+            assert((shop.x-b.x)*b.side>b.w/2)
+            assert(shop.z-shop.d/2>=b.z-b.d/2 and shop.z+shop.d/2<=b.z+b.d/2)
+        end
+    end
+    assert(world.stats.batches<100 and world.stats.mesh_bytes<1024*1024)
+    assert(#world.minimap<=require("game.ui.hud").map_limit)
 end)
 
 print(count .. " world tests passed")

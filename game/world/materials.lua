@@ -4,6 +4,8 @@ return {
     concrete = { color = { 0.64, 0.60, 0.50 }, kind = 0 },
     plaster_sand = { color = { 0.79, 0.64, 0.43 }, kind = 0 },
     plaster_blue = { color = { 0.39, 0.56, 0.59 }, kind = 0 },
+    plaster_cream = { color = { 0.82, 0.77, 0.62 }, kind = 0 },
+    dirt = { color = { 0.43, 0.34, 0.23 }, kind = 1 },
     plaster_inside = { color = { 0.70, 0.67, 0.55 }, kind = 0 },
     trim = { color = { 0.82, 0.76, 0.60 }, kind = 0 },
     wood = { color = { 0.37, 0.23, 0.12 }, kind = 2 },

@@ -1,10 +1,10 @@
--- Small, unrotated excerpt of the reference src/world/layout.js.
--- Preserve STREET and W2/E2 footprints; both buildings have shops and upper rooms.
+-- Unrotated market excerpt of the reference src/world/layout.js.
+-- W1/W3 frame a west flank around W2; W2/E2 have shops and upper rooms.
 -- Bounds are metres in level space, +Y up, street towards -Z.
 return {
     seed = 1337,
     chunk_size = 16,
-    street = { half_width = 4.5, kerb = 6.5, walk_height = 0.145, z_min = -16, z_max = 12 },
+    street = { half_width = 4.5, kerb = 6.5, walk_height = 0.145, z_min = -28, z_max = 22 },
     buildings = {
         { id = "W2", x = -14, z = -1.5, w = 15, d = 13, floors = 2,
             material = "plaster_sand", side = 1, room = true,
@@ -37,15 +37,54 @@ return {
                 rug = { x = 10, z = -3.5, w = 3, d = 2 } },
             counter = { x = .16, z = .83, w = 3.5, d = .8 },
             shelves = { x = .96, z = .55, w = .7, d = 4 } },
+        { id = "W1", x = -13.5, z = 15, w = 14, d = 10, floors = 2,
+            material = "plaster_cream", side = 1 },
+        { id = "W3", x = -13, z = -19, w = 13, d = 14, floors = 2,
+            material = "plaster_blue", side = 1 },
+    },
+    -- Reference west courtyard and mid-street alley, widened to meet the actual
+    -- building edges without unsupported strips. The rear lane closes the loop.
+    ground = {
+        { id = "west_courtyard", x0 = -25.5, x1 = -6.5, z0 = 5, z1 = 10, y = 0, material = "dirt", surface = "dirt" },
+        { id = "west_alley", x0 = -25.5, x1 = -6.5, z0 = -12, z1 = -8, y = 0, material = "dirt", surface = "dirt" },
+        { id = "west_rear", x0 = -25.5, x1 = -21.5, z0 = -8, z1 = 5, y = 0, material = "dirt", surface = "dirt" },
+    },
+    -- Endpoints create street/kerb links; intermediate points stay on the ground
+    -- rectangles above. All links are bidirectional and validated with Bullet.
+    routes = {
+        { id = "west_loop", points = {
+            { id = "north_entry", x = -7.5, y = 0, z = 7.5 },
+            { id = "courtyard", x = -18, y = 0, z = 7.5 },
+            { id = "rear_north", x = -23.5, y = 0, z = 7.5 },
+            { id = "rear_mid", x = -23.5, y = 0, z = -1.5 },
+            { id = "rear_south", x = -23.5, y = 0, z = -10 },
+            { id = "alley", x = -18, y = 0, z = -10 },
+            { id = "south_entry", x = -7.5, y = 0, z = -10 },
+        } },
+    },
+    -- Yard walls bound the rear route where neighbouring footprints stop.
+    walls = {
+        { id = "west_boundary", x = -25.7, z = -1, w = .4, d = 22.8, h = 2.4 },
+        { id = "courtyard_end", x = -23, z = 10.2, w = 5, d = .4, h = 2.4 },
+        { id = "alley_end", x = -22.5, z = -12.2, w = 6, d = .4, h = 2.4 },
+    },
+    covers = {
+        { id = "barrier", x = 1.6, z = -2.5, w = .6, h = .9, d = 2.5, normal_x = -1, normal_z = 0 },
+        { id = "courtyard", x = -13.5, z = 8.9, w = 2.4, h = 1.1, d = .65, normal_x = 0, normal_z = 1 },
+        { id = "alley", x = -13.5, z = -10.9, w = 2.4, h = 1.1, d = .65, normal_x = 0, normal_z = -1 },
     },
     wall = 0.3,
     storey = 3.2,
     slab = 0.2,
     -- Large props have intentional simple collision; tiny trim is visual only.
     stalls = { { x = -3.2, z = 6.4, w = 2.4 }, { x = 3, z = -9, w = 2.2 } },
-    crates = { { x = -10, z = -5.5 }, { x = -11.2, z = -5.5 }, { x = 5.4, z = -4.5 } },
+    crates = { { x = -10, z = -5.5, normal_x = 1 }, { x = -11.2, z = -5.5 }, { x = 5.4, z = -4.5 },
+        { x = -24.8, z = 1.5, y = 0, normal_x = 1, normal_z = 0 } },
     spawn = { x = 0, y = 0, z = 10 },
     views = {
+        courtyard = { position = { x = -7.8, y = 1.66, z = 7.4 }, yaw = 1.5, pitch = 0, title = "WEST COURTYARD" },
+        alley = { position = { x = -8, y = 1.66, z = -10 }, yaw = 1.57, pitch = 0, title = "WEST ALLEY" },
+        rear = { position = { x = -23.5, y = 1.66, z = 6.8 }, yaw = 0, pitch = 0, title = "BEHIND W2" },
         street = { position = { x = 0, y = 1.66, z = 10 }, yaw = 0, pitch = 0, title = "MARKET STREET" },
         shop = { position = { x = -2.8, y = 1.805, z = 4.8 }, yaw = 0.68, pitch = 0, title = "THE SHOPFRONT" },
         room = { position = { x = -14.5, y = 1.805, z = -3.2 }, yaw = -2.05, pitch = 0, title = "INSIDE W2" },

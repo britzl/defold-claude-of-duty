@@ -49,17 +49,22 @@ Start with the source projects' 120 Hz simulation rate through Defold's fixed-up
 
 **2. Generate the world from shared descriptions of geometry, collision and navigation.**
 
-The 28-metre street now connects an enterable two-storey W2 shop/apartment and
+The 50-metre street now connects an enterable two-storey W2 shop/apartment and
 three-storey E2 shop/apartments. Shared recipes support either entrance side,
 opposite stair directions and repeated upper floors. Three flights provide
 standing headroom, true slab openings, guards and furnished rooms; collision,
 floor-specific minimaps, room audio and bounded lights use the same dimensions.
-The layered graph has 82 nodes and 81 edges linking both buildings through the
-street. Native checks cover continuous player traversal, enemy routes between
-buildings and floors, and W2 alerted pursuit. Light selection follows the camera
-within the existing four-light budget. Loading remains bounded with independent
-random streams. This advances milestone 3; the remaining market layout, additional
-building recipes and browser/mobile validation remain subsequent work.
+W1/W3 closed facades now frame the west courtyard and alley; a rear lane around
+W2 connects them into a second route between two street junctions. Shared layout
+data supplies tiled dirt ground, collision, cover, minimap and route connections.
+The layered graph has 93 nodes and 93 edges linking both buildings and the flank.
+Native checks cover continuous player traversal, enemy routes between buildings
+and floors, a full patrol circuit and alerted pursuit around W2. Light selection
+follows the camera within the existing four-light budget. Loading remains bounded with independent
+random streams. The expanded world stays within the existing resource limits
+(77 mesh batches, 190 colliders, 0.71 MiB vertex streams). This advances milestone 3;
+the remaining market layout, additional building recipes and browser/mobile
+validation remain subsequent work.
 See `README.md`.
 
 Translate the original [layout](/Users/bjornritzl/Downloads/Claude-of-Duty-main/src/world/layout.js) into Lua data: buildings, floors, openings, stairs, alleys, furnishings and spawn points.

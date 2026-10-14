@@ -34,7 +34,27 @@ local function metadata(layout)
             interior.navigation(layout,b,nav,prefix.."room")
         end
     end
-    -- One street spine connects entrances at their authored Z positions.
+    for _,ground in ipairs(layout.ground or {}) do
+        nav.surfaces[#nav.surfaces+1]={id=ground.id,layer=0,y=ground.y,
+            x0=ground.x0,x1=ground.x1,z0=ground.z0,z1=ground.z1}
+    end
+    for _,route in ipairs(layout.routes or {}) do
+        local previous
+        for i,p in ipairs(route.points) do
+            local id=route.id.."/"..p.id
+            node(id,p.x,p.y,p.z)
+            if previous then nav.edges[#nav.edges+1]={from=previous,to=id,kind="walk"} end
+            previous=id
+            if i==1 or i==#route.points then
+                local side=p.x<0 and -1 or 1
+                hubs[#hubs+1]=node(id.."/street",0,0,p.z)
+                node(id.."/walk",side*(s.half_width+s.kerb)/2,base,p.z)
+                nav.edges[#nav.edges+1]={from=id.."/street",to=id.."/walk",kind="step",rise=base}
+                nav.edges[#nav.edges+1]={from=id.."/walk",to=id,kind="step",rise=base-p.y}
+            end
+        end
+    end
+    -- The street spine and flank endpoints together form a traversable cycle.
     table.sort(hubs,function(a,b) return a.z==b.z and a.id<b.id or a.z<b.z end)
     for i=2,#hubs do
         nav.edges[#nav.edges+1]={from=hubs[i-1].id,to=hubs[i].id,kind="walk"}
@@ -83,9 +103,11 @@ local function add(world, shape)
         world.colliders[#world.colliders + 1] = shape
         world.minimap[#world.minimap + 1] = { id = shape.id, x = shape.x, z = shape.z, w = shape.w, d = shape.d,
             bottom = shape.y - shape.h / 2, top = shape.y + shape.h / 2, surface = shape.surface }
-        if shape.id == "cover/barrier" or shape.id:match("^crate/%d+$") then
-            world.cover[#world.cover + 1] = { id = shape.id, x = shape.x - shape.w / 2 - 0.4,
-                y = shape.y - shape.h / 2, z = shape.z, height = shape.h, normal_x = -1, normal_z = 0 }
+        if shape.cover then
+            local nx,nz=shape.cover.normal_x,shape.cover.normal_z
+            world.cover[#world.cover + 1] = { id = shape.id,
+                x = shape.x + nx*(shape.w/2+.4), z = shape.z + nz*(shape.d/2+.4),
+                y = shape.y - shape.h / 2, height = shape.h, normal_x = nx, normal_z = nz }
         end
     end
     local stats = world.stats

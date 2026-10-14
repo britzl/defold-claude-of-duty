@@ -5,9 +5,10 @@ Runtime-generated port targeting Defold 1.14.0. See [PLAN.md](PLAN.md).
 The first plan step is implemented: a gameplay controller, six subsystem modules,
 120 Hz fixed simulation, metre-based 3D physics with gravity -20.6 m/s², buffered
 input, gameplay notifications, centralized damage, and separate camera/HUD
-presentation. The first world slice is also generated at runtime: a 28-metre
+presentation. The first world slice is also generated at runtime: a 50-metre
 market street, pavements, a two-storey W2 shop/apartment, and an enterable
-three-storey E2 shop with two upper apartments.
+three-storey E2 shop with two upper apartments. Closed W1/W3 shopfronts frame
+a west courtyard and alley linked by a rear lane around W2.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
@@ -46,6 +47,7 @@ views, timing, input, damage and HUD updates, then closes the engine it launched
 ```sh
 PYTHONPATH=automation-bridge-python python3 tests/smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/building_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/market_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
@@ -104,7 +106,7 @@ The compass uses north = world -Z and east = +X. The north-up minimap follows th
 player over a 44-metre square, drawing the generated world's collision footprints
 and a rotated player marker. Rectangles are clipped to the map and the player's
 floor height, so the shop's roof does not fill its accessible interior. The
-current slice supplies 154 rectangles; the GUI bounds this to 256 for larger maps.
+current slice supplies 190 rectangles; the GUI bounds this to 256 for larger maps.
 It shows geometry, not enemy positions. Renderer diagnostic views hide the combat
 HUD while leaving the settings menu available.
 
@@ -391,10 +393,22 @@ Each system must release its generated Defold resources in `final`.
 ## Generated world
 
 `game/world/layout.lua` is the authored description. It retains the reference's
-9-metre road, 6.5-metre building line, 0.145-metre pavement and W2/E2 footprints.
-This is an unrotated excerpt. W2 now has an open ground-floor shop and a furnished
-upper apartment; E2 has a shop and two furnished upper apartments. It is not the
-full map or the complete original building recipe set.
+9-metre road, 6.5-metre building line, 0.145-metre pavement and W1/W2/W3/E2 footprints.
+This is an unrotated excerpt. The road spans z=-28..22. W1 and W3 retain the
+reference footprints and use closed shopfronts; their setbacks, balconies and W3
+ruin details remain future work.
+The west courtyard and alley on opposite sides of W2 adapt the reference
+passages to meet the building edges. A four-metre rear lane joins them at
+x=-25.5..-21.5, forming a second route between the street junctions at z=7.5 and
+z=-10. Yard walls close the outer edges. `layout.ground`, `routes`, `walls` and
+`covers` describe the extension; tiled ground and cover solids feed collision,
+surface audio and minimap output. Two low barriers and a rear crate provide cover
+without obstructing the walking route. Seven cover candidates have supported,
+capsule-clear positions; AI cover selection is still subsequent work.
+
+W2 has an open ground-floor shop and a furnished upper apartment; E2 has a shop
+and two furnished upper apartments. This is not the full map or the complete
+original building recipe set.
 
 Enter W2 through the shopfront, cross to the back-left of the shop, and climb
 the straight staircase along the west wall. The upper landing leads through
@@ -429,8 +443,8 @@ walls and floors have simple solid proxies.
 `generator.lua` merges geometry by material and 16-metre spatial bucket, capped
 at 64 boxes per mesh upload. Every batch carries explicit AABB buffer metadata
 for Defold's frustum culling. There are no game objects per decorative piece.
-The slice generates 374 boxes, 50 mesh batches, 13,464 vertices and 154
-collision objects. Vertex streams occupy 538,560 bytes (CPU/GPU resource overhead
+The slice generates 519 boxes, 77 mesh batches, 18,684 vertices and 190
+collision objects. Vertex streams occupy 747,360 bytes (CPU/GPU resource overhead
 is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
@@ -452,9 +466,9 @@ bidirectional connections (including the kerb step and doorway), cover candidate
 lights, spawn points and minimap rectangles with vertical bounds. Native
 validation checks floor support and clear connection centrelines. These are
 navigation inputs, not a finished navmesh or proof of every route's clearance.
-The graph has 82 nodes and 81 edges, including every tread, upper doorway and a
-street spine joining the two entrances. Ground-floor nodes are namespaced by
-building (`W2/room`, `E2/room`, plus `/walk`, `/door` and `/street`). E2's second
+The graph has 93 nodes and 93 edges, including every tread, upper doorway and a
+street spine joining the two building entrances and both mouths of the west loop.
+Ground-floor nodes are namespaced by building (`W2/room`, `E2/room`, plus `/walk`, `/door` and `/street`). E2's second
 upper floor uses `E2/floor2/` node IDs.
 Actors outside a stair flight attach through its landings; actors already on the
 flight can replan through intermediate treads. This prevents the raised clearance
@@ -474,6 +488,23 @@ and `e2_top` in addition to the original views.
 The world Lua tests also verify standing headroom, connected floors, the minimap's
 stair opening and its bounded rectangle count. This building increment targets
 native macOS/Metal validation; browser/mobile validation remains outstanding.
+
+`tests/market_smoke.py` walks the complete market circuit in both directions,
+checks actual dirt/cover collision, patrols the enemy around the loop and tests
+alerted pursuit around W2's occluding corner. `--ai-only` skips player traversal;
+`--views-only` captures and profiles the four review views. It writes screenshots
+and `costs.json` to `build/market-validation`. `world.view` also accepts `courtyard`,
+`rear` and `alley`. The Lua checks verify both independent paths, continuous ground
+and standing capsule clearance along every new edge, cover clearance, deterministic
+loading and the existing GUI/resource budgets. The 77 world batches are up from
+50; stream storage is about 0.71 MiB, up from 0.51 MiB. The existing mesh, physics,
+GUI, texture and render-target limits are unchanged. A macOS/Metal debug run at
+1920 × 1280 measured 29.1 ms of world-loading CPU work (1.03 ms peak job). Short
+90-frame inspection captures reported 154 submitted draws for the street, 121
+for the courtyard/alley and 131 behind W2; these include shadows, post-processing
+and GUI. `DrawRenderList` averaged 0.83–1.01 ms of CPU time across those views.
+The nine render targets still occupy an estimated 50.5 MiB. These idle views do
+not establish GPU timing, sustained combat performance or browser/mobile budgets.
 
 Generated world materials now sample runtime GPU atlases and receive the lighting,
 shadows and height fog described below. Room lights are sourced from the same
@@ -540,7 +571,7 @@ The renderer Lua suite checks loading budgets, pass order, feedback avoidance,
 resize/minimize behavior, effect toggles, context-rebake scheduling and teardown.
 The native suite checks actual GPU atlas channels, visible shadow/normal/light/
 bloom contributions, animated shadow collapse, exposure, hip/ADS views and resize,
-with review images in `build/renderer-validation`. All 96 Lua checks and the
+with review images in `build/renderer-validation`. All 99 Lua checks and the
 native renderer, weapons, soldier and framework suites pass on macOS/Metal. The
 HTML5 debug bundle also passes a manual WebGL 2 check of street/room lighting,
 shadows, sky, movement, encounter restart and the separate weapon pass, with no
@@ -615,7 +646,7 @@ physics settings and capsule position/velocity/stance) and `gameplay.damage`
 (queue a hit through the combat owner).
 It also publishes the `world` state and exposes `world.snapshot`, `world.validate`,
 `world.raycast` and `world.view`. Ray hits include the authored collider id and
-surface. `world.view` takes `{name = "street" | "shop" | "room"}`.
+surface. `world.view` takes `{name = "street"}` or any named inspection view listed above.
 `movement.course` creates the optional fixtures; `movement.reset` resets feet
 with `{x, y, z, yaw}` and optional `{velocity = {x, y, z}}`. `movement.drive`
 accepts `{segments = {{ticks = 120, move_z = -1, sprint = true}, ...}}` with

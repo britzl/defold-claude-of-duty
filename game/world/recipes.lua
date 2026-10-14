@@ -1,10 +1,10 @@
 local interior = require "game.world.interior"
 local M = {}
 
-local function box(id, material, x, y, z, w, h, d, surface)
+local function box(id, material, x, y, z, w, h, d, surface, cover)
     assert(w > 0 and h > 0 and d > 0, "Invalid box: " .. id)
     coroutine.yield({ id = id, material = material, x = x, y = y, z = z,
-        w = w, h = h, d = d, surface = surface })
+        w = w, h = h, d = d, surface = surface, cover = cover })
 end
 
 local function window(b, floor, z, base, storey)
@@ -64,13 +64,15 @@ local function building(layout, b)
                 door.z + sign * (door.width / 2 + 0.07), 0.16, door.height, 0.14)
         end
     else
-        box(b.id .. "/mass", b.material, b.x, base + height / 2, b.z, b.w, height, b.d, "plaster")
-        -- Closed ground-floor shops in the opposing facade.
-        for i = 1, 3 do
-            local z = z0 + 2 + (i - 1) * 4.4
-            box(b.id .. "/shop/" .. i, "metal", x0 - 0.025, base + 1.25, z, 0.06, 2.5, 2.9)
+        -- Closed footprints meet road-level alleys as well as raised pavements.
+        box(b.id .. "/mass", b.material, b.x, (base + height) / 2, b.z, b.w, base + height, b.d, "plaster")
+        -- Closed shops face the street on either side and fit the footprint.
+        local front, bays = b.x+b.side*b.w/2, math.max(1,math.floor(b.d/4))
+        for i = 1, bays do
+            local z = z0 + (i-.5)*b.d/bays
+            box(b.id .. "/shop/" .. i, "metal", front+b.side*.025, base + 1.25, z, 0.06, 2.5, 2.9)
             for j = 1, 10 do
-                box(b.id .. "/slat/" .. i .. "/" .. j, "shutters", x0 - 0.065, base + j * 0.23, z, 0.06, 0.035, 2.85)
+                box(b.id .. "/slat/" .. i .. "/" .. j, "shutters", front+b.side*.065, base + j * 0.23, z, 0.06, 0.035, 2.85)
             end
         end
     end
@@ -105,7 +107,18 @@ function M.generate(layout, detail)
                 s.walk_height / 2 - 0.1, z + depth / 2, width, s.walk_height + 0.2, depth, "concrete")
         end
     end
+    for _, ground in ipairs(layout.ground or {}) do
+        for x = ground.x0, ground.x1-.001, 7 do
+            for z = ground.z0, ground.z1-.001, 7 do
+                local w,d = math.min(7,ground.x1-x),math.min(7,ground.z1-z)
+                box("ground/"..ground.id.."/"..x.."/"..z,ground.material,x+w/2,ground.y-.15,z+d/2,w,.3,d,ground.surface)
+            end
+        end
+    end
     for _, b in ipairs(layout.buildings) do building(layout, b) end
+    for _, wall in ipairs(layout.walls or {}) do
+        box("boundary/"..wall.id,"plaster_sand",wall.x,wall.h/2,wall.z,wall.w,wall.h,wall.d,"plaster")
+    end
     for i, stall in ipairs(layout.stalls) do
         local id = "stall/" .. i
         box(id .. "/table", "wood", stall.x, 0.45, stall.z, stall.w, 0.9, 1.15, "wood")
@@ -120,16 +133,19 @@ function M.generate(layout, detail)
         end
     end
     for i, crate in ipairs(layout.crates) do
-        local base = s.walk_height
-        box("crate/" .. i, "wood", crate.x, base + 0.5, crate.z, 0.95, 1, 0.95, "wood")
+        local base = crate.y or s.walk_height
+        local cover = {normal_x=crate.normal_x or -1,normal_z=crate.normal_z or 0}
+        box("crate/" .. i, "wood", crate.x, base + 0.5, crate.z, 0.95, 1, 0.95, "wood", cover)
         if detail then
             for _, sign in ipairs({ -1, 1 }) do
                 box("crate/" .. i .. "/strap/" .. sign, "metal", crate.x, base + 0.5, crate.z + sign * 0.32, 0.97, 1.02, 0.055)
             end
         end
     end
-    -- One cover solid, dimensions also feed the cover and minimap output.
-    box("cover/barrier", "concrete", 1.6, 0.45, -2.5, 0.6, 0.9, 2.5, "concrete")
+    for _, cover in ipairs(layout.covers or {}) do
+        box("cover/"..cover.id,"concrete",cover.x,(cover.y or 0)+cover.h/2,cover.z,
+            cover.w,cover.h,cover.d,"concrete",cover)
+    end
 end
 
 return M
