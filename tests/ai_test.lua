@@ -37,7 +37,12 @@ local function context(position)
     ctx.services.enemy_bullets=trace.boxes({{id="player",actor="player",surface="flesh",x=0,y=.89,z=0,w=.64,h=1.78,d=.64}})
     return ctx,e
 end
-local function ticks(ctx,n) for _=1,n do runtime.fixed_update(ctx,h) end end
+local function ticks(ctx,n)
+    for _=1,n do
+        runtime.fixed_update(ctx,h)
+        if ctx.time.tick%2==0 then runtime.update(ctx,h*2) end
+    end
+end
 
 test("25 parent-ordered joints have identity bind palettes and invertible rigid transforms",function()
     assert(rig.count==25)
@@ -51,6 +56,30 @@ test("25 parent-ordered joints have identity bind palettes and invertible rigid 
     local p={x=-2,y=4,z=.7}
     local round=T.point(T.inverse(m),T.point(m,p))
     near(round.x,p.x);near(round.y,p.y);near(round.z,p.z)
+end)
+
+test("reused presentation poses match independent poses and preserve simulation and other actors",function()
+    local first,second={},{}
+    local simulation=rig.pose({walk=1,phase=1.4,aim=1,pitch=.3})
+    local saved=rig.pose({walk=1,phase=1.4,aim=1,pitch=.3})
+    local other,other_worlds=rig.pose({crouch=.7,phase=2,walk=.6},second)
+    local expected_other=rig.pose({crouch=.7,phase=2,walk=.6})
+    for frame=0,80 do
+        local state={time=frame*.2,phase=frame*.4,walk=frame%3/2,aim=frame%5/4,
+            pitch=math.sin(frame)*.5,death=frame%17/16,recoil=.5,crouch=frame%7/6}
+        local expected,expected_worlds=rig.pose(state)
+        local palette,worlds=rig.pose(state,first)
+        for i,bone in ipairs(rig.bones) do
+            local inverse_bind=T.identity(-bone.bind.x,-bone.bind.y,-bone.bind.z)
+            local composed=T.mul(worlds[i],inverse_bind)
+            for k=1,12 do
+                near(palette[i][k],expected[i][k]);near(worlds[i][k],expected_worlds[i][k])
+                near(palette[i][k],composed[k])
+                near(simulation[i][k],saved[i][k]);near(other[i][k],expected_other[i][k])
+            end
+        end
+    end
+    assert(first.worlds~=other_worlds)
 end)
 
 test("generated triangles face outwards, weights normalize, and all attributes are finite",function()

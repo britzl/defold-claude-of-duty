@@ -14,7 +14,12 @@ local V=require "game.weapons.math"
 local h,count=1/120,0
 local function test(name,run) run();count=count+1;print("PASS "..name) end
 local function near(a,b,t) assert(math.abs(a-b)<(t or 1e-7),a.." != "..b) end
-local function ticks(ctx,n) for _=1,n do runtime.fixed_update(ctx,h) end end
+local function ticks(ctx,n)
+    for _=1,n do
+        runtime.fixed_update(ctx,h)
+        if ctx.time.tick%2==0 then runtime.update(ctx,h*2) end
+    end
+end
 local function context(cover)
     local ctx=runtime.new();ctx.world.ready=true
     local e=ai.reset(ctx,{x=0,y=.004,z=0},math.pi)

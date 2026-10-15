@@ -31,7 +31,12 @@ local function context()
     for _,id in ipairs(ctx.ai.order) do ctx.ai.actors[id].query=flat() end
     return ctx
 end
-local function ticks(ctx,n) for _=1,n do runtime.fixed_update(ctx,h) end end
+local function ticks(ctx,n)
+    for _=1,n do
+        runtime.fixed_update(ctx,h)
+        if ctx.time.tick%2==0 then runtime.update(ctx,h*2) end
+    end
+end
 
 test("layout spawns two deterministic squads with distinct health, motion and random streams",function()
     local ctx=context()
@@ -138,7 +143,8 @@ test("an unreachable flank approach releases its claim and waits before retrying
     assert(tactics.flank(ctx,flanker))
     function flanker.query:walkable() return false end
     flanker.think=0
-    ticks(ctx,1)
+    -- Unreachable searches are spread over frames; claims release on completion.
+    for _=1,20 do ticks(ctx,1);if not flanker.flank then break end end
     assert(not flanker.flank and next(ctx.ai.flank_claims)==nil and flanker.flank_retry>flanker.age)
     local replans=flanker.replans
     ticks(ctx,60)
@@ -192,7 +198,7 @@ test("repeated encounter resets discard pending old hits, rounds, reports and cl
     assert(next(ctx.combat.actors)==nil and next(ctx.events.listeners)==nil)
 end)
 
-test("static edge cache leaves endpoint probes fresh and invalidates with the graph",function()
+test("static world reuses exact endpoint links and invalidates with the graph",function()
     local graph={nodes={{id="a",x=0,y=0,z=0},{id="b",x=0,y=0,z=-2}},edges={{from="a",to="b"}}}
     local calls=0
     local q={walkable=function(_,a,b) calls=calls+1;return a.x==b.x or a.z==b.z end}
@@ -201,8 +207,34 @@ test("static edge cache leaves endpoint probes fresh and invalidates with the gr
     -- Block the direct path only; route via the graph remains supported.
     function q:walkable(a,b) calls=calls+1;return (a.x==0 and b.x==0) or a.z==b.z end
     assert(nav.route(graph,from,to,q,cache));local first=calls
-    calls=0;assert(nav.route(graph,from,to,q,cache));assert(calls==first-1)
+    calls=0;assert(nav.route(graph,from,to,q,cache));assert(calls==1 and first>calls)
     graph={nodes=graph.nodes,edges={}};assert(not nav.route(graph,from,to,q,cache))
+end)
+
+test("pending replans preserve movement, freeze on pause, and cancel on death and reset",function()
+    local ctx=context()
+    local e=ctx.ai.actors.enemy_1
+    local calls=0
+    function e.query:walkable() calls=calls+1;return true end
+    ctx.ai.planner.seconds=0
+    e.route={{x=e.position.x+2,y=e.position.y,z=e.position.z}}
+    e.route_goal=e.route[1]
+    local route,x=e.route,e.position.x
+    ticks(ctx,4)
+    assert(e.nav_job and e.route==route and e.position.x>x and calls==0)
+    local job,position=e.nav_job,e.position.x
+    runtime.set_paused(ctx,true);ticks(ctx,10)
+    assert(e.nav_job==job and e.position.x==position and calls==0)
+    runtime.set_paused(ctx,false)
+    combat.request(ctx.combat,{target=e.id,amount=999});combat.fixed_update(ctx)
+    assert(not e.nav_job)
+    ctx.ai.planner.seconds=1;ticks(ctx,2)
+    assert(calls==0,"Dead actor resumed its queued search")
+    ctx.ai.planner.seconds=0;ticks(ctx,20)
+    assert(#ctx.ai.planner.jobs>0)
+    ai.reset(ctx)
+    assert(#ctx.ai.planner.jobs==0 and not ctx.ai.actors.enemy_1.nav_job)
+    runtime.final(ctx)
 end)
 
 test("six-actor simulation is deterministic across 30, 60 and 144 presentation FPS",function()

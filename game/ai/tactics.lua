@@ -62,7 +62,7 @@ function M.posture(e,dt)
     else e.cover_phase=nil;e.peek_timer=0 end
     e.duck=e.suppressed or e.cover_phase=="hide"
 end
-function M.cover(ctx,e,query)
+function M.cover(ctx,e,query,options)
     local ai=ctx.ai
     if e.cover then
         if protected(query,e.cover,e.last_seen) then return e.cover end
@@ -84,8 +84,9 @@ function M.cover(ctx,e,query)
     end)
     for i=1,math.min(3,#candidates) do
         local c=candidates[i].cover
-        local route=nav.route(ctx.world.navigation,e.position,c,query,ai.nav_cache)
-        if route then
+        local route=nav.route(ctx.world.navigation,e.position,c,query,ai.nav_cache,options)
+        -- Another job can acquire this cover while clearance probes yield.
+        if route and not ai.cover_claims[c.id] and protected(query,c,e.last_seen) then
             ai.cover_claims[c.id]=e.id;e.cover=c
             e.route=route;e.route_goal=V.copy(c);e.route_age=0
             return c

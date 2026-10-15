@@ -143,7 +143,10 @@ def main(ai_only=False, e2_only=False, w2_only=False):
             # A real player hit supplies last-seen position. The floor/guard hide
             # the upstairs player until the enemy pursues through the staircase.
             cmd("ai.configure", {"enabled": False})
-            cmd("movement.reset", dict(x=-9, y=3.35, z=-5.55, yaw=0))
+            # The authored bedroom is supported and hidden until the soldier
+            # reaches this floor. The former corner is now blocked by furniture.
+            target = nodes["W2/bedroom"]
+            cmd("movement.reset", dict(x=target["x"], y=target["y"]+.01, z=target["z"], yaw=0))
             cmd("ai.reset", {"position": nodes["W2/stair_bottom"], "yaw": 0})
             game.wait_frames(4)
             cmd("gameplay.damage", dict(target="enemy_1", amount=1, source="player"))

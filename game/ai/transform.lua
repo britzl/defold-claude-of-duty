@@ -2,12 +2,17 @@
 -- exactly the same tested math on every engine backend.
 local M = {}
 function M.identity(x,y,z) return {1,0,0,x or 0, 0,1,0,y or 0, 0,0,1,z or 0} end
-function M.rotation(x,y,z)
+function M.rotation(x,y,z,out)
     local a,b,c,d,e,f=math.cos(x or 0),math.sin(x or 0),math.cos(y or 0),math.sin(y or 0),math.cos(z or 0),math.sin(z or 0)
-    return {c*e+d*b*f,-c*f+d*b*e,d*a,0, a*f,a*e,-b,0, -d*e+c*b*f,d*f+c*b*e,c*a,0}
+    if not out then return {c*e+d*b*f,-c*f+d*b*e,d*a,0, a*f,a*e,-b,0, -d*e+c*b*f,d*f+c*b*e,c*a,0} end
+    out[1],out[2],out[3],out[4]=c*e+d*b*f,-c*f+d*b*e,d*a,0
+    out[5],out[6],out[7],out[8]=a*f,a*e,-b,0
+    out[9],out[10],out[11],out[12]=-d*e+c*b*f,d*f+c*b*e,c*a,0
+    return out
 end
-function M.mul(a,b)
-    local out={}
+-- A reusable destination must be distinct from both inputs.
+function M.mul(a,b,out)
+    out=out or {}
     for r=0,2 do
         local i=r*4
         for c=1,3 do out[i+c]=a[i+1]*b[c]+a[i+2]*b[4+c]+a[i+3]*b[8+c] end

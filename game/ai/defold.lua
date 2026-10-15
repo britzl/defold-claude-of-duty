@@ -4,6 +4,7 @@ local capsule = require "game.player.bullet"
 local V = require "game.weapons.math"
 local M = {}
 local WORLD={hash("world")}
+local BONE_PALETTE,PREVIOUS_BONES,PREVIOUS_WORLD=hash("bone_palette"),hash("previous_bones"),hash("previous_world")
 local function vector(p) return vmath.vector3(p.x,p.y,p.z) end
 local function matrix(t,out)
     out=out or vmath.matrix4()
@@ -116,15 +117,17 @@ function M.present(a,e,palette,position,yaw)
     go.set_rotation(vmath.quat_rotation_y(yaw),item.mesh)
     local current_world=vmath.matrix4_rotation_y(yaw)
     current_world.m03,current_world.m13,current_world.m23=position.x,position.y,position.z
-    go.set(item.prepass,"previous_world",item.previous_world or current_world)
-    item.previous_bones=item.previous_bones or {}
+    go.set(item.prepass,PREVIOUS_WORLD,item.previous_world or current_world)
+    -- Recycle the palette from two frames ago. The previous frame must stay
+    -- intact until its complete palette has been copied into the motion pass.
+    local current=item.spare_bones or {}
     for i,t in ipairs(palette) do
-        local current=matrix(t)
-        go.set(item.url,"bone_palette",current,{index=i})
-        go.set(item.prepass,"bone_palette",current,{index=i})
-        go.set(item.prepass,"previous_bones",item.previous_bones[i] or current,{index=i})
-        item.previous_bones[i]=current
+        current[i]=matrix(t,current[i])
     end
+    go.set(item.url,BONE_PALETTE,current)
+    go.set(item.prepass,BONE_PALETTE,current)
+    go.set(item.prepass,PREVIOUS_BONES,item.previous_bones or current)
+    item.spare_bones,item.previous_bones=item.previous_bones,current
     item.previous_world=current_world
     a.uploads=a.uploads+1
     local elapsed=os.clock()-started
@@ -146,7 +149,7 @@ function M.snapshot(a)
     end
     return {actors=actors,objects=objects,active_hitboxes=boxes,buffers=a.resource and 1 or 0,
         vertices=a.vertices or 0,mesh_bytes=a.bytes or 0,palette_bytes=rig.count*64*3,
-        palette_uploads=a.uploads,palette_calls_per_actor=rig.count*3+1,
+        palette_uploads=a.uploads,palette_calls_per_actor=4,
         mean_upload_ms=a.uploads>0 and a.present_seconds*1000/a.uploads or 0,peak_upload_ms=a.peak_present*1000}
 end
 function M.final(a)

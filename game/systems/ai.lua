@@ -5,6 +5,7 @@ local tuning = require "game.player.tuning"
 local rig = require "game.ai.rig"
 local transform = require "game.ai.transform"
 local nav = require "game.ai.navigation"
+local planner = require "game.ai.planner"
 local V = require "game.weapons.math"
 local rng = require "game.rng"
 local ballistics = require "game.weapons.ballistics"
@@ -52,7 +53,7 @@ local function spawn(ctx,point)
 end
 function M.init(ctx)
     ctx.ai={actors={},order={},squads={},cover_claims={},flank_claims={},nav_cache={},enabled=true,spawned=false,
-        sim=ballistics.new(),damage_scale=1,work_seconds=0,peak_tick=0,ticks=0}
+        planner=planner.new(),sim=ballistics.new(),damage_scale=1,work_seconds=0,peak_tick=0,ticks=0}
     events.on(ctx.events,events.BULLET_SEGMENT,ctx.ai,function(_,segment) suppression.observe(ctx,segment,false) end)
     events.on(ctx.events,events.BULLET_IMPACT,ctx.ai,function(_,hit) suppression.observe(ctx,hit,true) end)
     events.on(ctx.events,events.DAMAGE_DEALT,ctx.ai,function(_,hit)
@@ -63,16 +64,16 @@ function M.init(ctx)
     end)
     events.on(ctx.events,events.ACTOR_DEATH,ctx.ai,function(_,hit)
         local e=ctx.ai.actors[hit.actor]
-        if e then tactics.release(ctx.ai,e) end
+        if e then tactics.release(ctx.ai,e);e.nav_job=nil end
         if hit.actor=="player" then
             for _,id in ipairs(ctx.ai.order) do
                 local ally=ctx.ai.actors[id]
-                tactics.release(ctx.ai,ally);ally.memory=0;ally.visible=false
+                tactics.release(ctx.ai,ally);ally.memory=0;ally.visible=false;ally.nav_job=nil
             end
         end
     end)
 end
-local function think(ctx,e,query)
+local function think(ctx,e,query,options)
     local target=player_target(ctx)
     local distance=nav.distance(eye(e),target)
     local delta=wrap(angle(target.x-e.position.x,target.z-e.position.z)-e.yaw)
@@ -90,7 +91,7 @@ local function think(ctx,e,query)
         goal=not e.suppressed and tactics.flank(ctx,e) or nil
         if goal then e.state="flank";e.role="flank"
         else
-            local cover=e.squad and tactics.cover(ctx,e,query)
+            local cover=e.squad and tactics.cover(ctx,e,query,options)
             if cover and nav.distance(e.position,cover)>.32 then
                 goal=cover;e.state="cover";e.role="cover"
             elseif cover then
@@ -122,7 +123,7 @@ local function think(ctx,e,query)
             if e.flank then tactics.release_flank(ctx.ai,e);e.flank_retry=e.age+6 end
             e.stuck=0
         end
-        e.route=nav.route(ctx.world.navigation,e.position,goal,query,ctx.ai.nav_cache)
+        e.route=nav.route(ctx.world.navigation,e.position,goal,query,ctx.ai.nav_cache,options)
         e.route_goal=V.copy(goal);e.route_age=0;e.replans=e.replans+1
         if not e.route then
             -- A failed approach must not reserve the only flank indefinitely
@@ -177,7 +178,12 @@ function M.fixed_update(ctx,dt)
                 suppression.tick(e,dt)
                 e.cooldown=math.max(0,e.cooldown-dt);e.route_age=e.route_age+dt
                 e.think=e.think-dt
-                if e.think<=0 then think(ctx,e,query);e.think=.1 end
+                if e.think<=0 and not e.nav_job then
+                    e.nav_job=planner.add(ai.planner,e,function()
+                        think(ctx,e,query,{checkpoint=planner.checkpoint})
+                        e.nav_job=nil;e.think=.1
+                    end)
+                end
                 tactics.posture(e,dt)
                 local waypoint=e.route and e.route[1]
                 while waypoint and nav.distance(e.position,waypoint)<.28 do
@@ -220,12 +226,23 @@ function M.fixed_update(ctx,dt)
                 e.pitch=V.clamp(math.atan2(target.y-(e.position.y+1.4),math.max(.01,d)),-.5,.5)
                 e.recoil=math.max(0,e.recoil-dt*8)
             end
+            if profiler then profiler.scope_begin("ai.simulation_pose") end
             e.palette=rig.pose(sample(e))
+            if profiler then profiler.scope_end();profiler.scope_begin("ai.hitboxes") end
             if service and e.actor.alive then service.api.sync(service,e) end
+            if profiler then profiler.scope_end() end
             if ai.enabled and ctx.player.enabled and ctx.player.actor.alive and e.actor.alive then fire(ctx,e,query) end
         end
     end
+    planner.step(ai.planner,ctx.time.frame,function(job)
+        local e=job.owner
+        local valid=e.nav_job==job and ai.actors[e.id]==e and e.actor.alive and ai.enabled and ctx.player.enabled
+        if not valid and e.nav_job==job then e.nav_job=nil end
+        return valid
+    end)
+    if profiler then profiler.scope_begin("ai.ballistics") end
     if ai.enabled and ctx.player.enabled then ballistics.update(ctx,ai.sim,dt,ctx.services.enemy_bullets) end
+    if profiler then profiler.scope_end() end
     local elapsed=os.clock()-started
     ai.work_seconds=ai.work_seconds+elapsed;ai.peak_tick=math.max(ai.peak_tick,elapsed);ai.ticks=ai.ticks+1
 end
@@ -235,10 +252,15 @@ function M.present(ctx)
     local alpha=ctx.time.alpha
     for _,id in ipairs(ctx.ai.order) do
         local e=ctx.ai.actors[id]
+        if profiler then profiler.scope_begin("soldiers.pose") end
         local state=sample(e)
         for key,value in pairs(state) do state[key]=V.lerp(e.previous_pose[key],value,alpha) end
         local p={x=V.lerp(e.previous.x,e.position.x,alpha),y=V.lerp(e.previous.y,e.position.y,alpha),z=V.lerp(e.previous.z,e.position.z,alpha)}
-        service.api.present(service,e,rig.pose(state),p,V.lerp(e.previous_yaw,e.yaw,alpha))
+        e.presentation_pose=e.presentation_pose or {}
+        local palette=rig.pose(state,e.presentation_pose)
+        if profiler then profiler.scope_end();profiler.scope_begin("soldiers.upload") end
+        service.api.present(service,e,palette,p,V.lerp(e.previous_yaw,e.yaw,alpha))
+        if profiler then profiler.scope_end() end
     end
 end
 function M.reset(ctx,position,yaw)
@@ -249,7 +271,7 @@ function M.reset(ctx,position,yaw)
     end
     local ai=ctx.ai
     ai.actors={};ai.order={};ai.squads={};ai.cover_claims={};ai.flank_claims={};ai.nav_cache={}
-    ai.sim=ballistics.new();ai.spawned=true;ai.work_seconds=0;ai.peak_tick=0;ai.ticks=0
+    ai.planner=planner.new();ai.sim=ballistics.new();ai.spawned=true;ai.work_seconds=0;ai.peak_tick=0;ai.ticks=0
     if position then return spawn(ctx,{id="enemy_1",position=position,yaw=yaw}) end
     for _,point in ipairs(ctx.world.spawn_points) do
         if point.id~="player" then spawn(ctx,point) end
@@ -259,6 +281,7 @@ end
 function M.snapshot(ctx)
     local out={enabled=ctx.ai.enabled,damage_scale=ctx.ai.damage_scale,actors={},squads=ctx.ai.squads,cover_claims=ctx.ai.cover_claims,
         flank_claims=ctx.ai.flank_claims,fired=ctx.ai.sim.fired,live=#ctx.ai.sim.live,
+        planning=#ctx.ai.planner.jobs,planning_ms=ctx.ai.planner.used*1000,planning_steps=ctx.ai.planner.steps,
         peak_tick_ms=ctx.ai.peak_tick*1000,mean_tick_ms=ctx.ai.work_seconds*1000/math.max(1,ctx.ai.ticks)}
     for _,id in ipairs(ctx.ai.order) do
         local e=ctx.ai.actors[id]

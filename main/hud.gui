@@ -3,13 +3,26 @@ fonts {
   name: "default"
   font: "/builtins/fonts/default.font"
 }
+layers {
+  name: "damage"
+}
+layers {
+  name: "hud"
+}
+layers {
+  name: "map_floor"
+}
+layers {
+  name: "map"
+}
+layers {
+  name: "markers"
+}
+layers {
+  name: "overlay"
+}
+layers {
+  name: "menu"
+}
 material: "/builtins/materials/gui.material"
 adjust_reference: ADJUST_REFERENCE_PARENT
-max_nodes: 384
-layers { name: "damage" }
-layers { name: "hud" }
-layers { name: "map_floor" }
-layers { name: "map" }
-layers { name: "markers" }
-layers { name: "overlay" }
-layers { name: "menu" }

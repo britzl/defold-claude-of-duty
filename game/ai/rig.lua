@@ -43,9 +43,14 @@ M.count=#M.bones
 
 -- phase is distance-driven; aim/death/time are fixed-tick state interpolated
 -- only by the presenter. The same evaluator supplies authoritative hit volumes.
-function M.pose(state)
-    local rotations={}
-    local function rotate(name,x,y,z) rotations[M.index[name]]=T.rotation(x,y,z) end
+-- Optional scratch belongs to one presenter; simulation calls still return
+-- independent poses. Never share it with hit volumes or another soldier.
+function M.pose(state,scratch)
+    local rotations=scratch and scratch.rotations or {}
+    local function rotate(name,x,y,z)
+        local i=M.index[name]
+        rotations[i]=T.rotation(x,y,z,rotations[i])
+    end
     local death=V.smooth(state.death or 0)
     local crouch=V.clamp(state.crouch or 0,0,1)*(1-death)
     local walk=(state.walk or 0)*(1-death)*(1-crouch*.7)
@@ -91,24 +96,32 @@ function M.pose(state)
             rotate("Foot"..side,-lower_angle,0,0)
         end
     end
-    local worlds,palette={},{}
+    local worlds,palette=scratch and scratch.worlds or {},scratch and scratch.palette or {}
     for i,bone in ipairs(M.bones) do
         local m=rotations[i] or T.identity()
+        rotations[i]=m
         local p=bone.local_position
         m[4],m[8],m[12]=p.x,p.y,p.z
         if i==1 then
             m[8]=m[8]+math.abs(math.sin(phase))*.025*walk+breathe*.3
             -- Bounded authored collapse, not a simulated ragdoll.
-            local fall=T.rotation(death*math.pi*.49,0,death*.10)
+            local fall=T.rotation(death*math.pi*.49,0,death*.10,scratch and scratch.fall)
+            if scratch then scratch.fall=fall end
             fall[8]=-.77*death
-            m=T.mul(fall,m)
+            m=T.mul(fall,m,worlds[i])
             -- Rotate around pelvis, then lower it to the floor.
             m[8]=.98-.77*death-.70*crouch+breathe*.3+math.abs(math.sin(phase))*.025*walk*(1-crouch)
             m[12]=.005+.38*death+.12*crouch
         end
-        worlds[i]=bone.parent>0 and T.mul(worlds[bone.parent],m) or m
-        palette[i]=T.mul(worlds[i],T.identity(-bone.bind.x,-bone.bind.y,-bone.bind.z))
+        worlds[i]=bone.parent>0 and T.mul(worlds[bone.parent],m,worlds[i]) or m
+        -- Bind axes are identity: world * inverse_bind only changes translation.
+        local w,b,out=worlds[i],bone.bind,palette[i] or {}
+        out[1],out[2],out[3],out[4]=w[1],w[2],w[3],w[1]*-b.x+w[2]*-b.y+w[3]*-b.z+w[4]
+        out[5],out[6],out[7],out[8]=w[5],w[6],w[7],w[5]*-b.x+w[6]*-b.y+w[7]*-b.z+w[8]
+        out[9],out[10],out[11],out[12]=w[9],w[10],w[11],w[9]*-b.x+w[10]*-b.y+w[11]*-b.z+w[12]
+        palette[i]=out
     end
+    if scratch then scratch.rotations,scratch.worlds,scratch.palette=rotations,worlds,palette end
     return palette,worlds
 end
 

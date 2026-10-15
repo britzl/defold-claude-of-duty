@@ -246,6 +246,7 @@ function init(self)
                 points[i]={x=p.x,y=p.y,z=p.z}
             end
             require("game.ai.tactics").release(self.ctx.ai,e)
+            e.nav_job=nil
             e.patrol_points=points;e.patrol=1;e.route=nil;e.route_goal=nil;e.memory=0;e.notice=0;e.think=0
             return ai_system.snapshot(self.ctx)
         end)
@@ -508,7 +509,11 @@ end
 function late_update(self, dt)
     -- Camera and GUI see interpolated presentation, never drive simulation.
     local out = self.ctx.presentation
+    profiler.scope_begin("late.soldiers")
     ai_system.present(self.ctx)
+    profiler.scope_end()
+
+    profiler.scope_begin("late.view")
     if self.capture and self.capture.playing then
         local c=self.capture
         c.frame=c.frame+c.direction
@@ -517,16 +522,28 @@ function late_update(self, dt)
     local view = self.capture and capture_shots.camera(self.capture.shot,self.capture.frame)
         or self.view and self.ctx.world.views[self.view]
     local camera = view and view.position or out.camera
+    profiler.scope_end()
+
+    profiler.scope_begin("late.audio")
     if not self.capture then audio_system.present(self.ctx,dt,camera,view and view.yaw or out.yaw) end
+    profiler.scope_end()
+
+    profiler.scope_begin("late.camera")
     self.camera_position.x, self.camera_position.y, self.camera_position.z = camera.x, camera.y, camera.z
     go.set_position(self.camera_position, "/camera")
     go.set_rotation(vmath.quat_rotation_y(view and view.yaw or out.yaw) * vmath.quat_rotation_x(view and view.pitch or out.pitch)
         * vmath.quat_rotation_z(view and 0 or out.roll), "/camera")
+    profiler.scope_end()
+
+    profiler.scope_begin("late.weapon")
     local visible = self.capture and self.capture.shot.weapon~=nil
         or not view and self.ctx.world.ready and self.ctx.player.actor.alive
     local weapon_pose = weapon_adapter.update(self.weapon_visuals, self.ctx, (self.ctx.paused or self.capture) and 0 or dt,
         visible,self.capture and (self.capture.shot.weapon or "hidden"),
         self.capture and self.capture.shot.weapon_id,self.capture and self.capture.shot.firing)
+    profiler.scope_end()
+
+    profiler.scope_begin("late.render_state")
     msg.post("@render:","renderer_photographic_state",{
         ads=self.capture and (self.capture.shot.weapon=="ads" and 1 or 0) or (visible and self.ctx.weapons.ads or 0),
         paused=not self.capture and self.ctx.paused or false})
@@ -535,6 +552,9 @@ function late_update(self, dt)
         self.weapon_flash_active=active_flash
         msg.post("@render:","renderer_weapon_flash",{active=active_flash})
     end
+    profiler.scope_end()
+
+    profiler.scope_begin("late.muzzle")
     local part=weapon_pose.parts.flash.position
     local r=weapon_pose.rotation
     local q=vmath.quat_rotation_y(r[2])*vmath.quat_rotation_x(r[1])*vmath.quat_rotation_z(r[3])
@@ -545,11 +565,23 @@ function late_update(self, dt)
         local hit=physics.raycast(self.camera_position,self.player_muzzle,{hash("world")})
         if hit then self.player_muzzle=hit.position+hit.normal*.03 end
     end
+    profiler.scope_end()
+
+    profiler.scope_begin("late.combat_fx")
     combat_fx.update(self.combat_visuals,(self.ctx.paused or self.capture) and 0 or dt,go.get_rotation("/camera"),self.player_muzzle,
         self.capture~=nil,self.renderer_settings.combat_effects)
+    profiler.scope_end()
+
+    profiler.scope_begin("late.lights")
     update_lights(self,camera,dt)
+    profiler.scope_end()
+
+    profiler.scope_begin("late.fov")
     go.set("/camera#camera", "fov", view and (view.fov or math.rad(70)) or weapon_pose.world_fov)
     go.set("/viewmodel#camera", "fov", weapon_pose.view_fov)
+    profiler.scope_end()
+
+    profiler.scope_begin("late.hud")
     local weapon = weapon_system.snapshot(self.ctx)
     local ammo = string.format("%s  %s  %d / %d", weapon.label, string.upper(weapon.mode), weapon.ammo, weapon.reserve)
     local clip_labels = { reloadTac="RELOADING", reloadEmpty="RELOADING", inspect="INSPECTING",
@@ -570,12 +602,15 @@ function late_update(self, dt)
     state.diagnostic = self.renderer_settings.view ~= "scene"
     state.spread = weapon.spread or 0
     msg.post("/hud#gui", HUD_STATE, state)
+    profiler.scope_end()
     if self.ctx.world.ready and not self.map_sent then
+        profiler.scope_begin("late.map_upload")
         -- Keep each message below Defold's message payload limit.
         for _, shape in ipairs(self.ctx.world.minimap) do
             msg.post("/hud#gui", "map_rect", shape)
         end
         self.map_sent = true
+        profiler.scope_end()
     end
 end
 

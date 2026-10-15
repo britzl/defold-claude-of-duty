@@ -187,6 +187,7 @@ lua tests/world_test.lua
 lua tests/movement_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
+lua tests/navigation_test.lua
 lua tests/squads_test.lua
 lua tests/suppression_test.lua
 lua tests/renderer_test.lua
@@ -342,14 +343,26 @@ two joints; rigid equipment follows one. No model or animation is imported.
 
 `soldiers/soldier.vp` performs linear blend skinning with 25 matrix uniforms.
 Each palette is 1,600 bytes. Colour and temporal prepasses receive three palettes
-(current colour, current prepass and previous prepass), totalling 4,800 bytes
-and 75 indexed `go.set` calls plus one previous-root matrix per actor per
-presentation frame. One shared generated buffer serves all six soldiers and
+(current colour, current prepass and previous prepass), totalling 4,800 bytes.
+Three array assignments plus one previous-root matrix use four `go.set` calls
+per actor per presentation frame. Two reusable matrix palettes preserve the
+previous rendered pose for motion vectors. Presentation also owns reusable Lua
+pose buffers, separate from authoritative simulation poses and other soldiers.
+The identity bind axes allow inverse-bind composition to update only translation.
+One shared generated buffer serves all six soldiers and
 replacement instances; each live soldier uses two mesh components on one GO, one movement capsule and
 seven hit-volume GOs. Conservative bounds include the supported animations and
 death collapse. The fragment shader supplies procedural camouflage, with the
 world's sun, ambient light and fog. `skinning.glsl` is shared by the colour and
 animated sun shadow passes introduced in renderer step 6.
+
+A native Defold 1.14.0 arm64-macOS comparison with six active soldiers and a
+stationary player used 60 warmup frames and 600 recorded frames per version.
+Soldier presentation fell from 0.876 to 0.441 ms average (0.642 to 0.406 ms median;
+2.657 to 0.799 ms P95). Total controller `late_update` fell from 0.959 to 0.533 ms
+average. The `soldiers.pose` and `soldiers.upload` profiler scopes separate pose
+evaluation from shader uploads. These are debug CPU measurements with no shots
+fired, not GPU timings or a sustained combat benchmark.
 
 Idle breathing, distance-driven walking, upper-body aiming, recoil and a bounded
 0.85-second death collapse are evaluated in Lua. Simulation poses advance at 120
@@ -382,8 +395,38 @@ floor support and capsule clearance before accepting a connection. Movement then
 uses the same swept capsule controller as the player, including kerb step-up,
 wall sliding and overlap recovery. Perception checks are staggered across
 actors. Routes refresh when goals move, a route fails, or movement stalls;
-accepted static-world graph edges are cached for the encounter while endpoint
-connections are always probed. Unreachable paths retry at most once per second.
+static-world graph edges are checked lazily and cached for the encounter.
+Endpoint searches use a spatial grid: at most 12 nearby candidates within 12 m,
+retaining up to four clear links. A failed local route expands to at most 24
+candidates within 24 m and 12 clear links, supporting the sparse alley spans.
+Floor and stair-entry restrictions apply before probing. Up to 64 exact endpoint
+positions retain their validated connections; moving endpoints get fresh checks.
+Replacing the navigation graph or restarting clears these caches.
+
+`game/ai/planner.lua` schedules each actor's decisions and clearance probes round
+robin, sharing a 2 ms / 32-resumption budget across all fixed ticks in a rendered
+frame. This is a soft CPU limit: an individual probe finishes before yielding.
+Cover searches use the same queue and recheck exclusive ownership on completion.
+Soldiers keep following their existing routes while replanning; before installing
+a delayed result, its first link is checked against the soldier's current position.
+Death, replacement, inspection and explicit patrol changes cancel stale jobs;
+pause preserves them without advancing. `ai.navigation`, `nav.direct`,
+`nav.endpoints`, `nav.static_edges` and `nav.reconnect` expose the work in the
+native profiler. Unreachable paths retry at most once per second.
+`PYTHONPATH=automation-bridge-python python3 tests/navigation_profile.py` rebuilds,
+runs the original six-second forward sprint plus two-second idle, and records
+spawn/forward captures under `build/forward-run-profile/optimized`. It restores
+normal combat settings and leaves a fresh encounter running at spawn.
+
+The native forward-run captures in `build/forward-run-profile/navigation-comparison.json`
+measure 37.1 FPS before this change and 73.5–82.1 FPS afterward (two runs).
+In the final run, stationary spawn and forward movement took 13.37 and 13.60 ms
+per frame respectively. AI CPU work fell from 18.02 to 3.24 ms per rendered frame,
+with navigation/decisions at 0.43 ms versus 14.92 ms previously spent on routing.
+These are local debug captures; all runs use the same movement sequence and
+six active soldiers. Scope totals are divided by all rendered frames, including
+frames with no navigation work.
+
 Nearby actors use local separation steering; world collision remains
 capsule-swept. This is not rigid actor-to-actor blocking.
 
@@ -1395,7 +1438,8 @@ scope and percentiles. These results do not qualify WebGL floating-point HDR.
 The continuous street A/B sample has 470 draws with both AA passes enabled and
 468 disabled; render-script median CPU is 122.5/96 µs respectively. This short
 sample is not a sustained combat or GPU-time budget. The soldier adapter now
-uploads 76 matrix properties per actor; physical mobile and other native
+uploads its three palettes and previous-root matrix with four Lua calls per actor;
+physical mobile and other native
 backends remain unqualified. Browser context restoration and floating-point
 HDR remain the earlier open gates.
 

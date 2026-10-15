@@ -15,6 +15,7 @@ local systems = {
     require "game.systems.fx",
     (require "game.systems.audio"),
 }
+local fixed_scopes={"fixed.world","fixed.player","fixed.weapons","fixed.ai","fixed.fx","fixed.audio"}
 local M = {}
 
 function M.new(services)
@@ -52,8 +53,12 @@ function M.fixed_update(ctx, dt)
     -- Observe Defold's steps for presentation only. Never step Bullet ourselves.
     time.remainder = time.remainder - dt
     combat.fixed_update(ctx)
-    for _, system in ipairs(systems) do
-        if system.fixed_update then system.fixed_update(ctx, dt) end
+    for i, system in ipairs(systems) do
+        if system.fixed_update then
+            if profiler then profiler.scope_begin(fixed_scopes[i]) end
+            system.fixed_update(ctx, dt)
+            if profiler then profiler.scope_end() end
+        end
     end
     input.end_tick(ctx.input)
 end

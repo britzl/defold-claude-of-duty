@@ -34,6 +34,10 @@ def main():
         cmd("movement.reset", {"x": x, "y": .01, "z": z, "yaw": 0})
         game.wait_frames(4)
         cmd("ai.configure", {"enabled": True})
+        # Current patrol spawns no longer see this fixture's player position.
+        # A real player hit supplies the same observed target to each squad.
+        for actor in ("enemy_1", "enemy_4"):
+            cmd("gameplay.damage", {"target": actor, "amount": 1, "source": "player"})
 
     def capture(name):
         shot = game.screenshot(resolution_multiplier=.75)
