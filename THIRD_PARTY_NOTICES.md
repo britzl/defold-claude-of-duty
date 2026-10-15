@@ -3,7 +3,7 @@
 `render/agx.glsl` adapts the neutral AgX implementation in
 Claude-of-Duty's `src/render/glsl.js`, also used by the Kaigen reference.
 
-`render/surface_noise.glsl`, the fifteen recipes and microdetail in
+`render/surface_noise.glsl`, the nineteen recipes and microdetail in
 `render/surfaces.glsl`, and the layering in `render/weathering.glsl` adapt
 `src/materials/glsl/noise.js`, `surfaces-arch.js`, `surfaces-ground.js`,
 `surfaces-metal.js`, `surfaces-organic.js`, `generator.js` and `shader.js` from the

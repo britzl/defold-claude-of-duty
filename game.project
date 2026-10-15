@@ -34,7 +34,7 @@ clear_color_blue = 0.77
 clear_color_alpha = 1.0
 
 [mesh]
-max_count = 512
+max_count = 640
 
 [collection]
 max_instances = 2048

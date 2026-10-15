@@ -12,7 +12,7 @@ export async function installLaboratory(fixture) {
   let meshes = 0, vertices = 0;
   for (const b of fixture.batches) {
     // Special light/glass/cutout shots stay pending until their paths agree.
-    if (b.glass || b.key === 'cutout') continue;
+    if (b.glass || b.key === 'cutout' || b.material === 'foliage') continue;
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(b.positions, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(b.normals, 3));
@@ -38,5 +38,5 @@ export async function installLaboratory(fixture) {
   return { version: fixture.version, meshes, vertices,
     geometry: 'Production Defold fixture triangles transformed into reference level space',
     shading: 'Reference production recipes; tint/weathering/interior lighting are not normalized',
-    exclusions: ['glass panes', 'perforated panel', 'local-light fixture qualification'] };
+    exclusions: ['glass panes', 'perforated panel', 'foliage coverage fixtures', 'local-light fixture qualification'] };
 }

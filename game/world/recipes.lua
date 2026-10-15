@@ -144,7 +144,7 @@ function M.generate(layout, detail)
         for x=terrain.x0,terrain.x1-.001,layout.chunk_size do
             for z=terrain.z0,terrain.z1-.001,layout.chunk_size do
                 local w,d=math.min(layout.chunk_size,terrain.x1-x),math.min(layout.chunk_size,terrain.z1-z)
-                box("terrain/"..x.."/"..z,"dirt",x+w/2,-.15,z+d/2,w,.3,d,"dirt")
+                box("terrain/"..x.."/"..z,"sand",x+w/2,-.15,z+d/2,w,.3,d,"sand")
             end
         end
         -- Visible boundary walls prevent falling off the finite terrain.

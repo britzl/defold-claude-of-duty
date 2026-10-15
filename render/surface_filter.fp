@@ -6,10 +6,11 @@ uniform highp vec4 filter_params; // output core size, operation, relief/metres,
 vec2 coord(vec2 uv) { return source_rect.xy+fract(uv)*source_rect.zw; }
 float height_at(vec2 uv) {
     vec2 q=coord(uv);
+    if(filter_params.y>3.5) return texture2D(height_texture,q).a;
     return texture2D(source_texture,q).a+(texture2D(height_texture,q).a-0.5)/255.0;
 }
 void main() {
-    if (filter_params.y>2.5) { gl_FragColor=texture2D(source_texture,var_uv); return; }
+    if (filter_params.y>2.5 && filter_params.y<3.5) { gl_FragColor=texture2D(source_texture,var_uv); return; }
     float size=filter_params.x;
     vec2 uv=(var_uv*(size+2.0)-1.0)/size;
     if(filter_params.y<0.5) gl_FragColor=texture2D(source_texture,coord(uv));

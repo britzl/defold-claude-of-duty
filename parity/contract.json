@@ -256,14 +256,18 @@
         "threejs:src/materials/library.js",
         "kaigen:src/claude_of_duty/cod_materials_lib.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Inspect every recipe close up, at distance and grazing angles; sweep lit/shaded roughness rows.",
       "expect": "Full catalogue including sand/corrugated/burlap/foliage, stable relief and no seams or cutout shimmer.",
       "coverage": [
         "tests/surface_atlas_test.lua",
         "tests/materials_smoke.py",
-        "tests/weathering_smoke.py"
-      ]
+        "tests/weathering_smoke.py",
+        "tests/catalogue_smoke.py",
+        "tests/catalogue_browser_pixels.py",
+        "tests/catalogue_browser.project"
+      ],
+      "implementation_notes": "Nineteen runtime recipes, all three atlas tiers, shared leaf coverage in colour/depth/motion/sun/local shadows. Foliage uses world-projected two-sided cards and filtered distant coverage; matched reference UV/coverage and visual qualification remain open."
     },
     {
       "id": "traversal",

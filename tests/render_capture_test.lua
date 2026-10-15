@@ -57,4 +57,21 @@ test("capture weapon poses ignore live movement, clock and recoil",function()
     local again=pose.capture(model,false)
     for i=1,3 do assert(hip.position[i]==again.position[i] and hip.rotation[i]==again.rotation[i]) end
 end)
+test("leaf cards carry the shared coverage tag on both windings without edge faces",function()
+    local mesh=require "game.world.mesh"
+    local b=mesh.new("leaf","foliage",0,0)
+    mesh.card(b,{material="foliage",x=0,y=1,z=0,w=2,h=2})
+    assert(b.vertex_count==12)
+    for i=1,12 do
+        assert(b.colors[i*4]==-1 and b.positions[i*3]==0)
+        assert(b.normals[i*3]==(i<=6 and 1 or -1))
+    end
+    for _,name in ipairs(lab.catalogue_materials) do
+        for _,suffix in ipairs({"","_far","_grazing"}) do
+            local s=capture.select("material_"..name..suffix)
+            assert(s.laboratory and capture.camera(s,120).position.x==s.position[1]+1.2)
+        end
+    end
+    assert(capture.select("foliage_local").lighting=="night")
+end)
 print(tests.." capture tests passed")

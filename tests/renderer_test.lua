@@ -122,6 +122,11 @@ render.disable_texture=function(name) bindings[name]=nil end
 render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
     for _,target in pairs(bindings) do assert(target~=active,"render-target feedback loop") end
+    if material=="shadow" or material=="local_shadow" or material=="prepass" or predicate=="capture_lab" or predicate=="model" then
+        assert(bindings.coverage_texture,"Missing foliage mask in "..tostring(material or predicate))
+        assert(#options.constants.coverage_rects==11,"Missing cutout mip rectangles")
+        assert(options.constants.coverage_info.args[2]==atlas.surfaces[20].size)
+    end
     if material=="bloom" then
         for _,name in ipairs({"source_texture","lower_texture","weapon_texture","exposure_texture"}) do
             assert(bindings[name],"Missing bloom sampler "..name)

@@ -8,7 +8,7 @@ The target is feature and presentation parity with the local Three.js and Kaigen
 
 ## Current status and scope
 
-The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 now expands the market to its full reference extent and footprints; its validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
+The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
 
 **Status convention:** `[x]` means the stated implementation is complete in the current port; `[ ]` means work remains. Implementation completion does not imply full source fidelity, all-platform qualification or an agreed performance budget. The ordered backlog below is the current execution plan; the historical record at the end preserves earlier design and validation details.
 
@@ -31,7 +31,7 @@ These are the original rendering-stage numbers, not the remaining implementation
 | --- | --- | --- |
 | 1. Comparisons | Capture catalogue, laboratory, deterministic stills/sweeps, source lock, 24-scenario contract and Three.js shared-geometry adapter | Controlled Kaigen captures, six Three.js special/transient fixtures, reference motion and fully matched scenes |
 | 2. HDR/colour | Metal RGBA16F, linear lighting, sRGB conversion, AgX and encoded RGBA8 fallback | Floating-point HDR qualification on WebGL and other target backends |
-| 3. Surface recipes | All fifteen planned recipes, generated maps, mip isolation/filtering and material tiers | Sand, corrugated metal, burlap and foliage from the full reference catalogue |
+| 3. Surface recipes | All nineteen reference families, generated maps, mip isolation/filtering, three material tiers and shared foliage coverage | Assignment on detailed step-4 geometry and matched reference appearance |
 | 4. Weathering | Deterministic variation, wear/grime masks, microdetail and selective parallax | Assignment and tuning on the completed geometry |
 | 5. Lighting | Unified sun/sky, filtered environment response, interior attenuation and room lights | Matched reference lighting throughout the full map |
 | 6. Sun shadows | Four stabilized cascades, contact-hardening filtering and animated/cutout casters | Full-map quality/cost tuning and platform qualification |
@@ -52,13 +52,13 @@ Start with reference setup, then build the shared content and simulation depende
 
 - [x] Defold capture/test harness and adapted Three.js reference capture path.
 - [x] Versioned 24-scenario comparison matrix with source references, expected behavior, verification procedures and existing coverage in `parity/contract.json`.
-- [x] Lock local runtime source hashes and all 56 production cameras/FOVs, seeds, level transforms, solar hours and quality/exposure policies. Exact reference Git revisions are unavailable for the source archives; no commit identity is guessed.
+- [x] Lock local runtime source hashes and all 71 production cameras/FOVs, seeds, level transforms, solar hours and quality/exposure policies. Exact reference Git revisions are unavailable for the source archives; no commit identity is guessed.
 - [x] Fix Three.js per-shot weapon/time/clear-sky state, record actual exposure/camera/GPU settings, import production laboratory triangles and validate repeat pixels from fresh pages. Pending/failed/omitted evidence is kept distinct.
 - [x] Verify the published Kaigen demo renders and record its build ID separately from the local source archive; mark controlled capture and performance evidence unavailable.
 - [x] Set Mac native and desktop browser to 60 FPS. Record proposed 1280×720 loading, resident-memory, CPU/GPU and p95/p99 frame budgets plus a sustained release-run protocol; these are targets, not measured passes. Mobile qualification is outside the current gate.
 - [x] Record nine adaptation decisions, including eye-origin firing, map layout, damage scales, controls, coordinates, exposure and audio. Open decisions remain assigned to their acceptance scenarios.
 - [ ] Add controlled Kaigen captures and its equivalent laboratory once a matching runnable build/engine and capture control are available.
-- [ ] Complete Three.js cutout/local-light/glass fixture qualification, transient firing/FX timelines and reference motion sweeps. Six catalogue stills are explicitly pending rather than represented by unrelated source shots.
+- [ ] Complete Three.js cutout/local-light/glass and foliage fixture qualification, transient firing/FX timelines and reference motion sweeps. Twelve catalogue stills (six original and six new foliage views) are explicitly pending rather than represented by unrelated source shots.
 
 **Completion check:** The versioned comparison matrix and baseline workflow are implemented. Controlled Kaigen and the listed reference-fixture comparisons remain open; this is not a full parity claim. Continue independent implementation with step 2 while closing those reference gates.
 
@@ -81,14 +81,19 @@ The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json
 
 **Resource account:** 1,983 generated boxes, 362 mesh batches, 543 colliders, 148,596 vertices (10,698,912 bytes), 189 navigation nodes and 194 edges. The full-map scan peaks at 145 visible minimap rectangles. Sustained 60 FPS qualification remains steps 18–19; these resource counts and layout smoke checks do not establish it.
 
-### 3. Complete the reference material catalogue — PARTIAL
+### 3. Complete the reference material catalogue — COMPLETE
 
-- [x] Fifteen planned surface recipes, wear/detail/parallax, mip filtering and launch-time material tiers.
-- [ ] Add sand, corrugated metal, burlap and foliage with reference physical scale, relief, roughness and weathering.
-- [ ] Connect foliage cutouts consistently to colour, depth, shadow and temporal passes using the existing coverage path.
-- [ ] Extend close-up, distance, grazing-angle and motion fixtures for the new recipes and tiers.
+- [x] Nineteen surface families plus microdetail, generated during bounded loading, with stable IDs and three material tiers.
+- [x] Add sand, corrugated metal, burlap and foliage using reference recipes, physical tile scales, relief, roughness and weathering. Hessian uses the reference world-palette tint/0.16 m weave scale and separate 0.5 m normal bake scale.
+- [x] Connect foliage cutouts to colour, camera depth/motion, sun and local shadows through the shared filtered coverage path. Two-sided cards retain a common UV orientation; leaf height is independent of coverage and distant ordered coverage avoids disappearing leaves.
+- [x] Extend close-up, distance, grazing-angle, back-face, shadow and motion fixtures. Catalogue v13 contains 71 cameras; the laboratory has 35 batches and 31,926 vertices.
+- [x] Apply sand to outer terrain and its physics/audio surface. Retain the full-map geometry/navigation and raise the mesh pool to 640 for the full map, actors, effects and laboratory.
 
-**Completion check:** The full catalogue is generated at runtime, remains distinct at relevant distances and has no atlas bleeding or unstable cutout edges.
+**Completion check:** The catalogue is generated at runtime with isolated mip borders and repeatable coverage in all geometry passes. The four materials remain distinct at the tested distances and tiers. World dressing is step 4; reference visual matching and sustained performance remain steps 18–19. Six new Three.js foliage fixtures are explicitly pending, alongside the six earlier reference fixtures.
+
+**Resource account:** Low/medium/high atlas sizes are 1024×1650, 2048×3282 and 4096×6546, holding 174/194/214 mip regions. The three resident RGBA8 maps occupy 19.34/76.92/306.84 MiB; bake draws are 1547/1727/1907. World batches rise from 362 to 374 because sand is separate from dirt; geometry stays at 1,983 boxes, 543 colliders and 148,596 vertices (10,698,912 bytes). No render targets were added. These allocations are not measured process/GPU residency or a performance pass.
+
+**2026-10-15 validation:** 183 Lua checks and 12 Node/Python baseline-tool checks passed. Native Metal passed all three atlas tiers (174/194/214 mip regions per map), leaf-mask mip energy, 45 exact still repeats, front/back leaf coverage, matching depth/normal occupancy, sun/local shadow toggles and exact restores. Four medium-tier 121-frame sweeps retained temporal history without resets. Chromium WebGL2 / ANGLE Metal passed the focused 62-stage medium-tier fixture and its map/coverage/depth/shadow/motion pixel gates. All test engines closed without runtime errors. A fresh native full-market quick run confirmed 543 collider dimensions, all 189 supported nodes, all 194 links in both directions, 78 six-actor route queries and eight inspection views. Full player circuits were not rerun because geometry/navigation did not change. Reports are in `build/material-catalogue-validation`, `build/material-catalogue-browser-validation` and `build/full-market-quick-validation`.
 
 ### 4. Complete building recipes, interiors and dressing — PARTIAL
 

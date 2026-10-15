@@ -75,7 +75,7 @@ void surface_weather(vec3 p,vec3 normal,float height,inout vec3 albedo,inout vec
     float edge=min(min(var_edges.x,var_edges.y),min(var_edges.z,var_edges.w));
     float wear=(1.0-smoothstep(.008,.065,edge))*var_masks.x*amount;
     wear*=smoothstep(.25,.80,macro)*(.55+.45*smoothstep(.3,.8,height));
-    bool coated=surface.x>10.5 && surface.x<12.5;
+    bool coated=(surface.x>10.5 && surface.x<12.5) || (surface.x>16.5 && surface.x<17.5);
     vec3 worn=coated?linear_colour(vec3(.55,.57,.59)):mix(albedo,linear_colour(vec3(.62,.56,.46)),.45);
     albedo=mix(albedo,worn,wear*.65);packed.r=mix(packed.r,coated?.30:.58,wear*.65);
     if(coated) packed.g=mix(packed.g,1.0,wear*.65);

@@ -25,4 +25,9 @@ return {
     metal_rust = { color = { 1, 1, 1 }, kind = 12, weather = .6 },
     rubber = { color = { 1, 1, 1 }, kind = 13, weather = .4 },
     glass = { color = { 1, 1, 1 }, kind = 14, weather = .15 },
+    sand = { color = { 1, 1, 1 }, kind = 16, weather = .18 },
+    corrugated = { color = { 1, 1, 1 }, kind = 17, weather = .45 },
+    -- Palette scale/tint for filled hessian: ~4.7 mm threads, not basket weave.
+    burlap = { color = { .635, .584, .478 }, kind = 18, weather = .5 },
+    foliage = { color = { 1, 1, 1 }, kind = 19, weather = .15, coverage = -1 },
 }

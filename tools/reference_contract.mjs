@@ -6,6 +6,8 @@ export function captureRequest(shot) {
       || ![...shot.position, ...shot.target, shot.fov].every(Number.isFinite)
       || shot.fov <= 0 || shot.fov >= 180) throw new Error(`Invalid camera: ${shot.id}`);
   if (shot.unsupported) return { status: 'pending', reason: shot.unsupported };
+  if (shot.id.includes('foliage'))
+    return { status: 'pending', reason: 'Reference foliage UV/coverage and matched shadow fixtures are not qualified.' };
   if (shot.combat_fixture || shot.firing)
     return { status: 'pending', reason: 'Reference transient fixture/event timeline is not implemented.' };
   if (['shadow_cutout', 'local_lights', 'glass'].includes(shot.id))

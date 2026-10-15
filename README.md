@@ -27,6 +27,76 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Parity step 3: complete surface catalogue
+
+The runtime catalogue now contains nineteen surface families plus the shared
+microdetail recipe. Sand, corrugated metal, burlap and foliage keep IDs 16–19;
+ID 15 remains microdetail so existing world and weapon materials retain their
+mappings. Sand uses the reference 2.5 m ripple tile, corrugated sheets use a
+2.4 m tile with twelve ridges, and hessian uses the world palette's 0.16 m tile
+and tint. Hessian's normal bake retains the reference 0.5 m bake scale; using
+the visible UV scale for that bake incorrectly triples its slopes. Foliage
+uses a 0.6 m tile of overlapping, varied leaves. All maps, wear, roughness and
+relief are generated during bounded loading.
+
+The existing outer terrain now uses sand, including its collision/audio surface
+name. This separates twelve more material batches: the full map has 374 batches,
+1,983 boxes, 543 colliders and 148,596 vertices / 10,698,912 mesh bytes. Its 189
+navigation nodes and 194 edges are unchanged. The mesh pool is 640 to accommodate
+the full map, six soldiers, weapons, effects and the expanded optional laboratory.
+Detailed palms, sandbags, roofing and other world dressing remain step 4.
+
+Foliage cards have both windings and a negative vertex-alpha coverage tag.
+Colour, camera depth/motion, sun shadows and point-light shadows sample the same
+padded mask mip chain. The 0.45 near cutoff transitions to a fixed ordered mask
+when leaves become subpixel, preserving distant coverage for TAA instead of
+turning the card opaque or losing all leaves. The mask lives in albedo alpha;
+leaf vein/curvature height is kept separately in material alpha for normal
+baking. Foliage does not use parallax. The world pass reuses its existing atlas
+sampler/uniforms to stay within Defold 1.14's 32 resource bindings per set;
+depth/shadow overrides receive their own eleven mask rectangles. `view=coverage`
+shows atlas alpha for pixel inspection. Shadows still have their own filtering
+and texel footprint; this is not per-pixel equality across render passes.
+
+| Material tier | Atlas dimensions | Mip regions | Bake jobs / draws | Three resident maps |
+| --- | --- | --- | --- | --- |
+| Low | 1024 × 1650 | 174 | 1025 / 1547 | 19.34 MiB |
+| Medium | 2048 × 3282 | 194 | 1145 / 1727 | 76.92 MiB |
+| High | 4096 × 6546 | 214 | 1265 / 1907 | 306.84 MiB |
+
+These are atlas allocations, not total process or GPU memory. Temporary bake
+storage and the render pipeline are accounted separately by `renderer.snapshot`.
+Sustained performance remains steps 18–19.
+
+Capture catalogue v13 has 71 cameras, including fifteen new close, distant,
+grazing, back-face and shadow views. The new test entry points are:
+
+```sh
+# After a current native editor build; owns one process per quality tier:
+PYTHONPATH=automation-bridge-python python3 tests/catalogue_smoke.py --motion
+# Build debug wasm-web with --settings tests/catalogue_browser.project,
+# then use the existing browser capture harness (62 stages at medium quality):
+node tools/validate_rendering_browser.mjs --bundle=/path/to/bundle --output=build/material-catalogue-browser-validation
+PYTHONPATH=automation-bridge-python python3 tests/catalogue_browser_pixels.py
+```
+
+The 2026-10-15 validation passed 183 Lua checks, twelve baseline-tool checks,
+all three native material tiers, 45 exact still repeats, four 121-frame medium-tier
+sweeps without history resets, and all 62 medium-tier WebGL stages and pixel gates.
+A fresh native full-map quick run also passed all 543 collider dimensions, 189
+supported nodes, 194 links in both directions and 78 six-actor route queries.
+All owned engines closed without runtime errors. Full player traversal circuits
+and sustained performance were not rerun for this material increment.
+
+The native checks inspect every mip border/channel, leaf-mask energy, exact
+camera returns, front/back coverage, depth, sun/local shadows and optional four
+121-frame motion sweeps. The browser pixel checks inspect the same medium-tier
+maps and fixtures, motion output and exact camera/shadow returns. Captures and
+reports are under `build/material-catalogue-validation` and
+`build/material-catalogue-browser-validation`. These material checks do not
+qualify cross-engine visual parity. The six new Three.js foliage views remain
+explicitly pending until reference UV/coverage and shadow fixtures are matched.
+
 ## Run and validate
 
 Open `game.project` in Defold 1.14.0, fetch libraries, then build and run.

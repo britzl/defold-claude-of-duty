@@ -10,7 +10,7 @@ test('production catalogue has unique, validated camera requests and explicit un
   const selected = selectShots(catalog);
   assert.equal(new Set(selected.map(s => s.id)).size, selected.length);
   const pending = selected.filter(s => captureRequest(s).status === 'pending').map(s => s.id);
-  assert.deepEqual(pending.sort(), ['combat_effects','combat_glass','glass','local_lights','shadow_cutout','weapon_fire']);
+  assert.deepEqual(pending.sort(), ['combat_effects','combat_glass','foliage_back','foliage_local','foliage_shadow','glass','local_lights','material_foliage','material_foliage_far','material_foliage_grazing','shadow_cutout','weapon_fire']);
   assert.throws(() => selectShots(catalog, 'street,missing'), /Unknown shot/);
   assert.throws(() => selectShots(catalog, 'street,street'), /Duplicate/);
 });
@@ -44,8 +44,8 @@ test('applied-state validation permits rounding but rejects wrong time, weapon, 
 
 test('laboratory export carries production triangles, material assignments and roughness rows', () => {
   const fixture = JSON.parse(execFileSync('lua', ['tools/export_parity.lua', 'laboratory'], { maxBuffer: 16 * 1024 * 1024 }));
-  assert.equal(fixture.batches.length, 31);
-  assert.equal(fixture.batches.reduce((n,b) => n + b.positions.length / 3, 0), 31650);
+  assert.equal(fixture.batches.length, 35);
+  assert.equal(fixture.batches.reduce((n,b) => n + b.positions.length / 3, 0), 31926);
   for (const b of fixture.batches) {
     assert.equal(b.positions.length, b.normals.length);
     assert.equal(b.positions.length % 9, 0);

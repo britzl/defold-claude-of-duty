@@ -1,0 +1,7 @@
+[rendering_validation]
+enabled = 1
+suite = catalogue
+[display]
+width = 1024
+height = 1024
+high_dpi = 0

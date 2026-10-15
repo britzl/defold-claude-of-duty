@@ -11,6 +11,7 @@ uniform lowp sampler2D material_texture;
 #include "/render/lighting.glsl"
 #include "/render/surface_sampling.glsl"
 #include "/render/weathering.glsl"
+#define WORLD_FOLIAGE
 #include "/render/coverage.glsl"
 #include "/render/depth_normal.glsl"
 void main() {
@@ -20,7 +21,7 @@ void main() {
     vec3 bitangent=normalize(cross(geometric,tangent));
     tangent=normalize(cross(bitangent,geometric));
     vec2 world_uv=vec2(dot(var_world,tangent),dot(var_world,bitangent));
-    vec2 uv=world_uv/surface_info.x;
+    vec2 uv=var_color.a<-.5?foliage_uv(var_world,geometric):world_uv/surface_info.x;
     // Low-frequency continuous warping breaks a repeated tile grid only on
     // unstructured materials. It is anchored in metres, not texture indices.
     if(surface.x<1.5 || (surface.x>4.5 && surface.x<5.5) || (surface.x>8.5 && surface.x<10.5))

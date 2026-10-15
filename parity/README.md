@@ -5,7 +5,7 @@ reference source paths, expected behavior, a verification procedure, existing
 coverage, and nine recorded adaptation decisions. `implemented-core` describes
 existing code; it does not mean the scenario has passed parity review.
 [reference-lock.json](reference-lock.json) pins the runtime source snapshots and
-all 56 production camera requests, including FOV, lighting and fixture intent.
+all 71 production camera requests, including FOV, lighting and fixture intent.
 
 The current acceptance targets, selected on 2026-10-15, are **Mac native and
 desktop browser at 60 FPS**. Mobile qualification is outside this gate. Proposed
@@ -26,13 +26,24 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
-## Full-map source increment — 2026-10-15
+## Complete material catalogue increment — 2026-10-15
 
-The current lock pins the expanded 104 m market and refreshed contract.
+The current lock includes nineteen surface families, the full market and capture
+catalogue v13 (71 cameras). The fifteen additions cover sand, corrugated metal,
+burlap and foliage at close range, distance and grazing angles, plus leaf-card
+back faces and sun/local shadows. Native tier checks and a focused 62-stage
+medium-tier WebGL fixture are documented in the repository README. Their images
+are implementation evidence, not matched cross-engine receipts. Six new foliage
+reference shots are explicitly pending; the earlier six pending reference
+fixtures remain open. The lock carries no stale captures from older catalogues.
+
+## Full-map source increment — 2026-10-15 (historical)
+
+That increment pinned the expanded 104 m market and refreshed contract.
 [excerpt-baseline-v1.json](excerpt-baseline-v1.json) preserves the previous source
 identity and three capture receipts. Those native images describe the old map;
 they do not qualify this source increment. The current lock deliberately carries
-no old capture evidence. The catalogue still contains 56 production camera
+no old capture evidence. That catalogue contained 56 production camera
 requests; eight additional layout inspection views are smoke-test artifacts,
 not a new matched visual baseline.
 

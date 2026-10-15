@@ -6,7 +6,7 @@ local local_lights=require "game.render.local_lights"
 local photo=require "game.render.photographic"
 local M = { atlas_tile = atlas.scratch_size, surface_count = #atlas.surfaces, environment_size = daylight.environment_size,
     shadow_size = shadows.size, radiance_range = 8, max_lights = 4 }
-M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7, cascades = 8, shadow_visibility = 9, depth = 10, geometry_normals = 11, ao = 12, contact = 13, occlusion_raw = 14, motion = 15, history = 16, reflections = 17, local_shadow = 18, glass = 19, fog_scatter = 20, fog_transmittance = 21, bloom = 22, exposure = 23, grade = 24 }
+M.views = { scene = 0, albedo = 1, normals = 2, material = 3, shadow = 4, environment = 5, hdr_probe = 6, environment_atlas = 7, cascades = 8, shadow_visibility = 9, depth = 10, geometry_normals = 11, ao = 12, contact = 13, occlusion_raw = 14, motion = 15, history = 16, reflections = 17, local_shadow = 18, glass = 19, fog_scatter = 20, fog_transmittance = 21, bloom = 22, exposure = 23, grade = 24, coverage = 25 }
 -- A format constant alone does not prove renderability/filtering/blending.
 -- Enable the measured backend first; qualify WebGL/mobile before expanding it.
 function M.pipeline(adapter, half_float, requested)

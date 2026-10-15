@@ -3,12 +3,15 @@ local mesh=require "game.world.mesh"
 local visible=require "game.world.visible_faces"
 local M={roughness={.08,.25,.5,.75,1},
     extra_materials={"concrete_floor","brick","tile","dirt","gravel","metal_painted","metal_rust","rubber","glass"},
-    batch_count=31}
+    catalogue_materials={"sand","corrugated","burlap","foliage"},
+    batch_count=35}
 M.lights={
     {id="lab/key",kind="room",x=40.5,y=2.7,z=-.5,radius=8,intensity=24,
         minimum={x=37,y=0,z=-6},maximum={x=47,y=4,z=6}},
     {id="lab/fill",kind="room",x=52,y=2.7,z=-1,radius=9,intensity=42,colour={1,.75,.5},
-        minimum={x=49,y=0,z=-6},maximum={x=59,y=4,z=6}}
+        minimum={x=49,y=0,z=-6},maximum={x=59,y=4,z=6}},
+    {id="lab/leaves",kind="room",x=106,y=3.8,z=2,radius=9,intensity=42,colour={1,.85,.6},
+        minimum={x=98,y=0,z=-7},maximum={x=114,y=5,z=7}}
 }
 local function sphere_vertex(batch,centre,radius,lat,lon)
     local n={math.sin(lat)*math.cos(lon),math.cos(lat),math.sin(lat)*math.sin(lon)}
@@ -53,6 +56,21 @@ function M.batches()
     end
     for i,material in ipairs(M.extra_materials) do
         box(material,8.4+i*2.4,2,-5.32,2.1,2.6,.12)
+    end
+    -- Separate from the existing lighting/glass rooms, with open sky behind
+    -- foliage so a full rectangular depth/shadow silhouette cannot hide.
+    box("concrete_floor",106,-.1,0,16,.2,14)
+    for i,material in ipairs(M.catalogue_materials) do
+        local batch=mesh.new("catalogue/"..material,material,0,0)
+        local shape={material=material,x=100+i*2.4,y=2,z=-5.32,w=2.1,h=2.6,d=.12}
+        if material=="foliage" then
+            mesh.card(batch,shape)
+            mesh.card(batch,{material=material,x=106,y=2.2,z=2,w=2.4,h=1.8,rotation_x=math.pi/2})
+        else
+            mesh.box(batch,shape,1)
+            mesh.box(batch,{material=material,x=100+i*2.4,y=.015,z=-1,w=2.1,h=.03,d=4},1)
+        end
+        list[#list+1]=batch
     end
     -- Large wall with ledges for metre-scale repairs/runoff and close wear.
     box("plaster_sand",-20,2,-5.5,12,4,.2)

@@ -23,6 +23,7 @@ def validate_channels(name, mean):
     assert mean[2] > 120, (name,"occlusion",mean)
     assert mean[0] > (5 if name == "glass" else 30), (name,"roughness",mean)
     if name == "metal_brushed": assert mean[1] > 200, (name,mean)
+    elif name == "corrugated": assert 60 < mean[1] <= 255, (name,mean)
     elif name in ("metal_painted","metal_rust"): assert 0 <= mean[1] < 245, (name,mean)
     else: assert mean[1] < 10, (name,"dielectric",mean)
     if name == "glass": assert mean[0] < 100, (name,"glass gloss",mean)

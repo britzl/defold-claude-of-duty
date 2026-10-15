@@ -1,6 +1,6 @@
 -- Runtime GPU maps. Every level owns a periodic one-texel border; no hardware
 -- mip attachment or texture-array support is required. IDs are stable.
-local M={levels=11,detail_kind=15}
+local M={levels=11,detail_kind=15,foliage_kind=19}
 local definitions={
     {"plaster",1024,2.2,.06,.014,.75},
     {"asphalt",1024,3,.075,.014,.65},
@@ -18,6 +18,10 @@ local definitions={
     {"rubber",512,.5,.013,.003,.50},
     {"glass",512,2,.0008,0,.04},
     {"detail",1024,.25,.0034,0,0},
+    {"sand",1024,2.5,.10,0,.70},
+    {"corrugated",1024,2.4,.075,.030,.60},
+    {"burlap",512,.16,.018,.003,.40,.5},
+    {"foliage",512,.6,.02,0,.25},
 }
 M.presets={low={divisor=4,width=1024},medium={divisor=2,width=2048},high={divisor=1,width=4096}}
 function M.new(quality)
@@ -26,7 +30,7 @@ function M.new(quality)
         levels=M.levels,detail_kind=M.detail_kind,surfaces={}}
     local pending={}
     for kind,d in ipairs(definitions) do
-        local s={name=d[1],size=d[2]/preset.divisor,metres=d[3],relief=d[4],parallax=d[5],detail=d[6],rects={}}
+        local s={name=d[1],size=d[2]/preset.divisor,metres=d[3],relief=d[4],parallax=d[5],detail=d[6],normal_metres=d[7] or d[3],rects={}}
         s.last_level=math.floor(math.log(s.size)/math.log(2)+.5)
         a.surfaces[kind]=s
         for level=0,s.last_level do
@@ -56,6 +60,17 @@ function M.new(quality)
         end end
         return result
     end
+    -- Only the leaf rectangles are needed by depth/shadow overrides. These
+    -- are global constants; per-object material uniforms do not survive overrides.
+    function a.coverage_rects(vector)
+        local result={}
+        local s=a.surfaces[M.foliage_kind+1]
+        for level=0,a.levels-1 do
+            local r=s.rects[math.min(level,s.last_level)+1]
+            result[#result+1]=vector((r.x+1)/a.width,(r.y+1)/a.height,r.size/a.width,r.size/a.height)
+        end
+        return result
+    end
     function a.jobs()
         local jobs={}
         local function add(job) jobs[#jobs+1]=job end
@@ -63,7 +78,7 @@ function M.new(quality)
             for channel=0,1 do add({op="recipe",kind=kind-1,channel=channel,size=s.size,target=channel==0 and "scratch_a" or "scratch_b"}) end
             for channel,name in ipairs({"albedo","material","normal"}) do
                 add({op=channel==3 and "normal" or "copy",target=name,source=channel==2 and "scratch_b" or "scratch_a",
-                    rect=s.rects[1],source_rect={x=0,y=0,size=s.size},source_width=a.scratch_size,source_height=a.scratch_size,relief=s.relief/s.metres})
+                    rect=s.rects[1],source_rect={x=0,y=0,size=s.size},source_width=a.scratch_size,source_height=a.scratch_size,foliage=s.name=="foliage",relief=s.relief/s.normal_metres})
             end
             for level=1,s.last_level do for _,name in ipairs({"albedo","material","normal"}) do
                 local prev,r=s.rects[level],s.rects[level+1]

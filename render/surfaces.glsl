@@ -1374,6 +1374,275 @@ void detail_surface(vec2 uv, out vec3 alb, out float h, out float rough, out flo
 }
 
 
+void sand_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  vec2 p = uv * P + 91.0 * 8.2;
+
+  // ---- wind ripples: sheared sine, gently warped so the crests meander ----
+  vec2 rp = owShear(p * 1.0, 1.0, 1.0);
+  float warp = owFbm(p * 0.9, P * 0.9, 3, 0.55);
+  float ripple = sin((rp.y * 1.0 + warp * 0.55) * 6.28318);
+  // asymmetric profile: gentle windward slope, sharp lee crest
+  ripple = ripple * 0.5 + 0.5;
+  ripple = pow(ripple, 1.7) * 0.75 + ripple * 0.25;
+  float rippleAmp = surface_ramp(0.20, 0.70, owFbm01(p * 0.7, P * 0.7, 3, 0.6));
+  float secondary = sin((p.y * 3.0 + p.x * 1.0 + warp * 0.8) * 6.28318) * 0.5 + 0.5;
+
+  float dune = owFbm01(p * 0.5, P * 0.5, 4, 0.6);
+  float mid  = owFbm01(p * 5.0, P * 5.0, 5, 0.5);
+  float grain = owFbm01(p * 18.0, P * 18.0, 4, 0.55);
+  vec4 gcell = owWorley(p * 24.0, P * 24.0, 1.0);
+
+  h = 0.50 + (dune - 0.5) * 0.16 + (mid - 0.5) * 0.05
+    + (ripple - 0.5) * 0.26 * rippleAmp + (secondary - 0.5) * 0.06 * rippleAmp
+    + (grain - 0.5) * 0.018;
+
+  vec3 cLight = owSRGB(vec3(0.760, 0.660, 0.480));
+  vec3 cMid   = owSRGB(vec3(0.610, 0.510, 0.360));
+  vec3 cDamp  = owSRGB(vec3(0.360, 0.290, 0.205));
+  vec3 c = mix(cMid, cLight, surface_ramp(0.3, 0.8, dune));
+  c = mix(c, cDamp, surface_ramp(0.62, 0.28, h) * 0.55);           // damp in the hollows
+  // coarse grains collect on the crests, fines in the troughs
+  c = mix(c, cLight * 1.06, surface_ramp(0.45, 0.85, ripple) * rippleAmp * 0.35);
+  c = mix(c, cMid * 0.88, surface_ramp(0.45, 0.10, ripple) * rippleAmp * 0.30);
+  c *= 0.90 + 0.18 * grain;
+  // sparkle from quartz grains
+  c += surface_ramp(0.22, 0.0, gcell.x) * step(0.86, gcell.z) * 0.10;
+
+  rough = 0.90 + (grain - 0.5) * 0.10 - surface_ramp(0.6, 0.3, h) * 0.12;
+  metal = 0.0;
+  ao = 1.0 - surface_ramp(0.55, 0.25, h) * 0.10;
+
+  // ---- pebbles and shell fragments sitting on top ----
+  vec4 peb = owWorley(p * 18.0, P * 18.0, 1.0);
+  float pebble = surface_ramp(0.30, 0.10, peb.x) * step(0.80, peb.w);
+  vec3 pcol = mix(owSRGB(vec3(0.400, 0.370, 0.330)), owSRGB(vec3(0.690, 0.660, 0.620)), peb.z);
+  c = mix(c, pcol, pebble * 0.85);
+  h += pebble * 0.05;
+  rough = mix(rough, 0.55 + 0.25 * peb.z, pebble * 0.8);
+  ao -= surface_ramp(0.40, 0.30, peb.x) * step(0.80, peb.w) * 0.08;
+
+  // ---- scattered dry debris / dark mineral streaks ----
+  float streak = surface_ramp(0.62, 0.88, owFbm01(owShear(p * 2.5, 2.0, 4.0), owShearPer(P * 2.5, 4.0), 4, 0.5));
+  c = mix(c, cDamp * 1.1, streak * 0.22);
+
+  alb = clamp(c, vec3(0.02), vec3(0.82));
+  rough = clamp(rough, 0.35, 0.99);
+  ao = clamp(ao, 0.80, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+void corrugated_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  const float RIDGES = 12.0;
+  vec2 p = uv * P + 29.0 * 6.1;
+
+  // ---- the profile: sinusoidal ridges with a flat-ish crown ----
+  float t = uv.x * RIDGES * 6.28318530718;
+  float wave = sin(t);
+  float profile = sign(wave) * pow(abs(wave), 0.72) * 0.5 + 0.5;
+  // panel joints every 4 ridges: one sheet laps over the next
+  float panel = uv.x * RIDGES / 4.0;
+  float panelId = floor(panel);
+  float lap = surface_ramp(0.0, 0.06, fract(panel)) * surface_ramp(0.0, 0.06, 1.0 - fract(panel));
+  float panelStep = (owHash11(mod(panelId,3.0) + 29.0) - 0.5) * 0.05;
+
+  float dents = owFbm01(p * 2.2, P * 2.2, 4, 0.6);
+  float fine = owFbm01(p * 11.0, P * 11.0, 4, 0.5);
+
+  h = 0.18 + profile * 0.62 + panelStep + (dents - 0.5) * 0.07 + (fine - 0.5) * 0.012;
+  h -= (1.0 - lap) * 0.06;
+
+  // ---- galvanised zinc: crystalline spangle ----
+  vec4 sp = owWorley(p * 7.0, P * 7.0, 1.0);
+  float spangle = surface_ramp(0.55, 0.05, sp.x);
+  vec3 zinc = owSRGB(vec3(0.520, 0.535, 0.545));
+  vec3 c = mix(zinc * 0.86, zinc * 1.12, spangle * (0.3 + 0.7 * sp.z));
+  c *= 0.94 + 0.12 * fine;
+  metal = 1.0;
+  rough = 0.34 + (1.0 - spangle) * 0.16 + (fine - 0.5) * 0.08;
+  ao = 1.0;
+
+  // ---- rust, heavier in the valleys and at the bottom of the sheet ----
+  float valley = 1.0 - profile;
+  float rustField = surface_ramp(0.62, 0.98,
+      (1.0 - owBillow(owWarp(p * 1.6, P * 1.6, 1.0, 4), P * 1.6, 5, 0.6)) *
+      (0.58 + 0.40 * valley) + (1.0 - uv.y) * 0.16);
+  float rustGrain = owFbm01(p * 22.0, P * 22.0, 4, 0.55);
+  vec3 rustCol = owRustColour(rustField, rustGrain);
+  c = mix(c, rustCol, rustField);
+  metal = mix(metal, 0.0, surface_ramp(0.15, 0.6, rustField));
+  rough = mix(rough, 0.88 + 0.08 * rustGrain, surface_ramp(0.1, 0.6, rustField));
+  h += rustField * 0.02 * rustGrain;
+
+  // holes rusted right through
+  vec4 hole = owWorley(p * 5.0 + 31.0, P * 5.0, 0.95);
+  float perf = surface_ramp(0.10, 0.02, hole.x) * step(0.94, hole.w) * surface_ramp(0.5, 0.9, rustField);
+  h -= perf * 0.5;
+  ao -= perf * 0.7;
+  c = mix(c, rustCol * 0.25, perf);
+
+  // ---- fixings: hex screws with a rubber washer, two rows, on the crowns ----
+  float crown = surface_ramp(0.72, 0.95, profile);
+  vec2 fx = vec2(fract(uv.x * RIDGES) - 0.5, fract(uv.y * 3.0) - 0.5);
+  float fd = length(fx * vec2(1.0, RIDGES / 3.0));
+  float screwRnd = owHash12(floor(vec2(uv.x * RIDGES, uv.y * 3.0)) + 29.0);
+  float screw = surface_ramp(0.16, 0.11, fd) * crown * step(0.25, screwRnd);
+  float washer = surface_ramp(0.24, 0.18, fd) * crown * step(0.25, screwRnd);
+  h += washer * 0.02 + screw * 0.035;
+  c = mix(c, owSRGB(vec3(0.120, 0.115, 0.110)), washer * 0.8);
+  c = mix(c, mix(owSRGB(vec3(0.400, 0.405, 0.410)), rustCol, rustField), screw);
+  rough = mix(rough, 0.85, washer * 0.8);
+  rough = mix(rough, 0.42 + rustField * 0.4, screw);
+  metal = mix(metal, 0.0, washer * 0.9);
+  metal = mix(metal, 1.0 - rustField, screw);
+  ao -= (washer - screw) * 0.35;
+  // rust streak weeping from each fixing
+  float weep = washer * 0.0 + surface_ramp(0.34, 0.20, fd) * step(0.25, screwRnd) * crown *
+               surface_ramp(0.0, 0.5, fract(uv.y * 3.0) - 0.5);
+  c = mix(c, owSRGB(vec3(0.330, 0.170, 0.080)), clamp(weep, 0.0, 1.0) * 0.5);
+
+  // ---- dirt collecting in the valleys ----
+  float dirt = valley * surface_ramp(0.35, 0.8, owFbm01(p * 3.0, P * 3.0, 4, 0.55));
+  c = mix(c, owSRGB(vec3(0.200, 0.185, 0.160)), dirt * 0.40);
+  rough += dirt * 0.14;
+  metal *= 1.0 - dirt * 0.5;
+  ao -= valley * 0.18;
+
+  alb = clamp(c, vec3(0.02), vec3(0.85));
+  rough = clamp(rough, 0.14, 0.99);
+  metal = clamp(metal, 0.0, 1.0);
+  ao = clamp(ao, 0.15, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+void burlap_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  const float THREADS = 34.0;      // hessian is coarse
+  vec2 p = uv * P + 67.0 * 4.7;
+
+  vec2 t = uv * THREADS;
+  vec2 cell = mod(floor(t),vec2(THREADS));
+  vec2 f = fract(t) - 0.5;
+  float over = mod(cell.x + cell.y, 2.0);
+
+  // hessian threads are irregular: each one has its own thickness
+  float twx = 0.62 + 0.30 * owHash12(vec2(cell.x, 0.0) + 67.0);
+  float twy = 0.62 + 0.30 * owHash12(vec2(0.0, cell.y) + 67.0 * 1.7);
+  float warpP = cos(clamp(f.x / twx, -0.5, 0.5) * 3.14159);
+  float weftP = cos(clamp(f.y / twy, -0.5, 0.5) * 3.14159);
+  float top = mix(warpP, weftP, over);
+  float bot = mix(weftP, warpP, over) * 0.40;
+  float weave = max(top, bot);
+
+  float fibre = owFbm01(owShear(p * 12.0, 0.0, 8.0), owShearPer(P * 12.0, 8.0), 3, 0.5);
+  float macro = owFbm01(p * 1.0, P * 1.0, 4, 0.62);
+  float dirt  = owFbm01(owWarp(p * 2.5, P * 2.5, 0.8, 3), P * 2.5, 5, 0.55);
+
+  vec3 cJute = owSRGB(vec3(0.520, 0.430, 0.275));
+  vec3 cPale = owSRGB(vec3(0.640, 0.560, 0.400));
+  vec3 cSoil = owSRGB(vec3(0.230, 0.180, 0.120));
+  vec3 c = mix(cJute, cPale, owHash12(cell + 3.0) * 0.5 + fibre * 0.15);
+  c *= 0.855 + 0.235 * (weave * 0.5 + 0.5);
+  c *= 0.90 + 0.18 * macro;
+  c = mix(c, cSoil, surface_ramp(0.42, 0.85, dirt) * 0.60);
+
+  h = 0.50 + weave * 0.38 + (fibre - 0.5) * 0.05;
+  rough = 0.90 + (1.0 - weave) * 0.06;
+  metal = 0.0;
+  ao = mix(0.74, 1.0, surface_ramp(-0.4, 0.9, weave));
+
+  // sun rot: bleached and frayed on the exposed side
+  float rot = surface_ramp(0.55, 0.9, owFbm01(p * 0.7 + 11.0, P * 0.7, 3, 0.6));
+  c = mix(c, cPale * 1.15, rot * 0.4);
+  rough += rot * 0.05;
+
+  // loose fibres standing off the surface
+  float loose = owScratches(p * 4.0, P * 4.0, 10.0, 2.0, 0.70);
+  h += loose * 0.06;
+  c = mix(c, cPale, loose * 0.3);
+
+  // spilled sand caught in the weave
+  float sand = surface_ramp(0.5, 0.85, owFbm01(p * 12.0, P * 12.0, 4, 0.5)) * (1.0 - surface_ramp(0.2, 0.7, weave));
+  c = mix(c, owSRGB(vec3(0.640, 0.545, 0.390)), sand * 0.45);
+
+  alb = clamp(c, vec3(0.02), vec3(0.80));
+  rough = clamp(rough, 0.6, 0.99);
+  ao = clamp(ao, 0.2, 1.0);
+  h = clamp(h, 0.0, 1.0);
+}
+
+float foliage_height;
+void foliage_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
+  const vec2 P = vec2(8.0);
+  const float CELLS = 5.0;
+  vec2 p = uv * P + 79.0 * 5.9;
+
+  // Each cell holds one leaf, rotated and scaled by its hash. Sampling the
+  // 3x3 neighbourhood lets leaves overlap into their neighbours' cells.
+  vec2 lp = uv * CELLS;
+  vec2 ip = floor(lp), fp = fract(lp);
+
+  float bestCover = 0.0;
+  float bestDepth = 0.0;
+  vec3 bestCol = owSRGB(vec3(0.14,0.26,0.075));
+  float bestH = 0.0;
+  float bestVein = 0.0;
+
+  for (int y = -1; y <= 1; y++){
+    for (int x = -1; x <= 1; x++){
+      vec2 g = vec2(float(x), float(y));
+      vec2 cell = mod(ip + g, vec2(CELLS));
+      vec4 r = owHash42(cell + 79.0 * 2.0);
+      vec4 r2 = owHash42(cell * 1.7 + 9.0 + 79.0);
+      vec2 centre = g + 0.15 + r.xy * 0.7 - fp;
+      float ang = r.z * 6.28318;
+      vec2 q = owRot(centre, ang);
+      // leaf shape: an ellipse pinched at both ends
+      vec2 s = vec2(0.30 + r.w * 0.16, 0.13 + r2.x * 0.07);
+      vec2 e = q / s;
+      float d = length(e);
+      float pinch = 1.0 - 0.55 * abs(e.x) * 0.5;
+      float cover = surface_ramp(1.02, 0.86, d / max(pinch, 0.3));
+      // serrated edge
+      float serr = sin(atan(e.y, e.x) * 26.0) * 0.03;
+      cover = surface_ramp(1.02 + serr, 0.88 + serr, d / max(pinch, 0.3));
+      if (cover > 0.01){
+        float depth = r2.y;
+        if (depth > bestDepth){
+          float vein = 1.0 - surface_ramp(0.0, 0.05, abs(e.y * s.y));
+          float sideV = surface_ramp(0.75, 1.0, abs(fract(e.x * 5.0 + e.y * 2.0) * 2.0 - 1.0));
+          vein = clamp(vein + sideV * 0.45 * cover, 0.0, 1.0);
+          vec3 cYoung = owSRGB(vec3(0.180, 0.330, 0.090));
+          vec3 cOld   = owSRGB(vec3(0.095, 0.185, 0.060));
+          vec3 cDry   = owSRGB(vec3(0.390, 0.320, 0.110));
+          vec3 lc = mix(cYoung, cOld, r2.z);
+          lc = mix(lc, cDry, surface_ramp(0.55, 1.0, r2.w) * 0.8);
+          // blotches and mildew spots
+          float spots = owFbm01(p * 22.0, P * 22.0, 3, 0.5);
+          lc *= 0.85 + 0.30 * spots;
+          lc = mix(lc, cDry * 0.7, surface_ramp(0.78, 0.95, spots) * 0.5);
+          lc = mix(lc, lc * 1.35, vein * 0.5);
+          bestDepth = depth;
+          bestCover = cover;
+          bestCol = lc;
+          bestH = 0.45 + depth * 0.35 + (1.0 - surface_ramp(0.0, 1.0, d)) * 0.12 + vein * 0.05;
+          bestVein = vein;
+        }
+      }
+    }
+  }
+
+  float fine = owFbm01(p * 12.0, P * 12.0, 3, 0.5);
+  alb = clamp(bestCol * (0.955 + 0.085 * fine), vec3(0.02), vec3(0.7));
+  // h doubles as the cutout mask for foliage (see generator.js)
+  h = bestCover;
+  foliage_height = mix(.5,bestH,bestCover);
+  rough = clamp(0.62 + (1.0 - bestVein) * 0.14 + (fine - 0.5) * 0.10, 0.35, 0.95);
+  metal = 0.0;
+  ao = clamp(0.55 + bestDepth * 0.45, 0.3, 1.0);
+}
+
 void surface_sample(vec2 uv, float kind, out vec3 albedo, out float height, out vec3 packed) {
     float rough,metal,ao;
     if(kind<0.5) plaster_surface(uv,albedo,height,rough,metal,ao);
@@ -1391,6 +1660,10 @@ void surface_sample(vec2 uv, float kind, out vec3 albedo, out float height, out 
     else if(kind<12.5) metal_rust_surface(uv,albedo,height,rough,metal,ao);
     else if(kind<13.5) rubber_surface(uv,albedo,height,rough,metal,ao);
     else if(kind<14.5) glass_surface(uv,albedo,height,rough,metal,ao);
-    else detail_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<15.5) detail_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<16.5) sand_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<17.5) corrugated_surface(uv,albedo,height,rough,metal,ao);
+    else if(kind<18.5) burlap_surface(uv,albedo,height,rough,metal,ao);
+    else foliage_surface(uv,albedo,height,rough,metal,ao);
     packed=clamp(vec3(rough,metal,ao),0.0,1.0);
 }

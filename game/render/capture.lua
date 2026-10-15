@@ -1,5 +1,5 @@
 -- Versioned camera contract; no simulation, clocks or random numbers.
-local M = { version = 12, width = 1280, height = 720, settle_frames = 40,
+local M = { version = 13, width = 1280, height = 720, settle_frames = 40,
     sweep_frames = 121, sweep_fps = 30 }
 local shots = {
     { id="street", position={0,1.66,10}, target={0,1.66,-8}, fov=75,
@@ -52,6 +52,23 @@ shots[#shots+1]={id="glass",position={43.5,1.8,5.5},target={42,1.2,-2},fov=55,
 shots[#shots+1]={id="local_lights",position={56,3,4},target={54,.3,-1.5},fov=65,
     laboratory=true,reference=false,purpose="Two bounded point-light shadow cubemaps and occluder contact."}
 local extra=require("game.render.laboratory").extra_materials
+for i,name in ipairs(require("game.render.laboratory").catalogue_materials) do
+    local x=100+i*2.4
+    for _,view in ipairs({
+        {suffix="",position={x,2,-3},target={x,2,-5.32},fov=45},
+        {suffix="_far",position={x,2,20},target={x,2,-5.32},fov=45},
+        {suffix="_grazing",position={x-.95,1.9,-4.95},target={x+.85,2,-5.32},fov=55},
+    }) do
+        shots[#shots+1]={id="material_"..name..view.suffix,position=view.position,target=view.target,fov=view.fov,
+            laboratory=true,reference=false,purpose="Full catalogue: "..name.." scale, relief, minification and stable coverage."}
+    end
+end
+shots[#shots+1]={id="foliage_back",position={109.6,2,-7.64},target={109.6,2,-5.32},fov=45,
+    laboratory=true,reference=false,purpose="Two-sided leaf card: matching cutout orientation and depth."}
+shots[#shots+1]={id="foliage_shadow",position={109,4,6},target={106,1,2},fov=58,
+    laboratory=true,reference=false,purpose="Foliage coverage in colour, depth/motion and sun shadows."}
+shots[#shots+1]={id="foliage_local",position={109,4,6},target={106,1,2},fov=58,lighting="night",
+    laboratory=true,reference=false,purpose="Foliage in point-light cubemap shadows."}
 for i,name in ipairs(extra) do
     local x=8.4+i*2.4
     shots[#shots+1]={id="material_"..name,position={x,2,-2.4},target={x,2,-5.3},fov=45,
@@ -106,7 +123,7 @@ function M.catalog()
         world_clip={near=.1,far=500},
         lighting={mode="fixed_presets",sun_direction=copy(require("game.render.daylight").sun_direction),rig=require("game.render.daylight").snapshot(),exposure=1,
             presets={"daylight","sunset","night"},reference_daylight_hour=16.5,north_rotation_degrees=61,matched_time_of_day=false},
-        comparison="Adapted framing in the unrotated partial map; not cross-engine pixel equality."}
+        comparison="Adapted framing in the unrotated full map; not cross-engine pixel equality."}
 end
 function M.select(id)
     for _,shot in ipairs(shots) do

@@ -70,7 +70,7 @@ function M.box(batch, box, shade, visible, edge_points)
                     bounds[axis] = math.min(bounds[axis], vertex[axis])
                     bounds[axis+3] = math.max(bounds[axis+3], vertex[axis])
                 end
-                c[#c + 1] = 1
+                c[#c + 1] = materials[box.material].coverage or 1
                 local y,z=vertex[2]-center[2],vertex[3]-center[3]
                 local local_position={vertex[1]-center[1],y*cosine+z*sine,-y*sine+z*cosine}
                 local horizontal,vertical=u,v
@@ -94,6 +94,17 @@ function M.box(batch, box, shade, visible, edge_points)
     end
     batch.vertex_count = batch.vertex_count + vertices
     batch.boxes = batch.boxes + 1
+end
+
+-- A zero-thickness, two-sided card. The opposite winding supplies each side's
+-- normal without changing global culling or inventing opaque edge faces.
+function M.card(batch,shape,shade)
+    local s={}
+    for k,v in pairs(shape) do s[k]=v end
+    s.d=0
+    s.weather_masks=s.weather_masks or {0,0,0,0}
+    local face={s.x-s.w/2,s.y-s.h/2,s.x+s.w/2,s.y+s.h/2}
+    M.box(batch,s,shade or 1,{{},{},{},{},{face},{face}})
 end
 
 return M

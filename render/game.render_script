@@ -160,7 +160,7 @@ local function bake_next(self)
                 render.set_viewport(r.x,r.y,r.size+2,r.size+2)
                 self.bake_constants.source_rect=vmath.vector4(src.x/job.source_width,src.y/job.source_height,
                     src.size/job.source_width,src.size/job.source_height)
-                self.bake_constants.filter_params=vmath.vector4(r.size,job.op=="normal" and 2 or job.op=="reduce" and 1 or 0,
+                self.bake_constants.filter_params=vmath.vector4(r.size,job.op=="normal" and (job.foliage and 4 or 2) or job.op=="reduce" and 1 or 0,
                     job.relief or 0,src.size)
                 bind("source_texture",self.targets[job.source])
                 bind("height_texture",self.targets.scratch_b)
@@ -291,6 +291,14 @@ function init(self)
     for i=1,daylight.max_volumes*5 do self.lighting.volume_data[i]=vmath.vector4() end
     self.cascade_constants={}
     for i=1,shadows.count do self.cascade_constants[i]=render.constant_buffer() end
+    local foliage=atlas.surfaces[atlas.foliage_kind+1]
+    local function coverage_constants(constants)
+        constants.coverage_rects=atlas.coverage_rects(vmath.vector4)
+        constants.coverage_info=vmath.vector4(foliage.metres,foliage.size,foliage.last_level,.45)
+    end
+    coverage_constants(self.lighting);coverage_constants(self.motion_constants)
+    for _,constants in ipairs(self.cascade_constants) do coverage_constants(constants) end
+    for _,constants in ipairs(self.local_shadow_constants) do coverage_constants(constants) end
     self.targets.shadow=colour_target(shadows.atlas_size,shadows.atlas_size,true,true)
     for _,name in ipairs({"albedo","normal","material"}) do
         self.targets[name]=colour_target(atlas.width,atlas.height)
@@ -381,6 +389,7 @@ function update(self,dt)
         render.enable_state(G.STATE_CULL_FACE)
         render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
         render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+        bind("coverage_texture",t.albedo)
         self.shadow_draw_passes=0
         if o.shadows then
             -- Bind/clear ONCE: switching targets between tiles discards earlier
@@ -505,6 +514,7 @@ function update(self,dt)
         local scene=self.capture.laboratory and self.laboratory or self.capture.active and not self.capture.actors and self.static_world or self.world
         render.draw(scene,{constants=self.lighting,frustum=projection*view})
         if not self.capture.active then render.draw_debug3d() end
+        render.disable_texture("coverage_texture")
 
         render.disable_texture("occlusion_texture")
         -- Current opaque radiance and material data are immutable inputs. No

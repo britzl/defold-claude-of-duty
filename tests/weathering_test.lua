@@ -34,12 +34,12 @@ test("authored wear grime and occlusion masks survive all vertices and rotations
         assert(b.edges[i]>=-1e-6 and b.edges[i]<=4.000001)
     end
 end)
-test("all fifteen surface families have production mappings and distinct recipes",function()
+test("all nineteen surface families have production mappings and distinct recipes",function()
     local found={}
     for _,material in pairs(materials) do
         assert(atlas.surfaces[material.kind+1]);found[material.kind]=true
     end
-    for kind=0,14 do assert(found[kind],"Missing material family "..kind) end
+    for kind=0,19 do if kind~=atlas.detail_kind then assert(found[kind],"Missing material family "..kind) end end
     assert(materials.dirt.kind~=materials.asphalt.kind)
     assert(materials.concrete.kind~=materials.concrete_floor.kind)
 end)

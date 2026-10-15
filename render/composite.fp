@@ -30,7 +30,10 @@ vec3 grade(vec3 colour) {
     return mix(texture2D(grade_texture,uv).rgb,texture2D(grade_texture,next_uv).rgb,fract(p.b));
 }
 void main() {
-    if(post.z>23.5) {
+    if(post.z>24.5) {
+        vec2 uv=atlas_window.xy+var_uv*atlas_window.zw;
+        gl_FragColor=vec4(vec3(texture2D(debug_texture,uv).a),1);
+    } else if(post.z>23.5) {
         gl_FragColor=vec4(texture2D(grade_texture,var_uv).rgb,1);
     } else if(post.z>22.5) {
         vec4 data=texture2D(exposure_texture,vec2(.5));

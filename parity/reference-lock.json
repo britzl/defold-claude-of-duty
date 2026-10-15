@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "contract_sha256": "d654a5737f97fcfc3fa0b72823c1c35658657a30177201999ddde6abae379cc0",
+  "contract_sha256": "75a9bfdc30c430ed82220f2116c099b9079be0ee84498380104ffb0a9b30e465",
   "fingerprint_method": "Sorted relative UTF-8 path + NUL + decimal byte length + NUL + file bytes; SHA-256.",
   "sources": {
     "defold": {
-      "sha256": "e9289bf7cdebba2cf07113e918225ce19acc6d65701ceb56d620d64745ff7fc6",
+      "sha256": "50b8f8bb3f046ad17f49d2310e9a2ec280767efcc0e1ef62e1ea19b1c56848ad",
       "files": 236,
       "scopes": [
         "game",
@@ -17,7 +17,7 @@
         "input",
         "game.project"
       ],
-      "git_revision": "8146e120850b0b25c58e83b238cf1ea0675a9819",
+      "git_revision": "d1462083de53b0292b07f32e0c47d8646d7937ce",
       "revision_status": "Git commit plus working source hash"
     },
     "threejs": {
@@ -49,7 +49,7 @@
     }
   },
   "catalog": {
-    "comparison": "Adapted framing in the unrotated partial map; not cross-engine pixel equality.",
+    "comparison": "Adapted framing in the unrotated full map; not cross-engine pixel equality.",
     "height": 720,
     "level_to_world": {
       "translation": [
@@ -584,6 +584,262 @@
           54,
           0.3,
           -1.5
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_sand",
+        "laboratory": true,
+        "position": [
+          102.4,
+          2,
+          -3
+        ],
+        "purpose": "Full catalogue: sand scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          102.4,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_sand_far",
+        "laboratory": true,
+        "position": [
+          102.4,
+          2,
+          20
+        ],
+        "purpose": "Full catalogue: sand scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          102.4,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "material_sand_grazing",
+        "laboratory": true,
+        "position": [
+          101.45,
+          1.9,
+          -4.95
+        ],
+        "purpose": "Full catalogue: sand scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          103.25,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_corrugated",
+        "laboratory": true,
+        "position": [
+          104.8,
+          2,
+          -3
+        ],
+        "purpose": "Full catalogue: corrugated scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          104.8,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_corrugated_far",
+        "laboratory": true,
+        "position": [
+          104.8,
+          2,
+          20
+        ],
+        "purpose": "Full catalogue: corrugated scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          104.8,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "material_corrugated_grazing",
+        "laboratory": true,
+        "position": [
+          103.85,
+          1.9,
+          -4.95
+        ],
+        "purpose": "Full catalogue: corrugated scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          105.64999999999999,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_burlap",
+        "laboratory": true,
+        "position": [
+          107.2,
+          2,
+          -3
+        ],
+        "purpose": "Full catalogue: burlap scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          107.2,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_burlap_far",
+        "laboratory": true,
+        "position": [
+          107.2,
+          2,
+          20
+        ],
+        "purpose": "Full catalogue: burlap scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          107.2,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "material_burlap_grazing",
+        "laboratory": true,
+        "position": [
+          106.25,
+          1.9,
+          -4.95
+        ],
+        "purpose": "Full catalogue: burlap scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          108.05,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_foliage",
+        "laboratory": true,
+        "position": [
+          109.6,
+          2,
+          -3
+        ],
+        "purpose": "Full catalogue: foliage scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          109.6,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_foliage_far",
+        "laboratory": true,
+        "position": [
+          109.6,
+          2,
+          20
+        ],
+        "purpose": "Full catalogue: foliage scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          109.6,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "material_foliage_grazing",
+        "laboratory": true,
+        "position": [
+          108.64999999999999,
+          1.9,
+          -4.95
+        ],
+        "purpose": "Full catalogue: foliage scale, relief, minification and stable coverage.",
+        "reference": false,
+        "target": [
+          110.44999999999999,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "foliage_back",
+        "laboratory": true,
+        "position": [
+          109.6,
+          2,
+          -7.64
+        ],
+        "purpose": "Two-sided leaf card: matching cutout orientation and depth.",
+        "reference": false,
+        "target": [
+          109.6,
+          2,
+          -5.32
+        ]
+      },
+      {
+        "fov": 58,
+        "id": "foliage_shadow",
+        "laboratory": true,
+        "position": [
+          109,
+          4,
+          6
+        ],
+        "purpose": "Foliage coverage in colour, depth/motion and sun shadows.",
+        "reference": false,
+        "target": [
+          106,
+          1,
+          2
+        ]
+      },
+      {
+        "fov": 58,
+        "id": "foliage_local",
+        "laboratory": true,
+        "lighting": "night",
+        "position": [
+          109,
+          4,
+          6
+        ],
+        "purpose": "Foliage in point-light cubemap shadows.",
+        "reference": false,
+        "target": [
+          106,
+          1,
+          2
         ]
       },
       {
@@ -1143,7 +1399,7 @@
     ],
     "sweep_fps": 30,
     "sweep_frames": 121,
-    "version": 12,
+    "version": 13,
     "width": 1280,
     "world_clip": {
       "far": 500,
@@ -1151,7 +1407,7 @@
     },
     "world_seed": 1337
   },
-  "created_utc": "2026-10-15T07:51:52.367165+00:00",
+  "created_utc": "2026-10-15T08:30:58.217988+00:00",
   "evidence": [],
   "parity_qualified": false
 }

@@ -17,7 +17,7 @@ test("every mip and wrapped border fits without overlapping another material",fu
             all[#all+1]=r
         end
     end
-    assert(#all==#atlas.surfaces*(atlas.surfaces[1].last_level+1)-4)
+    assert(#all==#atlas.surfaces*(atlas.surfaces[1].last_level+1)-6)
     end
 end)
 test("each reduction reads a completed level and copies through independent scratch",function()
@@ -39,6 +39,33 @@ test("reference recipes keep physical scale, relief and independent concrete",fu
     for _,entry in ipairs({{0,2.2,.06},{1,3,.075},{2,2,.038},{5,2.5,.09}}) do
         local s=atlas.surfaces[entry[1]+1]
         assert(s.size==512 and s.metres==entry[2] and s.relief==entry[3])
+    end
+end)
+test("new catalogue IDs retain detail slot and leaf masks have complete mip chains",function()
+    local materials=require "game.world.materials"
+    assert(atlas.detail_kind==15 and atlas.foliage_kind==19)
+    for _,quality in ipairs({"low","medium","high"}) do
+        local a=atlas.new(quality)
+        for _,entry in ipairs({{"sand",16,2.5,.10},{"corrugated",17,2.4,.075},
+            {"burlap",18,.16,.018},{"foliage",19,.6,.02}}) do
+            local s=a.surfaces[entry[2]+1]
+            assert(s.name==entry[1] and s.metres==entry[3] and s.relief==entry[4])
+            assert(materials[entry[1]].kind==entry[2])
+        end
+        local rects=a.coverage_rects(function(...) return {...} end)
+        assert(#rects==11)
+        local s=a.surfaces[20]
+        for level,rect in ipairs(rects) do
+            local r=s.rects[math.min(level,#s.rects)]
+            assert(rect[1]==(r.x+1)/a.width and rect[2]==(r.y+1)/a.height)
+            assert(rect[3]==r.size/a.width and rect[4]==r.size/a.height)
+        end
+        local normals=0
+        for _,job in ipairs(a.jobs()) do
+            if job.op=="normal" and job.foliage then normals=normals+1 end
+        end
+        assert(normals==1 and s.parallax==0)
+        assert(a.surfaces[19].normal_metres==.5)
     end
 end)
 print(tests.." surface atlas tests passed")

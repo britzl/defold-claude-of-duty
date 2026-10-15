@@ -107,6 +107,34 @@ function M.new()
         steps[#steps+1]={name="street",id="photo_moving",play=true,changes={motion_blur=1}}
         steps[#steps+1]={name="street",id="street_return"}
     end
+    if sys.get_config_string("rendering_validation.suite","")=="catalogue" then
+        steps={}
+        for _,name in ipairs({"sand","corrugated","burlap","foliage"}) do
+            for _,suffix in ipairs({"","_far","_grazing"}) do
+                local id="material_"..name..suffix
+                steps[#steps+1]={name=id,id=id}
+            end
+        end
+        for _,name in ipairs({"foliage_back","foliage_shadow","foliage_local"}) do steps[#steps+1]={name=name,id=name} end
+        for _,name in ipairs({"material_foliage","material_foliage_far","foliage_back"}) do
+            for _,view in ipairs({"depth","geometry_normals"}) do
+                steps[#steps+1]={name=name,id=name.."_"..view,changes={view=view}}
+            end
+        end
+        for _,entry in ipairs({{"foliage_shadow","shadows"},{"foliage_local","local_shadows"}}) do
+            steps[#steps+1]={name=entry[1],id=entry[1].."_disabled",changes={[entry[2]]=false}}
+            steps[#steps+1]={name=entry[1],id=entry[1].."_restored"}
+        end
+        for _,name in ipairs({"sand","corrugated","burlap","foliage"}) do
+            steps[#steps+1]={name="material_"..name,id="material_"..name.."_motion",play=true,changes={view="motion"}}
+        end
+        for _,view in ipairs({"albedo","normals","material","coverage"}) do
+            for page=1,math.ceil(atlas.width/1024)*math.ceil(atlas.height/1024) do
+                steps[#steps+1]={name="laboratory",id=view.."_page_"..page,changes={view=view,atlas_page=page},page=page,view=view}
+            end
+        end
+        steps[#steps+1]={name="material_foliage",id="material_foliage_return"}
+    end
     return {steps=steps,index=0,frames=0,intervals={}}
 end
 function M.update(test,self,dt)
@@ -125,7 +153,7 @@ function M.update(test,self,dt)
         if not step then
             local stats=self.renderer_stats
             assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==39)
-            assert(stats.surface_count==15 and self.ctx.time.tick==test.tick,"Capture changed simulation")
+            assert(stats.surface_count==#atlas.surfaces-1 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,
                 frame_interval_median_ms=test.intervals[math.ceil(#test.intervals*.5)],

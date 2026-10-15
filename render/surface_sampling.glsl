@@ -1,6 +1,6 @@
 // Explicit mip rectangles avoid atlas bleed on all backends, including GLES.
-// 16 recipes x 11 slots (short chains repeat their last level).
-uniform highp vec4 surface_rects[176];
+// 20 recipes x 11 slots (short chains repeat their last level).
+uniform highp vec4 surface_rects[220];
 uniform highp vec4 surface_info; // metres, resolution, relief metres, last mip
 uniform highp vec4 surface_effects; // parallax metres, micro amount, weather amount
 uniform highp vec4 weather_features; // weather, micro, parallax, detail resolution
