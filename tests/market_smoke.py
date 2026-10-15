@@ -10,6 +10,7 @@ import shutil
 import time
 
 from automation_bridge import editor, engine
+from world_navigation import read_navigation
 
 
 def main(ai_only=False, views_only=False):
@@ -77,13 +78,13 @@ def main(ai_only=False, views_only=False):
         engine.wait_until(lambda: len(cmd("ai.snapshot")["actors"]) == 6, timeout=5)
         cmd("ai.configure", {"enabled": False})
         world = cmd("world.snapshot")
-        assert world["batches"] < 100 and world["mesh_bytes"] < 1024*1024, world
-        assert world["colliders"] <= 256, world
+        assert world["batches"] < 400 and world["mesh_bytes"] < 12*1024*1024, world
+        assert world["colliders"] < 700, world
         assert cmd("ui.snapshot")["map_rectangles"] == world["colliders"]
         valid = cmd("world.validate")
         assert valid["max_error"] < 1e-5 and all(n["supported"] for n in valid["nodes"]), valid
         assert all(e["clear"] for e in valid["edges"]), valid
-        nodes = {n["id"]: n for n in cmd("world.navigation")["nodes"]}
+        nodes = {n["id"]: n for n in read_navigation(cmd)["nodes"]}
         prefix = "west_loop/"
         flank = ["north_entry/street", "north_entry/walk", "north_entry", "courtyard",
                  "rear_north", "rear_mid", "rear_south", "alley", "south_entry",

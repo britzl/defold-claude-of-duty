@@ -1,0 +1,568 @@
+{
+  "schema_version": 1,
+  "id": "claude-of-duty-parity-v1",
+  "updated": "2026-10-15",
+  "scope": "Observable behavior and presentation in the local Three.js and Kaigen source snapshots; engine algorithms may differ.",
+  "status_policy": "Existing test files are coverage, not proof of a current pass. Pending and unavailable evidence never pass a parity gate.",
+  "reference_availability": {
+    "threejs": {
+      "local_capture": "available",
+      "revision": "Source archive without Git metadata; lock content hashes instead of guessing a commit."
+    },
+    "kaigen": {
+      "local_capture": "unavailable: hz engine dependency/CLI absent from local source archive",
+      "hosted_url": "https://kaigen3d.com/demos/claude-of-duty/",
+      "observed_date": "2026-10-15",
+      "hosted_build": "cd0e50316eb8",
+      "hosted_asset_directory": "a24065352205d",
+      "hosted_status": "Page loaded and rendered gameplay in the in-app browser; observational only.",
+      "hosted_source_match": "Unverified: published build cannot be equated with the local source archive.",
+      "controlled_capture": "Unavailable: no verified frame-addressed camera/scene adapter or equivalent laboratory.",
+      "performance": "Unmeasured under the sustained protocol; the hosted FPS overlay is not qualification."
+    }
+  },
+  "comparison": {
+    "catalog": "Production game/render/capture.lua, exported by tools/export_parity.lua",
+    "width": 1280,
+    "height": 720,
+    "device_pixel_ratio": 1,
+    "world_space": "Metres, Y up; catalogue cameras are in level space, looking toward target with vertical FOV in degrees.",
+    "seeds": {
+      "defold": 1337,
+      "threejs": 1592594996,
+      "kaigen": 1592594996
+    },
+    "seed_policy": "Retain each implementation's source default. Equal numeric seeds would not make different RNG/generation algorithms equivalent.",
+    "level_to_world": {
+      "defold": {
+        "yaw_radians": 0,
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "threejs": {
+        "yaw_radians": 0.5877,
+        "translation": [
+          0.9,
+          0,
+          1.34
+        ]
+      },
+      "kaigen": {
+        "yaw_radians": 0.5877,
+        "translation": [
+          0.9,
+          0,
+          1.34
+        ]
+      }
+    },
+    "solar_hours": {
+      "daylight": 16.5,
+      "sunset": 19.2,
+      "night": 1.5
+    },
+    "lighting_policy": "Match solar time and record actual world-space sun direction; current world rotations and Defold's 61-degree celestial rotation are not a lighting match.",
+    "quality": {
+      "defold": "Medium material tier, high photographic tier, production capture defaults; record all live settings.",
+      "threejs": "Ultra, with actual preset, framebuffer, renderer and metered exposure recorded per shot.",
+      "kaigen": "For future controlled captures fix Ultra and record actual settings; hosted automatic quality is observational only."
+    },
+    "exposure": {
+      "defold": "Fixed multiplier 1, adaptation disabled by capture controller.",
+      "threejs": "90 lockstep frames, frozen simulation/time, actual GPU exposure readback and display multiplier recorded.",
+      "kaigen": "Unknown until a controlled capture adapter is available.",
+      "equivalence": "Unmatched exposure models: compare appearance, never infer equal radiance from equal multipliers."
+    },
+    "repeatability": "Fresh reference page per shot/repeat. Exact pixels only within matching backend, source, scene, camera, frame and settings.",
+    "laboratory": "Export production Defold triangles into the Three.js level transform, with reference procedural recipes and uniform roughness spheres. Special glass/cutout/light fixtures remain pending.",
+    "cross_engine_gate": "Human review of composition, material separation, contrast, colour and motion; no cross-engine pixel-equality score."
+  },
+  "performance": {
+    "status": "User-selected Mac native and desktop browser at 60 FPS; other budgets are proposed engineering thresholds, not measurements.",
+    "device_decision": "2026-10-15: Mac + desktop browser only, target 60 FPS. Mobile qualification is outside the current acceptance gate.",
+    "protocol": {
+      "build": "Release; report engine/browser/OS/GPU, device, preset, native framebuffer and internal resolution.",
+      "runs": 3,
+      "warmup_seconds": 60,
+      "sample_seconds": 300,
+      "scenario": "Continuous full-map traversal with six AI, firing/reloads, indoors/outdoors, grenades and settled/live ragdolls. Until those features exist, mark the full-load budget unqualified.",
+      "cold_load": "Fresh process and generated resources; exclude download time from local generation and report network transfer separately.",
+      "frame_metric": "Wall-clock presented-frame intervals; report p50/p95/p99/worst, CPU/GPU separately and dropped/disjoint samples.",
+      "memory_metric": "Measured peak process resident memory plus separately reported GPU/resource estimates; estimates are not resident-memory measurements.",
+      "regression": "No shader compilations during measured play; no monotonic live-resource growth across ten encounter resets."
+    },
+    "devices": [
+      {
+        "id": "mac-metal",
+        "device": "Available MacBook Pro, Apple M3 Pro, 18 GB",
+        "backend": "Metal native",
+        "resolution": [
+          1280,
+          720
+        ],
+        "preset": "high target",
+        "fps": 60,
+        "frame_p95_ms": 18.3,
+        "frame_p99_ms": 25,
+        "worst_frame_ms": 50,
+        "cpu_p95_ms": 12,
+        "gpu_p95_ms": 14,
+        "cold_load_seconds": 10,
+        "peak_resident_mib": 1024,
+        "availability": "available; sustained release performance unmeasured"
+      },
+      {
+        "id": "mac-browser",
+        "device": "Same Mac, Chromium",
+        "backend": "WebGL 2; record ANGLE adapter",
+        "resolution": [
+          1280,
+          720
+        ],
+        "preset": "high target",
+        "fps": 60,
+        "frame_p95_ms": 18.3,
+        "frame_p99_ms": 25,
+        "worst_frame_ms": 50,
+        "cpu_p95_ms": 12,
+        "gpu_p95_ms": 14,
+        "cold_load_seconds": 15,
+        "peak_resident_mib": 1536,
+        "availability": "available; renderer-process memory scope must be recorded"
+      }
+    ]
+  },
+  "adaptations": [
+    {
+      "id": "map",
+      "state": "reconcile",
+      "current": "Full 104 m street and 20 footprints; connected W2/E1/E2 floors, ground-only E3, open infill arcades and bounded flat terrain. E2 interior and terrain boundary walls are Defold adaptations; detailed source architecture/dressing remains step 4.",
+      "reference": "Full authored market including E1/E3 interiors",
+      "gate": "world-layout"
+    },
+    {
+      "id": "coordinates",
+      "state": "recorded",
+      "current": "Unrotated map; separate 61-degree celestial rotation",
+      "reference": "Level transform yaw 0.5877, offset (0.9,0,1.34)",
+      "gate": "visual-baseline"
+    },
+    {
+      "id": "seeds",
+      "state": "recorded",
+      "current": "1337 with separate subsystem streams",
+      "reference": "0x5eed1234 with reference RNG forks",
+      "gate": "visual-baseline"
+    },
+    {
+      "id": "shot-origin",
+      "state": "decision-open",
+      "current": "Collision-limited eye origin; rendered muzzle flash",
+      "reference": "Muzzle-origin rounds",
+      "gate": "ballistics"
+    },
+    {
+      "id": "damage",
+      "state": "reconcile",
+      "current": "2x head damage and no separate arm damage volumes",
+      "reference": "Three.js head collider 4x; torso/arm/leg scales",
+      "gate": "regional-damage"
+    },
+    {
+      "id": "bindings",
+      "state": "reconcile",
+      "current": "1\u20133 inspection, 6\u20138 weapons, F inspect, held crouch/prone",
+      "reference": "1\u20133 weapons, I inspect, wheel switch, toggle crouch/prone",
+      "gate": "input-settings"
+    },
+    {
+      "id": "hdr",
+      "state": "qualification-open",
+      "current": "RGBA16F qualified on Metal; encoded RGBA8 elsewhere",
+      "reference": "Reference HDR pipelines",
+      "gate": "platform-lifecycle"
+    },
+    {
+      "id": "exposure",
+      "state": "decision-open",
+      "current": "Capture fixes multiplier at 1",
+      "reference": "GPU metering with different lighting/radiometric scales",
+      "gate": "visual-baseline"
+    },
+    {
+      "id": "audio-dsp",
+      "state": "decision-open",
+      "current": "Panning and generated room/muffled variants",
+      "reference": "Three.js HRTF/convolution; Kaigen engine processing",
+      "gate": "audio-spatial"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "visual-baseline",
+      "feature": "Reproducible scene comparisons",
+      "references": [
+        "threejs:src/dev/shots.js",
+        "kaigen:src/claude_of_duty/cod_look.c"
+      ],
+      "current": "partial",
+      "procedure": "Capture catalogue stills twice from fresh runs at the recorded camera, seed, solar time and quality; review identical-scene motion sweeps.",
+      "expect": "Within-backend repeats agree; every cross-engine image records actual settings and unsupported scenes remain pending.",
+      "coverage": [
+        "tests/render_baseline.py",
+        "tests/render_capture_test.lua",
+        "tools/capture_reference.mjs"
+      ]
+    },
+    {
+      "id": "world-layout",
+      "feature": "Full map, interiors and routes",
+      "references": [
+        "threejs:src/world/layout.js",
+        "kaigen:src/claude_of_duty/cod_world_layout.c"
+      ],
+      "current": "implemented-core",
+      "procedure": "Traverse every street/flank/doorway/stair/floor and route six actors between all connected areas.",
+      "expect": "Reference entrances, cover and sightlines exist; no invalid floor links or geometry/collision disagreements.",
+      "coverage": [
+        "tests/world_test.lua",
+        "tests/building_smoke.py",
+        "tests/market_smoke.py",
+        "tests/full_market_smoke.py",
+        "tests/market_browser.lua",
+        "tools/validate_market_browser.mjs",
+        "tests/market_browser_pixels.mjs"
+      ]
+    },
+    {
+      "id": "world-detail",
+      "feature": "Architecture, props and dressing",
+      "references": [
+        "threejs:src/world/dressing.js",
+        "kaigen:src/claude_of_duty/cod_world_dress.c"
+      ],
+      "current": "partial",
+      "procedure": "Compare street, courtyard, gate, ruined building and furnished-room compositions.",
+      "expect": "Reference silhouette, content density and traversable openings are present.",
+      "coverage": []
+    },
+    {
+      "id": "surfaces",
+      "feature": "All surface recipes, weathering and filtering",
+      "references": [
+        "threejs:src/materials/library.js",
+        "kaigen:src/claude_of_duty/cod_materials_lib.c"
+      ],
+      "current": "partial",
+      "procedure": "Inspect every recipe close up, at distance and grazing angles; sweep lit/shaded roughness rows.",
+      "expect": "Full catalogue including sand/corrugated/burlap/foliage, stable relief and no seams or cutout shimmer.",
+      "coverage": [
+        "tests/surface_atlas_test.lua",
+        "tests/materials_smoke.py",
+        "tests/weathering_smoke.py"
+      ]
+    },
+    {
+      "id": "traversal",
+      "feature": "Movement and automatic vaulting",
+      "references": [
+        "threejs:src/player/movement.js",
+        "kaigen:src/claude_of_duty/cod_player_move.c"
+      ],
+      "current": "partial",
+      "procedure": "Run stairs/slopes/low ceilings, sprint/slide/jump, mantle thick ledges and vault thin obstacles with blocked and clear landings.",
+      "expect": "Reference movement timing with no clipping, unsupported landings or frame-rate-dependent travel.",
+      "coverage": [
+        "tests/movement_test.lua",
+        "tests/movement_features_smoke.py"
+      ]
+    },
+    {
+      "id": "camera-feel",
+      "feature": "Camera impulses, bob and FOV",
+      "references": [
+        "threejs:src/player/camera.js",
+        "kaigen:src/claude_of_duty/cod_player_camera.c"
+      ],
+      "current": "partial",
+      "procedure": "Record walking, sprint/ADS transitions, strafe/turn, land, slide, mantle and damage sequences.",
+      "expect": "Reference spring timing and additive motion without camera collision violations.",
+      "coverage": []
+    },
+    {
+      "id": "health",
+      "feature": "Damage, regeneration, falls and player suppression",
+      "references": [
+        "threejs:src/player/health.js",
+        "kaigen:src/claude_of_duty/cod_player.c"
+      ],
+      "current": "partial",
+      "procedure": "Take timed hits, wait for recovery, fall from known heights and receive near misses; repeat with pause and death.",
+      "expect": "Delayed ramped regeneration, appropriate fall damage and suppression; no healing dead actors or duplicate damage.",
+      "coverage": [
+        "tests/runtime_test.lua"
+      ]
+    },
+    {
+      "id": "weapons",
+      "feature": "Three weapons, fire modes and ammunition",
+      "references": [
+        "threejs:src/weapons/index.js",
+        "kaigen:src/claude_of_duty/cod_weapons_update.c"
+      ],
+      "current": "implemented-core",
+      "procedure": "Fire each mode, reload tactical/empty, interrupt before/after mag transfer, switch and inspect at 30/60/144 presentation FPS.",
+      "expect": "Matching rates, chambers, ammunition transfers and interruption rules; correct requested weapon in capture.",
+      "coverage": [
+        "tests/weapons_test.lua",
+        "tests/weapons_smoke.py"
+      ]
+    },
+    {
+      "id": "viewmodel",
+      "feature": "Weapon geometry, hands and animation",
+      "references": [
+        "threejs:src/weapons/viewmodel.js",
+        "kaigen:src/claude_of_duty/cod_weapons_view.c"
+      ],
+      "current": "partial",
+      "procedure": "Capture every weapon hip/ADS/reload/inspect indoors and outdoors, plus camera turns and walking.",
+      "expect": "Reference silhouettes and hand grips; aligned optics and lag/sway without broken joints.",
+      "coverage": [
+        "tests/render_capture_test.lua",
+        "tests/combat_rendering_smoke.py"
+      ]
+    },
+    {
+      "id": "ballistics",
+      "feature": "Travel, drop, penetration and deflection",
+      "references": [
+        "threejs:src/physics/penetration.js",
+        "kaigen:src/claude_of_duty/cod_weapons_ballistics.c"
+      ],
+      "current": "partial",
+      "procedure": "Shoot bare targets, thin wood, thick concrete, overlapping layers and a muzzle-obstructing wall with fixed seeds.",
+      "expect": "Reference attenuation/deflection, complete travelled-segment checks and documented origin behavior.",
+      "coverage": [
+        "tests/weapons_test.lua",
+        "tests/weapons_smoke.py"
+      ]
+    },
+    {
+      "id": "regional-damage",
+      "feature": "Animated damage regions",
+      "references": [
+        "threejs:src/ai/agent.js",
+        "kaigen:src/claude_of_duty/cod_ai_spawn.c"
+      ],
+      "current": "partial",
+      "procedure": "Hit head, upper/lower torso, arms and legs while actors move and crouch.",
+      "expect": "Reference regional scales and correct skeleton-driven volumes; one damage application per actor per round.",
+      "coverage": [
+        "tests/ai_test.lua",
+        "tests/ai_smoke.py"
+      ]
+    },
+    {
+      "id": "soldiers",
+      "feature": "Three soldier variants and IK",
+      "references": [
+        "threejs:src/ai/animator.js",
+        "kaigen:src/claude_of_duty/cod_ai_body_anim.c"
+      ],
+      "current": "partial",
+      "procedure": "Show all variants walking/running/crouching/turning on stairs, aiming, reloading, vaulting and reacting to hits.",
+      "expect": "Reference equipment/anatomy, grounded feet, attached hands, matching shadows and motion vectors.",
+      "coverage": [
+        "tests/ai_test.lua",
+        "tests/temporal_smoke.py"
+      ]
+    },
+    {
+      "id": "dynamics",
+      "feature": "Ragdolls, cases and dropped magazines",
+      "references": [
+        "threejs:src/physics/ragdoll.js",
+        "kaigen:src/claude_of_duty/cod_ai_body_ragdoll.c"
+      ],
+      "current": "missing",
+      "procedure": "Kill actors on floors/stairs/beside walls; fire/reload repeatedly; apply blast impulses and reset ten times.",
+      "expect": "Stable physical settling and impulses, bounded lifetime/sleep/resource counts.",
+      "coverage": []
+    },
+    {
+      "id": "ai-tactics",
+      "feature": "Hearing, search, cover, bursts, reload and flank",
+      "references": [
+        "threejs:src/ai/agent.js",
+        "kaigen:src/claude_of_duty/cod_ai_brain.c"
+      ],
+      "current": "partial",
+      "procedure": "Approach unseen with noise, break visual contact, pin cover, wound an actor, hold position and obstruct a route.",
+      "expect": "No omniscience; investigation/retreat, squad peek permissions, tall-cover peeks, burst/reload cycles and useful flanks.",
+      "coverage": [
+        "tests/ai_test.lua",
+        "tests/squads_smoke.py",
+        "tests/suppression_smoke.py"
+      ]
+    },
+    {
+      "id": "grenades",
+      "feature": "Enemy grenade lifecycle",
+      "references": [
+        "threejs:src/ai/index.js",
+        "kaigen:src/claude_of_duty/cod_weapons_grenade.c"
+      ],
+      "current": "missing",
+      "procedure": "Trigger squad throws toward exposed and covered targets; pause mid-fuse and restart before detonation.",
+      "expect": "Rationed throws, bounce/fuse, obstruction-aware blast, impulses and synchronized warning/FX/audio.",
+      "coverage": []
+    },
+    {
+      "id": "effects",
+      "feature": "Surface, combat and ambient effects",
+      "references": [
+        "threejs:src/fx/index.js",
+        "kaigen:src/claude_of_duty/cod_fx.c"
+      ],
+      "current": "partial",
+      "procedure": "Fire into each surface, kill actors, detonate grenades, walk/land and inspect smoke, motes and heat haze.",
+      "expect": "Full effect catalogue, correct sorting/receivers and bounded pools during sustained fire.",
+      "coverage": [
+        "tests/combat_fx_test.lua",
+        "tests/combat_rendering_smoke.py"
+      ]
+    },
+    {
+      "id": "lighting-atmosphere",
+      "feature": "Lighting and animated sky/fog",
+      "references": [
+        "threejs:src/sky/index.js",
+        "kaigen:src/claude_of_duty/cod_look_sky.c"
+      ],
+      "current": "partial",
+      "procedure": "Capture fixed day/sunset/night indoors/outdoors, then animate time and cloud cover across a full transition.",
+      "expect": "Consistent light/environment/shadows, moving cloud influence and no stale reflection or temporal trails.",
+      "coverage": [
+        "tests/atmosphere_test.lua",
+        "tests/atmosphere_smoke.py",
+        "tests/lighting_smoke.py"
+      ]
+    },
+    {
+      "id": "render-pipeline",
+      "feature": "HDR, shadows, AO, TAA, reflections and photography",
+      "references": [
+        "threejs:src/render/index.js",
+        "kaigen:src/claude_of_duty/cod_look.c"
+      ],
+      "current": "implemented-core",
+      "procedure": "Run HDR probes and feature on/off/return pixels; inspect thin edges, moving soldiers, glass and ADS with optical effects.",
+      "expect": "Feature contribution, stable history and isolated weapon/GUI; comparable source appearance remains a review gate.",
+      "coverage": [
+        "tests/hdr_smoke.py",
+        "tests/shadows_smoke.py",
+        "tests/occlusion_smoke.py",
+        "tests/temporal_smoke.py",
+        "tests/reflections_smoke.py",
+        "tests/photographic_smoke.py"
+      ]
+    },
+    {
+      "id": "audio-content",
+      "feature": "Synthesis and gameplay cues",
+      "references": [
+        "threejs:src/audio/index.js",
+        "kaigen:src/claude_of_duty/cod_audio_events.c"
+      ],
+      "current": "partial",
+      "procedure": "Listen to every weapon/surface, enemy steps/barks, near misses, explosions, heartbeat and UI; repeat indoors/outdoors.",
+      "expect": "Reference timbre and event timing with generated sounds, bounded voices and no stale cues.",
+      "coverage": [
+        "tests/audio_test.lua",
+        "tests/audio_smoke.py"
+      ]
+    },
+    {
+      "id": "audio-spatial",
+      "feature": "Occlusion, reverberation and dynamic mix",
+      "references": [
+        "threejs:src/audio/mixer.js",
+        "kaigen:src/claude_of_duty/cod_audio_reverb.c"
+      ],
+      "current": "partial",
+      "procedure": "Move an audible source behind cover and across room boundaries; combine footsteps, automatic fire and a nearby blast.",
+      "expect": "Continuous obstruction/reverb changes, spatial localization, ducking and concussion without clipping.",
+      "coverage": [
+        "tests/audio_test.lua",
+        "tests/audio_smoke.py"
+      ]
+    },
+    {
+      "id": "hud",
+      "feature": "HUD feedback and pause/restart",
+      "references": [
+        "threejs:src/ui/index.js",
+        "kaigen:src/claude_of_duty/cod_hud_model.c"
+      ],
+      "current": "partial",
+      "procedure": "Fight and reload, receive hits from several bearings, see offscreen grenades, switch floors and resize/pause/restart.",
+      "expect": "Contacts, damage numbers, kill banners, grenade indicators and readable bounded layouts with correct lifecycle.",
+      "coverage": [
+        "tests/ui_test.lua",
+        "tests/ui_smoke.py"
+      ]
+    },
+    {
+      "id": "input-settings",
+      "feature": "Mouse, gamepad, touch and user settings",
+      "references": [
+        "threejs:src/core/input.js",
+        "kaigen:src/claude_of_duty/cod_input.c"
+      ],
+      "current": "partial",
+      "procedure": "Complete traversal/combat/menu/restart flows separately with each device; change FOV/inversion/presets and return focus.",
+      "expect": "Reference bindings, toggles, defaults and no stuck inputs; actual browser pointer lock and touch/audio activation verified.",
+      "coverage": [
+        "tests/ui_test.lua",
+        "tests/ui_smoke.py"
+      ]
+    },
+    {
+      "id": "quality-performance",
+      "feature": "Whole-game presets and adaptive quality",
+      "references": [
+        "threejs:src/core/config.js",
+        "kaigen:src/claude_of_duty/cod_flow.c"
+      ],
+      "current": "partial",
+      "procedure": "Run the specified sustained protocol for every target preset/device; change manual/automatic quality during combat.",
+      "expect": "Recorded budgets, stable adaptation, manual override, no gameplay shader compiles and no resource growth.",
+      "coverage": []
+    },
+    {
+      "id": "platform-lifecycle",
+      "feature": "Backend/device and resource recovery",
+      "references": [
+        "threejs:src/core/engine.js",
+        "kaigen:src/claude_of_duty/claude_of_duty.c"
+      ],
+      "current": "partial",
+      "procedure": "Run all scenarios on target devices, inject WebGL context loss, resize, background/resume and repeat quality changes.",
+      "expect": "Generated resources recover; HDR or documented fallback works; full gameplay/input/audio and sustained budgets qualify.",
+      "coverage": [
+        "tools/validate_rendering_browser.mjs",
+        "tests/renderer_smoke.py"
+      ]
+    }
+  ],
+  "exclusions": [
+    "Inactive Kaigen player melee/use/grenade/flashlight bindings",
+    "Objective game mode inferred from UI hooks",
+    "Multiplayer/progression/additional weapons",
+    "Saved preferences unless separately requested"
+  ]
+}

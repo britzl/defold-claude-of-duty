@@ -100,6 +100,14 @@ local function floor_geometry(layout, b, level, box)
 end
 
 function M.geometry(layout,b,box)
+    if not b.stairs then
+        -- E3 has an enterable shell but no authored stair flight. Keep the
+        -- inaccessible upper mass out of both navigation and room acoustics.
+        local base=layout.street.walk_height+layout.storey-layout.slab
+        local height=(b.floors-1)*layout.storey+layout.slab
+        box(b.id.."/upper/mass",b.material,b.x,base+height/2,b.z,b.w,height,b.d,"plaster")
+        return
+    end
     for level=1,b.floors-1 do floor_geometry(layout,b,level,box) end
 end
 
@@ -149,6 +157,7 @@ local function floor_navigation(layout,b,level,nav,entry)
 end
 
 function M.navigation(layout,b,nav,entry)
+    if not b.stairs then return end
     for level=1,b.floors-1 do
         floor_navigation(layout,b,level,nav,entry)
         entry=M.prefix(b,level).."upper_hall"
@@ -187,7 +196,7 @@ function M.lights(layout,b)
             minimum={x=lo,y=floor,z=near},maximum={x=hi,y=floor+storey-layout.slab,z=far}}
     end
     room("shop",x0,x1,z0,z1,base,{1,.76,.48})
-    for level=1,b.floors-1 do
+    for level=1,(b.stairs and b.floors-1 or 0) do
         local u=upper(b,level)
         local floor=base+level*storey
         local hall0,hall1=b.side==1 and x0 or u.partition_x+wall/2,b.side==1 and u.partition_x-wall/2 or x1

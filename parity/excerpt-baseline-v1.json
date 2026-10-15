@@ -1,0 +1,5393 @@
+{
+  "schema_version": 1,
+  "contract_sha256": "304db98b43c850107e5acc9e1f0950a955f4a2ebee08dd7e4e236a083f15d68c",
+  "fingerprint_method": "Sorted relative UTF-8 path + NUL + decimal byte length + NUL + file bytes; SHA-256.",
+  "sources": {
+    "defold": {
+      "sha256": "58004ac2295fb2fd1333d1bd46a654cb7523d9424d0b96f077e3a0eaf21ad081",
+      "files": 236,
+      "scopes": [
+        "game",
+        "main",
+        "render",
+        "world",
+        "weapons",
+        "soldiers",
+        "audio",
+        "input",
+        "game.project"
+      ],
+      "git_revision": "8146e120850b0b25c58e83b238cf1ea0675a9819",
+      "revision_status": "Git commit plus working source hash"
+    },
+    "threejs": {
+      "sha256": "d188d2c84f31f5d23810be0c4eb572c06158d0cb648989d7adda3cb2af734e2b",
+      "files": 163,
+      "scopes": [
+        "src",
+        "package.json",
+        "package-lock.json",
+        "index.html",
+        "vite.config.js"
+      ],
+      "git_revision": null,
+      "revision_status": "Source archive; exact commit unavailable"
+    },
+    "kaigen": {
+      "sha256": "eb5d03db76140a5a7d7862001388293b98be47fc2f4a715c4566b6a7b982ae23",
+      "files": 334,
+      "scopes": [
+        "src",
+        "shaders",
+        "assets",
+        "gameplay_blocks",
+        "hzproject.hzt",
+        "web"
+      ],
+      "git_revision": null,
+      "revision_status": "Source archive; exact commit unavailable"
+    }
+  },
+  "catalog": {
+    "comparison": "Adapted framing in the unrotated partial map; not cross-engine pixel equality.",
+    "height": 720,
+    "level_to_world": {
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "yaw_radians": 0
+    },
+    "lighting": {
+      "exposure": 1,
+      "matched_time_of_day": false,
+      "mode": "fixed_presets",
+      "north_rotation_degrees": 61,
+      "presets": [
+        "daylight",
+        "sunset",
+        "night"
+      ],
+      "reference_daylight_hour": 16.5,
+      "rig": {
+        "atmosphere_data": [
+          [
+            -0.3820739650237272,
+            0.5295444263012461,
+            -0.7573652921967918,
+            0
+          ],
+          [
+            5.12,
+            5.12,
+            5.12
+          ],
+          [
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            -0.3820739650237272,
+            0.5295444263012461,
+            -0.7573652921967918,
+            0
+          ],
+          [
+            0.2491142421301497,
+            0.7456655539128805,
+            0.6180007897047691,
+            0
+          ]
+        ],
+        "environment_height": 594,
+        "environment_width": 396,
+        "fog_data": [
+          0.0044,
+          0.16,
+          180,
+          0.006
+        ],
+        "fog_tint": [
+          0.88,
+          0.96,
+          1.08,
+          0
+        ],
+        "ground_radiance": [
+          0.18416354644283772,
+          0.15881493954359283,
+          0.1254366961645385
+        ],
+        "hour": 16.5,
+        "indirect": [
+          1,
+          1,
+          0.18,
+          0.025
+        ],
+        "moon_direction": [
+          0.2491142421301497,
+          0.7456655539128805,
+          0.6180007897047691,
+          0
+        ],
+        "name": "daylight",
+        "sky_height": 384,
+        "sky_horizon": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "sky_width": 768,
+        "sky_zenith": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "solar_direction": [
+          -0.3820739650237272,
+          0.5295444263012461,
+          -0.7573652921967918,
+          0
+        ],
+        "sun_direction": [
+          -0.3820739650237272,
+          0.5295444263012461,
+          -0.7573652921967918,
+          0
+        ],
+        "sun_radiance": [
+          4.552394597977254,
+          3.9257946907573458,
+          3.1007077624061874
+        ],
+        "sun_shape": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "sun_direction": [
+        -0.3820739650237272,
+        0.5295444263012461,
+        -0.7573652921967918,
+        0
+      ]
+    },
+    "settle_frames": 40,
+    "shots": [
+      {
+        "fov": 75,
+        "id": "street",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Overall colour, lighting, material scale and shadow depth.",
+        "reference": "hero",
+        "target": [
+          0,
+          1.66,
+          -8
+        ]
+      },
+      {
+        "fov": 70,
+        "id": "interior",
+        "position": [
+          -14.5,
+          1.805,
+          -3.2
+        ],
+        "purpose": "Interior fill, contact depth and bright doorway.",
+        "reference": "interior",
+        "target": [
+          -6.5,
+          1.805,
+          0
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "detail",
+        "position": [
+          -5.1,
+          1.45,
+          2.4
+        ],
+        "purpose": "Plaster/trim relief, tiling, weathering and filtering.",
+        "reference": "detail",
+        "target": [
+          -6.5,
+          1.4,
+          1.9
+        ]
+      },
+      {
+        "fov": 70,
+        "id": "courtyard",
+        "position": [
+          -7.8,
+          1.66,
+          7.4
+        ],
+        "purpose": "Ground, shade and contact under the west courtyard walls.",
+        "reference": false,
+        "target": [
+          -22,
+          1.5,
+          7.4
+        ]
+      },
+      {
+        "fov": 80,
+        "id": "weapon",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "World/viewmodel light balance and weapon materials.",
+        "reference": "weapon",
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip"
+      },
+      {
+        "fov": 58,
+        "id": "ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Sight readability, edge stability and weapon exposure.",
+        "reference": "ads",
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads"
+      },
+      {
+        "fov": 65,
+        "id": "sunset",
+        "lighting": "sunset",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Spectral sunset colour, low sun and distance contrast.",
+        "reference": "sunset",
+        "requested_hour": 19.2,
+        "target": [
+          0,
+          1.66,
+          -8
+        ]
+      },
+      {
+        "fov": 75,
+        "id": "night",
+        "lighting": "night",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Moon phase, cool night fill and warm local light.",
+        "reference": "night",
+        "requested_hour": 1.5,
+        "target": [
+          0,
+          1.66,
+          -8
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "laboratory",
+        "laboratory": true,
+        "position": [
+          6.8,
+          4.2,
+          9.5
+        ],
+        "purpose": "Fifteen surface recipes, dielectric/metal roughness rows and furniture contact.",
+        "reference": false,
+        "target": [
+          0,
+          1.3,
+          -1
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_plaster",
+        "laboratory": true,
+        "position": [
+          -6,
+          2,
+          -2.4
+        ],
+        "purpose": "Plaster trowel relief, pinholes and coating variation at close range.",
+        "reference": false,
+        "target": [
+          -6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_concrete",
+        "laboratory": true,
+        "position": [
+          -3.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Concrete aggregate, pores, formwork and tie holes.",
+        "reference": false,
+        "target": [
+          -3.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_asphalt",
+        "laboratory": true,
+        "position": [
+          -1.2,
+          2,
+          -2.4
+        ],
+        "purpose": "Asphalt binder, aggregate, patches and roughness.",
+        "reference": false,
+        "target": [
+          -1.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_wood",
+        "laboratory": true,
+        "position": [
+          1.2,
+          2,
+          -2.4
+        ],
+        "purpose": "Wood planks, grain, knots, joints and nails.",
+        "reference": false,
+        "target": [
+          1.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 70,
+        "id": "material_grazing",
+        "position": [
+          0,
+          0.3,
+          4
+        ],
+        "purpose": "Road minification and grazing-angle filtering.",
+        "reference": false,
+        "target": [
+          0,
+          0.1,
+          -8
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_metal_brushed",
+        "laboratory": true,
+        "position": [
+          3.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference recipe close-up: sheen, grain and filtering.",
+        "reference": false,
+        "target": [
+          3.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_fabric",
+        "laboratory": true,
+        "position": [
+          6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference recipe close-up: sheen, grain and filtering.",
+        "reference": false,
+        "target": [
+          6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 58,
+        "id": "shadow_cutout",
+        "laboratory": true,
+        "position": [
+          5,
+          3.8,
+          7
+        ],
+        "purpose": "Matching perforated panel and shadow silhouette; near-cascade contact/softness.",
+        "reference": false,
+        "target": [
+          2,
+          1.1,
+          3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "shadow_distance",
+        "position": [
+          0,
+          3,
+          27
+        ],
+        "purpose": "All four cascades, near/distant coverage and blended boundaries in motion.",
+        "reference": false,
+        "target": [
+          0,
+          1.5,
+          -30
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "shadow_remote",
+        "laboratory": true,
+        "position": [
+          164,
+          4,
+          7
+        ],
+        "purpose": "Camera-following shadows at a fixture 160 m outside the old fixed map.",
+        "reference": false,
+        "target": [
+          160,
+          0.5,
+          0
+        ]
+      },
+      {
+        "fov": 60,
+        "id": "contact_furniture",
+        "laboratory": true,
+        "position": [
+          7.5,
+          1.7,
+          5.3
+        ],
+        "purpose": "Table legs, near-ground contacts and silhouette rejection.",
+        "reference": false,
+        "target": [
+          4.8,
+          0.4,
+          2.1
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "contact_corner",
+        "laboratory": true,
+        "position": [
+          -4.1,
+          1.8,
+          0.2
+        ],
+        "purpose": "Stacked boxes and floor/wall contact without black halos.",
+        "reference": false,
+        "target": [
+          -6.7,
+          0.5,
+          -3.6
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "reflections",
+        "laboratory": true,
+        "position": [
+          42,
+          1.35,
+          5.5
+        ],
+        "purpose": "Smooth metal reflects the visible box, with edge fade and roughness fallback.",
+        "reference": false,
+        "target": [
+          42,
+          0.4,
+          -2
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "glass",
+        "laboratory": true,
+        "position": [
+          43.5,
+          1.8,
+          5.5
+        ],
+        "purpose": "Two overlapping thin panes, opaque occlusion and sorted linear transparency.",
+        "reference": false,
+        "target": [
+          42,
+          1.2,
+          -2
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "local_lights",
+        "laboratory": true,
+        "position": [
+          56,
+          3,
+          4
+        ],
+        "purpose": "Two bounded point-light shadow cubemaps and occluder contact.",
+        "reference": false,
+        "target": [
+          54,
+          0.3,
+          -1.5
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_concrete_floor",
+        "laboratory": true,
+        "position": [
+          10.8,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference concrete_floor recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          10.8,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_brick",
+        "laboratory": true,
+        "position": [
+          13.2,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference brick recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          13.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_tile",
+        "laboratory": true,
+        "position": [
+          15.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference tile recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          15.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_dirt",
+        "laboratory": true,
+        "position": [
+          18,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference dirt recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          18,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_gravel",
+        "laboratory": true,
+        "position": [
+          20.4,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference gravel recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          20.4,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_metal_painted",
+        "laboratory": true,
+        "position": [
+          22.799999999999997,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference metal_painted recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          22.799999999999997,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_metal_rust",
+        "laboratory": true,
+        "position": [
+          25.200000000000003,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference metal_rust recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          25.200000000000003,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_rubber",
+        "laboratory": true,
+        "position": [
+          27.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference rubber recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          27.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_glass",
+        "laboratory": true,
+        "position": [
+          30,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference glass recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          30,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 80,
+        "id": "materials_extended",
+        "laboratory": true,
+        "position": [
+          20,
+          4.6,
+          7
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          20,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "materials_far",
+        "laboratory": true,
+        "position": [
+          20,
+          5,
+          22
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          20,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "laboratory_far",
+        "laboratory": true,
+        "position": [
+          0,
+          5,
+          20
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          0,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 75,
+        "id": "weathering_facade",
+        "laboratory": true,
+        "position": [
+          -20,
+          2.1,
+          2
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -20,
+          2.1,
+          -5.3
+        ]
+      },
+      {
+        "fov": 50,
+        "id": "weathering_close",
+        "laboratory": true,
+        "position": [
+          -24.8,
+          2.8,
+          -3.9
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -25.9,
+          3.7,
+          -5.3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "weathering_far",
+        "laboratory": true,
+        "position": [
+          -20,
+          3,
+          15
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -20,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 50,
+        "id": "micro_detail",
+        "laboratory": true,
+        "position": [
+          -5.8,
+          2,
+          -4.75
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "parallax_tile",
+        "laboratory": true,
+        "position": [
+          16.25,
+          2,
+          -4.8
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          15.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "clouds": false,
+        "fov": 65,
+        "id": "window_shafts",
+        "laboratory": true,
+        "lighting": "sunset",
+        "position": [
+          82,
+          1.7,
+          2.5
+        ],
+        "purpose": "Real window aperture, mullion and shadowed room air.",
+        "reference": false,
+        "target": [
+          79.8,
+          1.4,
+          -3.8
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "sky_daylight",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Atmospheric sky and two procedural cloud decks.",
+        "reference": false,
+        "target": [
+          0,
+          28,
+          -30
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "sky_sunset",
+        "lighting": "sunset",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Low solar disc, warm cumulus and thin high cloud.",
+        "reference": false,
+        "target": [
+          0,
+          16,
+          -30
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "sky_night",
+        "lighting": "night",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Phased lunar disc, stars and cloud occlusion.",
+        "reference": false,
+        "target": [
+          -6,
+          28,
+          -30
+        ]
+      },
+      {
+        "clouds": false,
+        "fov": 20,
+        "id": "moon",
+        "lighting": "night",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Clear-sky lunar terminator and stable stars at fixed exposure.",
+        "reference": false,
+        "target": [
+          -7.6,
+          28,
+          -30
+        ]
+      },
+      {
+        "fov": 80,
+        "id": "rifle_hip",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip",
+        "weapon_id": "rifle"
+      },
+      {
+        "fov": 58,
+        "id": "rifle_ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads",
+        "weapon_id": "rifle"
+      },
+      {
+        "fov": 80,
+        "id": "smg_hip",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip",
+        "weapon_id": "smg"
+      },
+      {
+        "fov": 58,
+        "id": "smg_ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads",
+        "weapon_id": "smg"
+      },
+      {
+        "fov": 80,
+        "id": "pistol_hip",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip",
+        "weapon_id": "pistol"
+      },
+      {
+        "fov": 58,
+        "id": "pistol_ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads",
+        "weapon_id": "pistol"
+      },
+      {
+        "fov": 80,
+        "id": "weapon_indoor",
+        "position": [
+          -14.5,
+          1.805,
+          -3.2
+        ],
+        "purpose": "Weapon indirect light follows the camera into a dark interior.",
+        "reference": false,
+        "target": [
+          -6.5,
+          1.805,
+          0
+        ],
+        "weapon": "hip"
+      },
+      {
+        "firing": true,
+        "fov": 80,
+        "id": "weapon_fire",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Emissive feathered flash and isolated viewmodel coverage.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip"
+      },
+      {
+        "combat_fixture": true,
+        "fov": 60,
+        "id": "combat_effects",
+        "position": [
+          0,
+          1.1,
+          8.2
+        ],
+        "purpose": "Soft smoke intersection, surface decals and world flash.",
+        "reference": false,
+        "target": [
+          0.1,
+          0.1,
+          6.3
+        ]
+      },
+      {
+        "combat_fixture": "glass",
+        "fov": 55,
+        "id": "combat_glass",
+        "laboratory": true,
+        "position": [
+          43.5,
+          1.8,
+          5.5
+        ],
+        "purpose": "Glass and smoke share depth sorting in front of, between and behind panes.",
+        "reference": false,
+        "target": [
+          42,
+          1.2,
+          -2
+        ]
+      }
+    ],
+    "sweep_fps": 30,
+    "sweep_frames": 121,
+    "version": 12,
+    "width": 1280,
+    "world_clip": {
+      "far": 500,
+      "near": 0.1
+    },
+    "world_seed": 1337
+  },
+  "created_utc": "2026-10-15T07:02:03.639104+00:00",
+  "evidence": [
+    {
+      "engine": "defold",
+      "manifest": "captures/rendering/photographic-final/launch-1/manifest.json",
+      "manifest_sha256": "f861807fc312ec327e71a86f7c1c251be2a0879db250dc6197b1de351e22c55a",
+      "created_utc": "2026-10-14T22:11:08.682424+00:00",
+      "capture_source_sha256": "7f917737dab7e57babedd59695cff1a11b7b2065aa1448b6e1937bc6a430288a",
+      "adapter_sha256": null,
+      "catalog_version": 12,
+      "captured": [
+        "street",
+        "interior",
+        "detail",
+        "courtyard",
+        "weapon",
+        "ads",
+        "sunset",
+        "night",
+        "laboratory",
+        "material_plaster",
+        "material_concrete",
+        "material_asphalt",
+        "material_wood",
+        "material_grazing",
+        "material_metal_brushed",
+        "material_fabric",
+        "shadow_cutout",
+        "shadow_distance",
+        "shadow_remote",
+        "contact_furniture",
+        "contact_corner",
+        "reflections",
+        "glass",
+        "local_lights",
+        "material_concrete_floor",
+        "material_brick",
+        "material_tile",
+        "material_dirt",
+        "material_gravel",
+        "material_metal_painted",
+        "material_metal_rust",
+        "material_rubber",
+        "material_glass",
+        "materials_extended",
+        "materials_far",
+        "laboratory_far",
+        "weathering_facade",
+        "weathering_close",
+        "weathering_far",
+        "micro_detail",
+        "parallax_tile",
+        "window_shafts",
+        "sky_daylight",
+        "sky_sunset",
+        "sky_night",
+        "moon",
+        "rifle_hip",
+        "rifle_ads",
+        "smg_hip",
+        "smg_ads",
+        "pistol_hip",
+        "pistol_ads",
+        "weapon_indoor",
+        "weapon_fire",
+        "combat_effects",
+        "combat_glass"
+      ],
+      "reported_repeat_identical": [
+        "street",
+        "interior",
+        "detail",
+        "courtyard",
+        "weapon",
+        "ads",
+        "sunset",
+        "night",
+        "laboratory",
+        "material_plaster",
+        "material_concrete",
+        "material_asphalt",
+        "material_wood",
+        "material_grazing",
+        "material_metal_brushed",
+        "material_fabric",
+        "shadow_cutout",
+        "shadow_distance",
+        "shadow_remote",
+        "contact_furniture",
+        "contact_corner",
+        "reflections",
+        "glass",
+        "local_lights",
+        "material_concrete_floor",
+        "material_brick",
+        "material_tile",
+        "material_dirt",
+        "material_gravel",
+        "material_metal_painted",
+        "material_metal_rust",
+        "material_rubber",
+        "material_glass",
+        "materials_extended",
+        "materials_far",
+        "laboratory_far",
+        "weathering_facade",
+        "weathering_close",
+        "weathering_far",
+        "micro_detail",
+        "parallax_tile",
+        "window_shafts",
+        "sky_daylight",
+        "sky_sunset",
+        "sky_night",
+        "moon",
+        "rifle_hip",
+        "rifle_ads",
+        "smg_hip",
+        "smg_ads",
+        "pistol_hip",
+        "pistol_ads",
+        "weapon_indoor",
+        "weapon_fire",
+        "combat_effects",
+        "combat_glass"
+      ],
+      "pending": {},
+      "not_run": [],
+      "run_error": null,
+      "failed": {},
+      "first_capture_settings": {
+        "settings": {
+          "interior_lighting": true,
+          "environment_filter": true,
+          "photographic_quality": "high",
+          "local_shadows": true,
+          "volumetric_fog": true,
+          "fog_shadows": true,
+          "ads_dof": 1,
+          "bloom": true,
+          "exposure": 1,
+          "glass": true,
+          "temporal_aa": true,
+          "ambient_occlusion": true,
+          "contact_shadows": true,
+          "shadows": true,
+          "combat_effects": true,
+          "bloom_strength": 0.14,
+          "motion_blur": 0.15,
+          "local_lights": true,
+          "grade_strength": 1,
+          "sharpen": 0.25,
+          "vignette": 0.18,
+          "grain": 0.006,
+          "environment_level": 0,
+          "atlas_page": 0,
+          "combat_materials": true,
+          "soft_particles": true,
+          "impact_decals": true,
+          "bloom_level": 0,
+          "weathering": true,
+          "lighting": "daylight",
+          "parallax": true,
+          "micro_detail": true,
+          "normal_maps": true,
+          "fog": true,
+          "weapon_aa": true,
+          "clouds": true,
+          "muzzle_lights": true,
+          "reflections": true,
+          "auto_exposure": false,
+          "view": "scene",
+          "atlas_half": 0
+        },
+        "pipeline": {
+          "reason": "Metal half-float path",
+          "backend": "metal",
+          "output": "srgb",
+          "format": "rgba16f",
+          "hdr": true,
+          "tone_mapper": "agx_neutral",
+          "exposure_mode": "fixed"
+        },
+        "material_quality": "medium"
+      },
+      "applied_states": {
+        "street": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3089969389957
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "interior": {
+          "camera_radians": {
+            "position": {
+              "y": 1.805,
+              "z": -3.2,
+              "x": -14.5
+            },
+            "yaw": -1.9513027039073,
+            "pitch": 0,
+            "fov": 1.221730476396
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "detail": {
+          "camera_radians": {
+            "position": {
+              "y": 1.45,
+              "z": 2.4,
+              "x": -5.1
+            },
+            "yaw": 1.2277723863742,
+            "pitch": -0.033620965932897,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "courtyard": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 7.4,
+              "x": -7.8
+            },
+            "yaw": 1.5707963267949,
+            "pitch": -0.011267128829046,
+            "fov": 1.221730476396
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "weapon": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "ads": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.0122909661567
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "sunset": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.1344640137963
+          },
+          "hour": 19.2,
+          "sun_direction": [
+            -0.0016816864860962,
+            0.080800057777047,
+            -0.99672891128621,
+            0
+          ],
+          "exposure": 1
+        },
+        "night": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3089969389957
+          },
+          "hour": 1.5,
+          "sun_direction": [
+            -0.17025467596939,
+            0.37008146275836,
+            -0.91326505256316,
+            0
+          ],
+          "exposure": 1
+        },
+        "laboratory": {
+          "camera_radians": {
+            "position": {
+              "y": 4.2,
+              "z": 9.5,
+              "x": 6.8
+            },
+            "yaw": 0.57469961894219,
+            "pitch": -0.22779818406113,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_plaster": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": -6
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_concrete": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": -3.6
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_asphalt": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": -1.2
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_wood": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 1.2
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_grazing": {
+          "camera_radians": {
+            "position": {
+              "y": 0.3,
+              "z": 4,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": -0.016665123713941,
+            "fov": 1.221730476396
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_metal_brushed": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 3.6
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_fabric": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 6
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "shadow_cutout": {
+          "camera_radians": {
+            "position": {
+              "y": 3.8,
+              "z": 7,
+              "x": 5
+            },
+            "yaw": 0.64350110879328,
+            "pitch": -0.4951332634684,
+            "fov": 1.0122909661567
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "shadow_distance": {
+          "camera_radians": {
+            "position": {
+              "y": 3,
+              "z": 27,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": -0.026309717252922,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "shadow_remote": {
+          "camera_radians": {
+            "position": {
+              "y": 4,
+              "z": 7,
+              "x": 164
+            },
+            "yaw": 0.51914611424652,
+            "pitch": -0.40957126197635,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "contact_furniture": {
+          "camera_radians": {
+            "position": {
+              "y": 1.7,
+              "z": 5.3,
+              "x": 7.5
+            },
+            "yaw": 0.70085440788445,
+            "pitch": -0.30105576245751,
+            "fov": 1.0471975511966
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "contact_corner": {
+          "camera_radians": {
+            "position": {
+              "y": 1.8,
+              "z": 0.2,
+              "x": -4.1
+            },
+            "yaw": 0.60005021340175,
+            "pitch": -0.27517907669591,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "reflections": {
+          "camera_radians": {
+            "position": {
+              "y": 1.35,
+              "z": 5.5,
+              "x": 42
+            },
+            "yaw": 0,
+            "pitch": -0.12599568216401,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "glass": {
+          "camera_radians": {
+            "position": {
+              "y": 1.8,
+              "z": 5.5,
+              "x": 43.5
+            },
+            "yaw": 0.19739555984988,
+            "pitch": -0.078286129803528,
+            "fov": 0.95993108859688
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "local_lights": {
+          "camera_radians": {
+            "position": {
+              "y": 3,
+              "z": 4,
+              "x": 56
+            },
+            "yaw": 0.34877100358391,
+            "pitch": -0.43225498354516,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_concrete_floor": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 10.8
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_brick": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 13.2
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_tile": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 15.6
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_dirt": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 18
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_gravel": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 20.4
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_metal_painted": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 22.8
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_metal_rust": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 25.2
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_rubber": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 27.6
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "material_glass": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -2.4,
+              "x": 30
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 0.78539816339745
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "materials_extended": {
+          "camera_radians": {
+            "position": {
+              "y": 4.6,
+              "z": 7,
+              "x": 20
+            },
+            "yaw": 0,
+            "pitch": -0.20831556258943,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "materials_far": {
+          "camera_radians": {
+            "position": {
+              "y": 5,
+              "z": 22,
+              "x": 20
+            },
+            "yaw": 0,
+            "pitch": -0.10945094914136,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "laboratory_far": {
+          "camera_radians": {
+            "position": {
+              "y": 5,
+              "z": 20,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": -0.11802596513056,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "weathering_facade": {
+          "camera_radians": {
+            "position": {
+              "y": 2.1,
+              "z": 2,
+              "x": -20
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3089969389957
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "weathering_close": {
+          "camera_radians": {
+            "position": {
+              "y": 2.8,
+              "z": -3.9,
+              "x": -24.8
+            },
+            "yaw": 0.66596923737911,
+            "pitch": 0.46803024451653,
+            "fov": 0.87266462599716
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "weathering_far": {
+          "camera_radians": {
+            "position": {
+              "y": 3,
+              "z": 15,
+              "x": -20
+            },
+            "yaw": 0,
+            "pitch": -0.049221295118335,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "micro_detail": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -4.75,
+              "x": -5.8
+            },
+            "yaw": 0.34877100358391,
+            "pitch": 0,
+            "fov": 0.87266462599716
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "parallax_tile": {
+          "camera_radians": {
+            "position": {
+              "y": 2,
+              "z": -4.8,
+              "x": 16.25
+            },
+            "yaw": 1.1263771168938,
+            "pitch": 0,
+            "fov": 0.95993108859688
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "window_shafts": {
+          "camera_radians": {
+            "position": {
+              "y": 1.7,
+              "z": 2.5,
+              "x": 82
+            },
+            "yaw": 0.33596760592613,
+            "pitch": -0.04492649910519,
+            "fov": 1.1344640137963
+          },
+          "hour": 19.2,
+          "sun_direction": [
+            -0.0016816864860962,
+            0.080800057777047,
+            -0.99672891128621,
+            0
+          ],
+          "exposure": 1
+        },
+        "sky_daylight": {
+          "camera_radians": {
+            "position": {
+              "y": 12,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0.38050637711236,
+            "fov": 1.1344640137963
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "sky_sunset": {
+          "camera_radians": {
+            "position": {
+              "y": 12,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0.099668652491162,
+            "fov": 1.1344640137963
+          },
+          "hour": 19.2,
+          "sun_direction": [
+            -0.0016816864860962,
+            0.080800057777047,
+            -0.99672891128621,
+            0
+          ],
+          "exposure": 1
+        },
+        "sky_night": {
+          "camera_radians": {
+            "position": {
+              "y": 12,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0.1488899476095,
+            "pitch": 0.37668551422831,
+            "fov": 1.1344640137963
+          },
+          "hour": 1.5,
+          "sun_direction": [
+            -0.17025467596939,
+            0.37008146275836,
+            -0.91326505256316,
+            0
+          ],
+          "exposure": 1
+        },
+        "moon": {
+          "camera_radians": {
+            "position": {
+              "y": 12,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0.18776194651359,
+            "pitch": 0.37443119022659,
+            "fov": 0.34906585039887
+          },
+          "hour": 1.5,
+          "sun_direction": [
+            -0.17025467596939,
+            0.37008146275836,
+            -0.91326505256316,
+            0
+          ],
+          "exposure": 1
+        },
+        "rifle_hip": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "rifle_ads": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.0122909661567
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "smg_hip": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "smg_ads": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.0122909661567
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "pistol_hip": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "pistol_ads": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.0122909661567
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "weapon_indoor": {
+          "camera_radians": {
+            "position": {
+              "y": 1.805,
+              "z": -3.2,
+              "x": -14.5
+            },
+            "yaw": -1.9513027039073,
+            "pitch": 0,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "weapon_fire": {
+          "camera_radians": {
+            "position": {
+              "y": 1.66,
+              "z": 10,
+              "x": 0
+            },
+            "yaw": 0,
+            "pitch": 0,
+            "fov": 1.3962634015955
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "combat_effects": {
+          "camera_radians": {
+            "position": {
+              "y": 1.1,
+              "z": 8.2,
+              "x": 0
+            },
+            "yaw": -0.052583061610942,
+            "pitch": -0.48390810005982,
+            "fov": 1.0471975511966
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        },
+        "combat_glass": {
+          "camera_radians": {
+            "position": {
+              "y": 1.8,
+              "z": 5.5,
+              "x": 43.5
+            },
+            "yaw": 0.19739555984988,
+            "pitch": -0.078286129803528,
+            "fov": 0.95993108859688
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.38207396502373,
+            0.52954442630125,
+            -0.75736529219679,
+            0
+          ],
+          "exposure": 1
+        }
+      },
+      "all_catalog_shots_captured_and_repeated": true,
+      "qualification": "Image checksums and current source/camera metadata validated; parity, motion, audio and sustained performance are not inferred."
+    },
+    {
+      "engine": "threejs",
+      "manifest": "captures/parity/threejs-recovery/manifest.json",
+      "manifest_sha256": "48566513ef76fa2207c17fcebf45f205aecd6f032c2c9f7a4d6729821ff10431",
+      "created_utc": "2026-10-15T07:00:31.679Z",
+      "capture_source_sha256": "15163b84109dbf5a61a7b0565b6635a1bb9bbe3215b4de363fe00d6bf39514b0",
+      "adapter_sha256": "ed6125d83eb65070d6fa5ebca07ba8cf295051c2ce4cda84c05d93a0a3e512b6",
+      "catalog_version": 12,
+      "captured": [
+        "smg_ads",
+        "pistol_hip",
+        "pistol_ads",
+        "weapon_indoor"
+      ],
+      "reported_repeat_identical": [
+        "smg_ads",
+        "pistol_hip",
+        "pistol_ads",
+        "weapon_indoor"
+      ],
+      "pending": {
+        "shadow_cutout": "Geometry is exported, but equivalent cutout/local-light/glass fixture shading is not qualified.",
+        "local_lights": "Geometry is exported, but equivalent cutout/local-light/glass fixture shading is not qualified.",
+        "glass": "Geometry is exported, but equivalent cutout/local-light/glass fixture shading is not qualified.",
+        "weapon_fire": "Reference transient fixture/event timeline is not implemented.",
+        "combat_effects": "Reference transient fixture/event timeline is not implemented.",
+        "combat_glass": "Reference transient fixture/event timeline is not implemented."
+      },
+      "not_run": [
+        "ads",
+        "contact_corner",
+        "contact_furniture",
+        "courtyard",
+        "detail",
+        "interior",
+        "laboratory",
+        "laboratory_far",
+        "material_asphalt",
+        "material_brick",
+        "material_concrete",
+        "material_concrete_floor",
+        "material_dirt",
+        "material_fabric",
+        "material_glass",
+        "material_gravel",
+        "material_grazing",
+        "material_metal_brushed",
+        "material_metal_painted",
+        "material_metal_rust",
+        "material_plaster",
+        "material_rubber",
+        "material_tile",
+        "material_wood",
+        "materials_extended",
+        "materials_far",
+        "micro_detail",
+        "moon",
+        "night",
+        "parallax_tile",
+        "reflections",
+        "rifle_ads",
+        "rifle_hip",
+        "shadow_distance",
+        "shadow_remote",
+        "sky_daylight",
+        "sky_night",
+        "sky_sunset",
+        "smg_hip",
+        "street",
+        "sunset",
+        "weapon",
+        "weathering_close",
+        "weathering_facade",
+        "weathering_far",
+        "window_shafts"
+      ],
+      "run_error": null,
+      "failed": {},
+      "first_capture_settings": {
+        "quality": {
+          "renderScale": 1,
+          "shadowMapSize": 4096,
+          "cascades": 4,
+          "shadowDistance": 200,
+          "taa": true,
+          "gtao": true,
+          "ssr": true,
+          "volumetrics": true,
+          "motionBlur": true,
+          "bloom": true,
+          "anisotropy": 16,
+          "particleBudget": 24000,
+          "decalBudget": 512
+        },
+        "gpu": {
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+          "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+          "width": 1280,
+          "height": 720
+        },
+        "settings": {
+          "exposureBias": 0,
+          "exposureKey": 1.06,
+          "autoExposure": true,
+          "bloomStrength": 0.14,
+          "bloomThreshold": 1.6,
+          "bloomKnee": 0.9,
+          "chromatic": 0.0011,
+          "vignette": 0.24,
+          "adsVignette": 0.34,
+          "grain": 0.01,
+          "dofMaxCoc": 3.3,
+          "dofNearRatio": 0.38,
+          "dofFocusMin": 3,
+          "dofFocusMax": 18,
+          "dofFarStart": 1.15,
+          "dofFarRange": 18,
+          "dofNearScale": 0.55,
+          "sharpen": 0.25,
+          "lutStrength": 1,
+          "shutter": 0.42,
+          "aoRadius": 1.35,
+          "aoIntensity": 1.1,
+          "contactLength": 0.4,
+          "contactStrength": 1,
+          "skyFill": 0.32,
+          "groundFill": 0.013,
+          "bounceFill": 0.008,
+          "iblDiffuse": 0.03,
+          "interiorIndirect": 0.035,
+          "practicalGain": 0.55,
+          "viewFillOcclusion": 0.45,
+          "viewKeyScale": 0.55,
+          "viewKeyMax": 2.6,
+          "viewFillRatio": 0.3,
+          "viewRimRatio": 0.5,
+          "viewHemiRatio": 0.16,
+          "viewBounceRatio": 0.34,
+          "viewKeyGamma": 0.65,
+          "shadowStrength": 1,
+          "sunSoftness": 0.024
+        },
+        "level_to_world_matrix": [
+          0.8322181104875284,
+          0,
+          -0.5544483894616054,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0.5544483894616054,
+          0,
+          0.8322181104875284,
+          0,
+          0.9,
+          0,
+          1.34,
+          1
+        ],
+        "display_exposure": 1
+      },
+      "applied_states": {
+        "smg_ads": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 58,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.014497765156309857,
+            "ev100": -2.8996779918670654,
+            "exposure": 6.591960906982422
+          },
+          "weapon_id": "smg",
+          "frame": 93
+        },
+        "pistol_hip": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 80,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01779098007404543,
+            "ev100": -2.6386635303497314,
+            "exposure": 5.500997543334961
+          },
+          "weapon_id": "pistol",
+          "frame": 93
+        },
+        "pistol_ads": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 58,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01610345107643659,
+            "ev100": -2.766927480697632,
+            "exposure": 6.012467861175537
+          },
+          "weapon_id": "pistol",
+          "frame": 93
+        },
+        "weapon_indoor": {
+          "camera": {
+            "position": [
+              -12.941397448346297,
+              1.805,
+              6.716403693633187
+            ],
+            "quaternion": [
+              0,
+              -0.6301926852217996,
+              0,
+              0.776438780260838
+            ],
+            "vertical_fov": 80,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -14.5,
+              1.805,
+              -3.2
+            ],
+            "level_target": [
+              -6.5,
+              1.805,
+              0
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.011448081805909385,
+            "ev100": -3.1887149810791016,
+            "exposure": 8.054219245910645
+          },
+          "weapon_id": "rifle",
+          "frame": 93
+        }
+      },
+      "all_catalog_shots_captured_and_repeated": false,
+      "qualification": "Image checksums and current source/camera metadata validated; parity, motion, audio and sustained performance are not inferred."
+    },
+    {
+      "engine": "threejs",
+      "manifest": "captures/parity/threejs-baseline-final/manifest.json",
+      "manifest_sha256": "7e1ac12f86be0b730e64c1f852b75361e419cb8cdf29dba998cc6fd9650588b5",
+      "created_utc": "2026-10-15T05:43:10.011Z",
+      "capture_source_sha256": "15163b84109dbf5a61a7b0565b6635a1bb9bbe3215b4de363fe00d6bf39514b0",
+      "adapter_sha256": "1af50d7d65ddd9063cc1ee69aa59844fa85fb679702bd490385d621567074801",
+      "catalog_version": 12,
+      "captured": [
+        "street",
+        "interior",
+        "detail",
+        "courtyard",
+        "weapon",
+        "ads",
+        "sunset",
+        "night",
+        "laboratory",
+        "material_plaster",
+        "material_concrete",
+        "material_asphalt",
+        "material_wood",
+        "material_grazing",
+        "material_metal_brushed",
+        "material_fabric",
+        "shadow_distance",
+        "shadow_remote",
+        "contact_furniture",
+        "contact_corner",
+        "reflections",
+        "material_concrete_floor",
+        "material_brick",
+        "material_tile",
+        "material_dirt",
+        "material_gravel",
+        "material_metal_painted",
+        "material_metal_rust",
+        "material_rubber",
+        "material_glass",
+        "materials_extended",
+        "materials_far",
+        "laboratory_far",
+        "weathering_facade",
+        "weathering_close",
+        "weathering_far",
+        "micro_detail",
+        "parallax_tile",
+        "window_shafts",
+        "sky_daylight",
+        "sky_sunset",
+        "sky_night",
+        "moon",
+        "rifle_hip",
+        "rifle_ads",
+        "smg_hip"
+      ],
+      "reported_repeat_identical": [
+        "street",
+        "interior",
+        "detail",
+        "courtyard",
+        "weapon",
+        "ads",
+        "sunset",
+        "night",
+        "laboratory",
+        "material_plaster",
+        "material_concrete",
+        "material_asphalt",
+        "material_wood",
+        "material_grazing",
+        "material_metal_brushed",
+        "material_fabric",
+        "shadow_distance",
+        "shadow_remote",
+        "contact_furniture",
+        "contact_corner",
+        "reflections",
+        "material_concrete_floor",
+        "material_brick",
+        "material_tile",
+        "material_dirt",
+        "material_gravel",
+        "material_metal_painted",
+        "material_metal_rust",
+        "material_rubber",
+        "material_glass",
+        "materials_extended",
+        "materials_far",
+        "laboratory_far",
+        "weathering_facade",
+        "weathering_close",
+        "weathering_far",
+        "micro_detail",
+        "parallax_tile",
+        "window_shafts",
+        "sky_daylight",
+        "sky_sunset",
+        "sky_night",
+        "moon",
+        "rifle_hip",
+        "rifle_ads",
+        "smg_hip"
+      ],
+      "pending": {
+        "shadow_cutout": "Geometry is exported, but equivalent cutout/local-light/glass fixture shading is not qualified.",
+        "glass": "Geometry is exported, but equivalent cutout/local-light/glass fixture shading is not qualified.",
+        "local_lights": "Geometry is exported, but equivalent cutout/local-light/glass fixture shading is not qualified."
+      },
+      "not_run": [
+        "combat_effects",
+        "combat_glass",
+        "pistol_ads",
+        "pistol_hip",
+        "weapon_fire",
+        "weapon_indoor"
+      ],
+      "run_error": "page.goto: Timeout 120000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:5417/?capture=1&lockstep=1&q=ultra\", waiting until \"load\"\u001b[22m\n",
+      "failed": {
+        "smg_ads": "page.goto: Timeout 120000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:5417/?capture=1&lockstep=1&q=ultra\", waiting until \"load\"\u001b[22m\n"
+      },
+      "first_capture_settings": {
+        "quality": {
+          "renderScale": 1,
+          "shadowMapSize": 4096,
+          "cascades": 4,
+          "shadowDistance": 200,
+          "taa": true,
+          "gtao": true,
+          "ssr": true,
+          "volumetrics": true,
+          "motionBlur": true,
+          "bloom": true,
+          "anisotropy": 16,
+          "particleBudget": 24000,
+          "decalBudget": 512
+        },
+        "gpu": {
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+          "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+          "width": 1280,
+          "height": 720
+        },
+        "settings": {
+          "exposureBias": 0,
+          "exposureKey": 1.06,
+          "autoExposure": true,
+          "bloomStrength": 0.14,
+          "bloomThreshold": 1.6,
+          "bloomKnee": 0.9,
+          "chromatic": 0.0011,
+          "vignette": 0.24,
+          "adsVignette": 0.34,
+          "grain": 0.01,
+          "dofMaxCoc": 3.3,
+          "dofNearRatio": 0.38,
+          "dofFocusMin": 3,
+          "dofFocusMax": 18,
+          "dofFarStart": 1.15,
+          "dofFarRange": 18,
+          "dofNearScale": 0.55,
+          "sharpen": 0.25,
+          "lutStrength": 1,
+          "shutter": 0.42,
+          "aoRadius": 1.35,
+          "aoIntensity": 1.1,
+          "contactLength": 0.4,
+          "contactStrength": 1,
+          "skyFill": 0.32,
+          "groundFill": 0.013,
+          "bounceFill": 0.008,
+          "iblDiffuse": 0.03,
+          "interiorIndirect": 0.035,
+          "practicalGain": 0.55,
+          "viewFillOcclusion": 0.45,
+          "viewKeyScale": 0.55,
+          "viewKeyMax": 2.6,
+          "viewFillRatio": 0.3,
+          "viewRimRatio": 0.5,
+          "viewHemiRatio": 0.16,
+          "viewBounceRatio": 0.34,
+          "viewKeyGamma": 0.65,
+          "shadowStrength": 1,
+          "sunSoftness": 0.024
+        },
+        "level_to_world_matrix": [
+          0.8322181104875284,
+          0,
+          -0.5544483894616054,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0.5544483894616054,
+          0,
+          0.8322181104875284,
+          0,
+          0.9,
+          0,
+          1.34,
+          1
+        ],
+        "display_exposure": 1
+      },
+      "applied_states": {
+        "street": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 75,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01937932208627615,
+            "ev100": -2.5311686992645264,
+            "exposure": 5.106017112731934
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "interior": {
+          "camera": {
+            "position": [
+              -12.941397448346297,
+              1.805,
+              6.716403693633187
+            ],
+            "quaternion": [
+              0,
+              -0.6301926852217996,
+              0,
+              0.776438780260838
+            ],
+            "vertical_fov": 70,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -14.5,
+              1.805,
+              -3.2
+            ],
+            "level_target": [
+              -6.5,
+              1.805,
+              0
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.012521527974439317,
+            "ev100": -3.0716681480407715,
+            "exposure": 7.426578998565674
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "detail": {
+          "camera": {
+            "position": [
+              -2.013636228778542,
+              1.45,
+              6.165010251424254
+            ],
+            "quaternion": [
+              -0.010346893769300253,
+              0.7880009614072263,
+              0.013247924683460293,
+              0.615444489050146
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -5.1,
+              1.45,
+              2.4
+            ],
+            "level_target": [
+              -6.5,
+              1.4,
+              1.9
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.012500955758667432,
+            "ev100": -3.0885937213897705,
+            "exposure": 7.514220237731934
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "courtyard": {
+          "camera": {
+            "position": [
+              -1.4883831797868408,
+              1.66,
+              11.823111455408231
+            ],
+            "quaternion": [
+              -0.002658979434282311,
+              0.8815892060308856,
+              0.004966542120563008,
+              0.47198382927550114
+            ],
+            "vertical_fov": 70,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -7.8,
+              1.66,
+              7.4
+            ],
+            "level_target": [
+              -22,
+              1.5,
+              7.4
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.018083902016162803,
+            "ev100": -2.6156277656555176,
+            "exposure": 5.4138593673706055
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "weapon": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 80,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.015783322999051882,
+            "ev100": -2.7908992767333984,
+            "exposure": 6.1132049560546875
+          },
+          "weapon_id": "rifle",
+          "frame": 93
+        },
+        "ads": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 58,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.014071881690992308,
+            "ev100": -2.937476634979248,
+            "exposure": 6.766952037811279
+          },
+          "weapon_id": "rifle",
+          "frame": 93
+        },
+        "sunset": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 19.200000000000003,
+          "sun_direction": [
+            -0.8725740462732082,
+            0.0808000577770463,
+            -0.48175292882724347
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.008058481792831515,
+            "ev100": -2.709242582321167,
+            "exposure": 5.776806831359863
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "night": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 75,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 1.5,
+          "sun_direction": [
+            0.3511038779496639,
+            -0.31809531764662047,
+            -0.8806483042509099
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.0028930649243584104,
+            "ev100": -3.9491987228393555,
+            "exposure": 13.644317626953125
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "laboratory": {
+          "camera": {
+            "position": [
+              11.826342851200446,
+              4.2,
+              5.4758230012926035
+            ],
+            "quaternion": [
+              -0.09499167719262115,
+              0.5454697208708991,
+              0.062398571885274805,
+              0.830388934839473
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              6.8,
+              4.2,
+              9.5
+            ],
+            "level_target": [
+              0,
+              1.3,
+              -1
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.08926681452120236,
+            "ev100": -0.4939749836921692,
+            "exposure": 1.2440158128738403
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_plaster": {
+          "camera": {
+            "position": [
+              -5.423984797633022,
+              2,
+              2.669366871599564
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079836,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -6,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              -6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.021817774340673616,
+            "ev100": -2.383740186691284,
+            "exposure": 4.610010147094727
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_concrete": {
+          "camera": {
+            "position": [
+              -3.4266613324629547,
+              2,
+              1.3386907368917114
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079836,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -3.6,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              -3.6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.02339985015845024,
+            "ev100": -2.293611764907837,
+            "exposure": 4.3308234214782715
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_asphalt": {
+          "camera": {
+            "position": [
+              -1.4293378672928871,
+              2,
+              0.008014602183858521
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079825,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -1.2,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              -1.2,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.016446915276712114,
+            "ev100": -2.736971616744995,
+            "exposure": 5.888912677764893
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_wood": {
+          "camera": {
+            "position": [
+              0.5679855978771812,
+              2,
+              -1.3226615325239945
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079836,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              1.2,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              1.2,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.010779796424000256,
+            "ev100": -3.2780210971832275,
+            "exposure": 8.568548202514648
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_grazing": {
+          "camera": {
+            "position": [
+              3.1177935578464213,
+              0.3,
+              4.668872441950113
+            ],
+            "quaternion": [
+              -0.007975301471833625,
+              0.28962928064959603,
+              0.0024134097524842824,
+              0.9571026328509381
+            ],
+            "vertical_fov": 70,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              0.3,
+              4
+            ],
+            "level_target": [
+              0,
+              0.1,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.009155593746974314,
+            "ev100": -3.4819016456604004,
+            "exposure": 9.869187355041504
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_metal_brushed": {
+          "camera": {
+            "position": [
+              2.5653090630472493,
+              2,
+              -2.653337667231847
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              3.6,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              3.6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.0015981152247363422,
+            "ev100": -3.9491987228393555,
+            "exposure": 13.644317626953125
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_fabric": {
+          "camera": {
+            "position": [
+              4.562632528217317,
+              2,
+              -3.9840138019396996
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              6,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01299575563561826,
+            "ev100": -3.038801670074463,
+            "exposure": 7.259304523468018
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "shadow_distance": {
+          "camera": {
+            "position": [
+              15.870106515463345,
+              3,
+              23.809888983163265
+            ],
+            "quaternion": [
+              -0.012590623787194584,
+              0.2896142749244416,
+              0.003810054622410378,
+              0.9570530452573743
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              3,
+              27
+            ],
+            "level_target": [
+              0,
+              1.5,
+              -30
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.0342084040390951,
+            "ev100": -1.8104811906814575,
+            "exposure": 3.0983731746673584
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "shadow_remote": {
+          "camera": {
+            "position": [
+              141.26490884618588,
+              4,
+              -83.76400909829057
+            ],
+            "quaternion": [
+              -0.17300220415333054,
+              0.5146197289836296,
+              0.10688507197030492,
+              0.8329539923001796
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              164,
+              4,
+              7
+            ],
+            "level_target": [
+              160,
+              0.5,
+              0
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.2151801074267263,
+            "ev100": 0.7657455205917358,
+            "exposure": 0.5195318460464478
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "contact_furniture": {
+          "camera": {
+            "position": [
+              10.08021229280297,
+              1.7,
+              1.5923930646218596
+            ],
+            "quaternion": [
+              -0.11989818616553703,
+              0.5938289093244483,
+              0.09006911870858547,
+              0.7904930140487069
+            ],
+            "vertical_fov": 60,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              7.5,
+              1.7,
+              5.3
+            ],
+            "level_target": [
+              4.8,
+              0.4,
+              2.1
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.07393693213066077,
+            "ev100": -0.7619159817695618,
+            "exposure": 1.497904658317566
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "contact_corner": {
+          "camera": {
+            "position": [
+              -2.401204575106545,
+              1.8,
+              3.779682018890087
+            ],
+            "quaternion": [
+              -0.11367180452070332,
+              0.5542885308124104,
+              0.07674922555153131,
+              0.8209461016681099
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -4.1,
+              1.8,
+              0.2
+            ],
+            "level_target": [
+              -6.7,
+              0.5,
+              -3.6
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01706589719780103,
+            "ev100": -2.6921911239624023,
+            "exposure": 5.708931922912598
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "reflections": {
+          "camera": {
+            "position": [
+              38.90262678251502,
+              1.35,
+              -17.369632749706017
+            ],
+            "quaternion": [
+              -0.06025761668258762,
+              0.2890647758432469,
+              0.018234585899582448,
+              0.9552371825235337
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              42,
+              1.35,
+              5.5
+            ],
+            "level_target": [
+              42,
+              0.4,
+              -2
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.11097419388417179,
+            "ev100": -0.18189208209514618,
+            "exposure": 1.0020272731781006
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_concrete_floor": {
+          "camera": {
+            "position": [
+              8.557279458557455,
+              2,
+              -6.645366071355406
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              10.8,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              10.8,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.025678307924500918,
+            "ev100": -2.1769025325775146,
+            "exposure": 3.9942710399627686
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_brick": {
+          "camera": {
+            "position": [
+              10.554602923727522,
+              2,
+              -7.9760422060632585
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079836,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              13.2,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              13.2,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.016396255723066536,
+            "ev100": -2.744706630706787,
+            "exposure": 5.9205708503723145
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_tile": {
+          "camera": {
+            "position": [
+              12.55192638889759,
+              2,
+              -9.306718340771111
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507984,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              15.6,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              15.6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.0332653246303464,
+            "ev100": -1.8492984771728516,
+            "exposure": 3.1828696727752686
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_dirt": {
+          "camera": {
+            "position": [
+              14.549249854067659,
+              2,
+              -10.637394475478963
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507986,
+              0,
+              0.9571358603896125
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              18,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              18,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.023409342848350983,
+            "ev100": -2.2926065921783447,
+            "exposure": 4.3278069496154785
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_gravel": {
+          "camera": {
+            "position": [
+              16.546573319237726,
+              2,
+              -11.968070610186816
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507982,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              20.4,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              20.4,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.0206657925685074,
+            "ev100": -2.4505083560943604,
+            "exposure": 4.828376293182373
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_metal_painted": {
+          "camera": {
+            "position": [
+              18.54389678440779,
+              2,
+              -13.298746744894668
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079814,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              22.799999999999997,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              22.799999999999997,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.021207592733021384,
+            "ev100": -2.4203317165374756,
+            "exposure": 4.72843074798584
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_metal_rust": {
+          "camera": {
+            "position": [
+              20.54122024957786,
+              2,
+              -14.629422879602524
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079797,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              25.200000000000003,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              25.200000000000003,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.013061525890751128,
+            "ev100": -3.0333480834960938,
+            "exposure": 7.23191499710083
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_rubber": {
+          "camera": {
+            "position": [
+              22.538543714747927,
+              2,
+              -15.960099014310376
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079814,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              27.6,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              27.6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.011834671596495733,
+            "ev100": -3.1588516235351562,
+            "exposure": 7.889212131500244
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "material_glass": {
+          "camera": {
+            "position": [
+              24.535867179917997,
+              2,
+              -17.29077514901823
+            ],
+            "quaternion": [
+              0,
+              0.28963933565079814,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 45,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              30,
+              2,
+              -2.4
+            ],
+            "level_target": [
+              30,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.07372217929421701,
+            "ev100": -0.7672098875045776,
+            "exposure": 1.503411054611206
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "materials_extended": {
+          "camera": {
+            "position": [
+              21.425500935981805,
+              4.6,
+              -3.9234410158194093
+            ],
+            "quaternion": [
+              -0.0995129861462465,
+              0.2880696296473832,
+              0.03011367182950732,
+              0.9519486440097602
+            ],
+            "vertical_fov": 80,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              20,
+              4.6,
+              7
+            ],
+            "level_target": [
+              20,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.12233511992173964,
+            "ev100": -0.041542887687683105,
+            "exposure": 0.9091389179229736
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "materials_far": {
+          "camera": {
+            "position": [
+              29.742226777905884,
+              5,
+              8.559830641493516
+            ],
+            "quaternion": [
+              -0.05235357296473657,
+              0.2892057267097172,
+              0.015842739489751605,
+              0.9557029656967639
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              20,
+              5,
+              22
+            ],
+            "level_target": [
+              20,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.15296750217360122,
+            "ev100": 0.2808881103992462,
+            "exposure": 0.7270575761795044
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "laboratory_far": {
+          "camera": {
+            "position": [
+              11.988967789232108,
+              5,
+              17.984362209750568
+            ],
+            "quaternion": [
+              -0.056450663316582245,
+              0.28913514285503805,
+              0.017082561939959277,
+              0.9554697158229988
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              5,
+              20
+            ],
+            "level_target": [
+              0,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.1116222762650994,
+            "ev100": -0.17963647842407227,
+            "exposure": 1.0004618167877197
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "weathering_facade": {
+          "camera": {
+            "position": [
+              -14.635465430827358,
+              2.1,
+              14.093404010207164
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507984,
+              0,
+              0.9571358603896125
+            ],
+            "vertical_fov": 75,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -20,
+              2.1,
+              2
+            ],
+            "level_target": [
+              -20,
+              2.1,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.034121173059838625,
+            "ev100": -1.8007506132125854,
+            "exposure": 3.0775458812713623
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "weathering_close": {
+          "camera": {
+            "position": [
+              -21.901357858990966,
+              2.8,
+              11.844669427746451
+            ],
+            "quaternion": [
+              0.18780100688006707,
+              0.5705956851773197,
+              -0.13602009112788202,
+              0.7878133539623587
+            ],
+            "vertical_fov": 50,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -24.8,
+              2.8,
+              -3.9
+            ],
+            "level_target": [
+              -25.9,
+              3.7,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.0505476096225529,
+            "ev100": -1.3069286346435547,
+            "exposure": 2.1854922771453857
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "weathering_far": {
+          "camera": {
+            "position": [
+              -7.427636367826487,
+              3,
+              24.912239446545033
+            ],
+            "quaternion": [
+              -0.023553355509941712,
+              0.28955162512618615,
+              0.0071274920568430355,
+              0.956846014094215
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -20,
+              3,
+              15
+            ],
+            "level_target": [
+              -20,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.1471181623590973,
+            "ev100": 0.22102807462215424,
+            "exposure": 0.7578591704368591
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "micro_detail": {
+          "camera": {
+            "position": [
+              -6.56049489077029,
+              2,
+              0.6027646340615516
+            ],
+            "quaternion": [
+              0,
+              0.4513124105284198,
+              0,
+              0.8923660168916266
+            ],
+            "vertical_fov": 50,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              -5.8,
+              2,
+              -4.75
+            ],
+            "level_target": [
+              -6,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.04111340182277524,
+            "ev100": -1.5768119096755981,
+            "exposure": 2.63507080078125
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "parallax_tile": {
+          "camera": {
+            "position": [
+              11.762192026006632,
+              2,
+              -11.664433259091222
+            ],
+            "quaternion": [
+              0,
+              0.7559070871016954,
+              0,
+              0.6546789103594447
+            ],
+            "vertical_fov": 55,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              16.25,
+              2,
+              -4.8
+            ],
+            "level_target": [
+              15.2,
+              2,
+              -5.3
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.059968981666179595,
+            "ev100": -1.0622270107269287,
+            "exposure": 1.8445345163345337
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "window_shafts": {
+          "camera": {
+            "position": [
+              70.52800603363134,
+              1.7,
+              -42.044222659632815
+            ],
+            "quaternion": [
+              -0.02010823820470597,
+              0.4454781260802809,
+              0.01000856980636624,
+              0.8950110203068649
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              82,
+              1.7,
+              2.5
+            ],
+            "level_target": [
+              79.8,
+              1.4,
+              -3.8
+            ]
+          },
+          "hour": 19.200000000000003,
+          "sun_direction": [
+            -0.8725740462732082,
+            0.0808000577770463,
+            -0.48175292882724347
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0,
+            "cirrusOpacity": 0,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01570622178511183,
+            "ev100": -1.8752801418304443,
+            "exposure": 3.2407095432281494
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "sky_daylight": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              12,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0.18100158996679117,
+              0.28441319549094746,
+              -0.05477297679388938,
+              0.9398656710792546
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              12,
+              10
+            ],
+            "level_target": [
+              0,
+              28,
+              -30
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.13786560786550942,
+            "ev100": 0.12665323913097382,
+            "exposure": 0.8090924024581909
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "sky_sunset": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              12,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0.04767848040825838,
+              0.28927975621406876,
+              -0.014428007518876395,
+              0.9559476019896297
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              12,
+              10
+            ],
+            "level_target": [
+              0,
+              16,
+              -30
+            ]
+          },
+          "hour": 19.200000000000003,
+          "sun_direction": [
+            -0.8725740462732082,
+            0.0808000577770463,
+            -0.48175292882724347
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.09073634107654524,
+            "ev100": 0.5766473412513733,
+            "exposure": 0.592292845249176
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "sky_night": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              12,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0.1746759696112927,
+              0.3536585315251701,
+              -0.0674079683776987,
+              0.9164442779127415
+            ],
+            "vertical_fov": 65,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              12,
+              10
+            ],
+            "level_target": [
+              -6,
+              28,
+              -30
+            ]
+          },
+          "hour": 1.5,
+          "sun_direction": [
+            0.3511038779496639,
+            -0.31809531764662047,
+            -0.8806483042509099
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.014605101774313362,
+            "ev100": -2.410715103149414,
+            "exposure": 4.697017192840576
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "moon": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              12,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0.1723077706067357,
+              0.37148217988809423,
+              -0.07037134932645144,
+              0.9095927085284384
+            ],
+            "vertical_fov": 20,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              12,
+              10
+            ],
+            "level_target": [
+              -7.6,
+              28,
+              -30
+            ]
+          },
+          "hour": 1.5,
+          "sun_direction": [
+            0.3511038779496639,
+            -0.31809531764662047,
+            -0.8806483042509099
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0,
+            "cirrusOpacity": 0,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.01237192516576415,
+            "ev100": -2.6212079524993896,
+            "exposure": 5.434839725494385
+          },
+          "weapon_id": null,
+          "frame": 93
+        },
+        "rifle_hip": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 80,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.015783322999051882,
+            "ev100": -2.7908992767333984,
+            "exposure": 6.1132049560546875
+          },
+          "weapon_id": "rifle",
+          "frame": 93
+        },
+        "rifle_ads": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 58,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.014071881690992308,
+            "ev100": -2.937476634979248,
+            "exposure": 6.766952037811279
+          },
+          "weapon_id": "rifle",
+          "frame": 93
+        },
+        "smg_hip": {
+          "camera": {
+            "position": [
+              6.444483894616054,
+              1.66,
+              9.662181104875284
+            ],
+            "quaternion": [
+              0,
+              0.2896393356507983,
+              0,
+              0.9571358603896127
+            ],
+            "vertical_fov": 80,
+            "near": 0.1,
+            "far": 500,
+            "level_position": [
+              0,
+              1.66,
+              10
+            ],
+            "level_target": [
+              0,
+              1.66,
+              -8
+            ]
+          },
+          "hour": 16.5,
+          "sun_direction": [
+            -0.8476397439478665,
+            0.5295444263012461,
+            -0.03300856030304311
+          ],
+          "weather": {
+            "turbidity": 1.35,
+            "cloudCoverage": 0.3,
+            "cloudDensity": 1.9,
+            "cirrusCoverage": 0.21,
+            "cirrusOpacity": 0.3,
+            "windSpeed": 0.0042,
+            "windAngle": 0.7,
+            "horizonMurk": 0.13
+          },
+          "exposure": {
+            "avgLum": 0.015619087572544748,
+            "ev100": -2.8040151596069336,
+            "exposure": 6.169034957885742
+          },
+          "weapon_id": "smg",
+          "frame": 93
+        }
+      },
+      "all_catalog_shots_captured_and_repeated": false,
+      "qualification": "Image checksums and current source/camera metadata validated; parity, motion, audio and sustained performance are not inferred."
+    }
+  ],
+  "parity_qualified": false
+}

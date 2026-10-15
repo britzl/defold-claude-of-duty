@@ -1,12 +1,257 @@
 # Defold port implementation plan
 
-Date: 2026-10-13. Target engine: Defold 1.14.0.
+Created: 2026-10-13. Updated: 2026-10-15. Target engine: Defold 1.14.0.
 
-Implement a runtime-generated Defold port of Claude of Duty, with Lua gameplay systems, a custom render pipeline, and a small portable native extension where geometry generation or audio synthesis needs more performance. The same implementation should serve Defold's platforms, with adaptable input and graphics budgets.
+Implement a runtime-generated Defold port of Claude of Duty, with Lua gameplay systems and a custom render pipeline. Introduce a portable native extension only where measured geometry, animation or audio requirements justify it. The current acceptance platforms are Mac native and desktop browser, targeting 60 FPS (user decision, 2026-10-15). Keep input and graphics adaptable; physical mobile qualification is deferred outside the current gate.
 
-The result should retain the recognizable market street, procedural soldiers, three weapons, movement, and combat feedback. Preserve runtime generation wherever practical rather than making pre-baked art and audio the default.
+The target is feature and presentation parity with the local Three.js and Kaigen versions: the recognizable market street, procedural soldiers, three weapons, movement, combat, audio and interface. Preserve runtime generation wherever practical rather than making pre-baked art and audio the default. Equivalent behavior and appearance matter; engine-specific implementations do not have to be copied.
 
-This plan is based on a source-level review of the Three.js and Kaigen versions. Performance comparisons have not been run. The local Kaigen download lacks its engine checkout, so running that version requires the external engine.
+## Current status and scope
+
+The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 now expands the market to its full reference extent and footprints; its validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
+
+**Status convention:** `[x]` means the stated implementation is complete in the current port; `[ ]` means work remains. Implementation completion does not imply full source fidelity, all-platform qualification or an agreed performance budget. The ordered backlog below is the current execution plan; the historical record at the end preserves earlier design and validation details.
+
+### Already implemented
+
+- [x] Gameplay framework: six subsystem modules, 120 Hz fixed simulation, buffered input, independent random streams, gameplay events, centralized damage and interpolated presentation.
+- [x] Generated full market layout: 104-metre road, all 20 reference footprints, five flank routes, far cross street, ruin yard and gate passage; connected W2/E1/E2 floors, ground-only E3, shared collision/navigation/cover/room metadata and a full-map minimap. Detailed architecture and dressing remain step 4.
+- [x] Core traversal: swept capsule, walking/sprinting/tactical sprint, jump buffering/coyote time, crouch/prone, steps/slopes, sliding, clearance-checked mantling and collision-limited leaning.
+- [x] Core weapons: M4A1/MPX-9/P-19, fire modes, magazine/chamber state, reload/inspection/switching timelines, ADS, recoil, spread, projectile travel/drop and material penetration; generated simplified viewmodels in an independent render pass.
+- [x] Core soldiers/combat: generated 25-bone soldier, animated hit volumes, patrol/detection/pursuit/fire/death, two squads of three, shared alerts, cover claims, low-cover peeking, suppression, friendly firing-lane checks and a west-loop flank.
+- [x] Core audio: 76 generated samples, budgeted loading, bounded spatial mixer, player/weapon/surface cues, ambience, initial occlusion and room variants, volume controls and lifecycle cleanup.
+- [x] Core desktop UI: crosshair/hitmarkers, ammo/mode, health/basic damage direction, compass, geometry minimap, killfeed, pause/settings, focus handling and encounter restart.
+- [x] Rendering/capture infrastructure: the stages listed below, deterministic capture manifests, still/motion fixtures, a material laboratory and a Three.js capture adapter.
+
+### Rendering implementation status
+
+These are the original rendering-stage numbers, not the remaining implementation order.
+
+| Stage | Completed implementation | Remaining scope |
+| --- | --- | --- |
+| 1. Comparisons | Capture catalogue, laboratory, deterministic stills/sweeps, source lock, 24-scenario contract and Three.js shared-geometry adapter | Controlled Kaigen captures, six Three.js special/transient fixtures, reference motion and fully matched scenes |
+| 2. HDR/colour | Metal RGBA16F, linear lighting, sRGB conversion, AgX and encoded RGBA8 fallback | Floating-point HDR qualification on WebGL and other target backends |
+| 3. Surface recipes | All fifteen planned recipes, generated maps, mip isolation/filtering and material tiers | Sand, corrugated metal, burlap and foliage from the full reference catalogue |
+| 4. Weathering | Deterministic variation, wear/grime masks, microdetail and selective parallax | Assignment and tuning on the completed geometry |
+| 5. Lighting | Unified sun/sky, filtered environment response, interior attenuation and room lights | Matched reference lighting throughout the full map |
+| 6. Sun shadows | Four stabilized cascades, contact-hardening filtering and animated/cutout casters | Full-map quality/cost tuning and platform qualification |
+| 7. Contact depth | Shared prepass, GTAO-style occlusion and contact shadows | Reference appearance/stability and device qualification |
+| 8. Temporal stability | Camera/object/skinned motion, world TAA, history resets and separate weapon AA | Full-content motion regression and device qualification |
+| 9. Reflections/lights | SSR with environment fallback, thin glass, local-light selection/shadows and muzzle lighting | Full-map tuning and backend/cost qualification |
+| 10. Atmosphere | Fixed daylight/sunset/night, cloud layers, celestial bodies, volumetric fog and shafts | Continuous time/cloud animation and reference matching |
+| 11. Combat rendering | Weapon/soldier material detail, emissive flashes, soft smoke/dust and impact marks | Detailed models and the complete reference effects catalogue |
+| 12. Photography | Multiscale bloom, exposure adaptation, grade, sharpening, motion blur, ADS depth of field, vignette and grain | Final visual parity and sustained/device performance gates |
+
+Do not reimplement these rendering stages as missing features. Extend their documented limits and qualify them as the remaining content arrives. The latest recorded photographic increment reports 177 Lua checks, exact repeats of 56 native stills across two launches, five 121-frame sweeps and a focused 28-stage WebGL fixture. These results do not establish full browser gameplay coverage, mobile support or cross-engine parity.
+
+## Remaining work in implementation order
+
+Start with reference setup, then build the shared content and simulation dependencies before their presentation layers. Keep native and browser smoke checks, resource accounting and comparison captures running after each relevant increment. Steps 18–19 close performance and platform qualification; they are not reasons to postpone all profiling or device checks until the end. Missing Kaigen access blocks its comparison gate, not independent implementation work.
+
+### 1. Establish the parity baseline and acceptance targets — PARTIAL
+
+- [x] Defold capture/test harness and adapted Three.js reference capture path.
+- [x] Versioned 24-scenario comparison matrix with source references, expected behavior, verification procedures and existing coverage in `parity/contract.json`.
+- [x] Lock local runtime source hashes and all 56 production cameras/FOVs, seeds, level transforms, solar hours and quality/exposure policies. Exact reference Git revisions are unavailable for the source archives; no commit identity is guessed.
+- [x] Fix Three.js per-shot weapon/time/clear-sky state, record actual exposure/camera/GPU settings, import production laboratory triangles and validate repeat pixels from fresh pages. Pending/failed/omitted evidence is kept distinct.
+- [x] Verify the published Kaigen demo renders and record its build ID separately from the local source archive; mark controlled capture and performance evidence unavailable.
+- [x] Set Mac native and desktop browser to 60 FPS. Record proposed 1280×720 loading, resident-memory, CPU/GPU and p95/p99 frame budgets plus a sustained release-run protocol; these are targets, not measured passes. Mobile qualification is outside the current gate.
+- [x] Record nine adaptation decisions, including eye-origin firing, map layout, damage scales, controls, coordinates, exposure and audio. Open decisions remain assigned to their acceptance scenarios.
+- [ ] Add controlled Kaigen captures and its equivalent laboratory once a matching runnable build/engine and capture control are available.
+- [ ] Complete Three.js cutout/local-light/glass fixture qualification, transient firing/FX timelines and reference motion sweeps. Six catalogue stills are explicitly pending rather than represented by unrelated source shots.
+
+**Completion check:** The versioned comparison matrix and baseline workflow are implemented. Controlled Kaigen and the listed reference-fixture comparisons remain open; this is not a full parity claim. Continue independent implementation with step 2 while closing those reference gates.
+
+**2026-10-15 validation:** 15 focused Node/Python/Lua checks passed, plus source-lock acceptance/rejection checks. All 50 supported Three.js shots have exact repeat pixels across the recorded initial/recovery runs; six stills are explicitly pending. A late browser-load timeout is preserved in the evidence, and the remaining four pairs passed across eight fresh browser launches after browser-lifetime bounding was added. Existing native capture source/image hashes were rechecked; the native suite was not rerun. See `parity/README.md` for commands and limits.
+
+### 2. Complete the full market layout and navigation — COMPLETE
+
+- [x] Full z=-58..46 street and all 20 source building footprints/storey counts: W1–W5, E1–E5 and ten background buildings, with the eastern flank, remaining alleys, ruin yard, cross street and gate footprint.
+- [x] Shared structural descriptions for entrances, five stair flights, floor connections, occluding masses, eight reference spawn anchors, six enemy spawn/patrol positions and ten cover candidates. E1 has street and alley entrances; E3 has no invented upper-floor link.
+- [x] Five connected flank routes, a clear gate passage and a street-spine detour around BS3. Open infill ground-floor passages preserve the existing west loop.
+- [x] Full terrain and visible outer boundaries replace excerpt-only yard walls. All 543 collider rectangles reach the minimap; a 256-node visible pool avoids truncation. Room audio, twenty light records and eight indirect-light volumes use the same building layout, with bounded HTML5 lighting messages.
+- [x] Extend engine resource limits and bounded loading for the full map; paginate debug navigation to respect the bridge response limit.
+- [x] Native traversal/patrols and desktop-browser physics/route validation, including pixel checks for the pooled minimap.
+
+**Completion check:** A full-map traversal and six-actor route matrix reaches every intended floor and route without unsupported navigation links, blocked entrances or collision/visual mismatches. Detailed dressing follows in step 4. E2's retained extra interior, simple infill arcades, flat terrain/boundary walls and the rectangular structural gate opening are recorded adaptations; exact architectural openings, ruins and pointed arch belong to step 4.
+
+**2026-10-15 validation:** All 181 Lua checks passed, plus the 12 baseline-tool Node/Python checks and eight browser minimap pixel checks. Mac Bullet confirmed all 543 collider dimensions (maximum error < 0.000003 m), all 189 supported nodes and both directions of all 194 capsule-swept links. All six spawn actors reached 13 route destinations in the route matrix (78 queries) on native and Chromium WebGL2/ANGLE Metal. Native player traversal completed five flank circuits, all five stair flights, E1's alley entrance, E3's room and the gate/south gap in both directions, without jumps, resets within a circuit or recovery failures. Live AI climbed both E1 flights and returned, then completed the eastern circuit. Eight inspection views were captured on each backend. A fresh native quick run verified the final HTML5-safe lighting transport and GUI layer fix; both engines shut down without runtime errors. Reports/images are under `build/full-market-validation`, `build/full-market-quick-validation` and `build/full-market-browser-validation`.
+
+The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json`; the refreshed source lock carries no stale visual evidence. The full-map screenshots above validate this increment, not cross-engine visual parity.
+
+**Resource account:** 1,983 generated boxes, 362 mesh batches, 543 colliders, 148,596 vertices (10,698,912 bytes), 189 navigation nodes and 194 edges. The full-map scan peaks at 145 visible minimap rectangles. Sustained 60 FPS qualification remains steps 18–19; these resource counts and layout smoke checks do not establish it.
+
+### 3. Complete the reference material catalogue — PARTIAL
+
+- [x] Fifteen planned surface recipes, wear/detail/parallax, mip filtering and launch-time material tiers.
+- [ ] Add sand, corrugated metal, burlap and foliage with reference physical scale, relief, roughness and weathering.
+- [ ] Connect foliage cutouts consistently to colour, depth, shadow and temporal passes using the existing coverage path.
+- [ ] Extend close-up, distance, grazing-angle and motion fixtures for the new recipes and tiers.
+
+**Completion check:** The full catalogue is generated at runtime, remains distinct at relevant distances and has no atlas bleeding or unstable cutout edges.
+
+### 4. Complete building recipes, interiors and dressing — PARTIAL
+
+- [x] Reusable shop/apartment recipes, stairs, furnishings, simple stalls/crates and closed façades.
+- [ ] Add setbacks, balconies, arches, façade recesses/bevels, damage, collapsed floors, roof details and the arched gate's complete silhouette.
+- [ ] Match the remaining room/furnishing recipes, especially the reference E1/E3 interiors; reconcile the current W2/E2 adaptations with the reference layout.
+- [ ] Add the remaining stalls, sandbags, barriers, wrecks, palms, lamps, cables, laundry, rugs, rubble, tyres and small props.
+- [ ] Assign materials, update collision/navigation/cover where appropriate and retain chunk bounds, bounded loading and independent decorative randomness.
+
+**Completion check:** Matched street/interior/courtyard views reproduce the reference composition and content density, while the step-2 traversal matrix still passes. Track draw calls, generation cost and memory as content grows.
+
+### 5. Complete traversal and camera feel — PARTIAL
+
+- [x] Core movement, tactical sprint, slide, mantle and lean.
+- [ ] Add proactive vaulting over thin obstacles with verified landing clearance, distinct from climbing onto deep ledges.
+- [ ] Add stride/footfall camera motion, landing dip/pitch/roll, strafe/turn banking, breathing and reference slide/mantle camera offsets.
+- [ ] Match sprint/ADS FOV transitions and provide camera impulse channels for damage, suppression and explosions.
+
+**Completion check:** The traversal course covers vault/mantle selection, blocked landings and interruption; deterministic movement and camera behavior hold at different presentation frame rates and through pause/reset.
+
+### 6. Complete player health and suppression — PARTIAL
+
+- [x] Centralized damage/death, health display, hit flash and basic damage direction.
+- [ ] Add delayed, ramped regeneration and fall damage through the existing health owner.
+- [ ] Add near-miss/hit/explosion suppression and directional camera impulses using step 5's channels.
+- [ ] Add low-health pulse/desaturation and recovery state for the HUD/audio work; ensure death, pause and restart reset or freeze it correctly.
+
+**Completion check:** Repeatable damage, near-miss, fall and recovery scenarios match the reference timing, do not duplicate damage and cannot regenerate a dead actor.
+
+### 7. Complete weapons and first-person animation — PARTIAL
+
+- [x] Three weapon definitions, fire control, ammunition/chamber logic, ADS/recoil and procedural clip timelines.
+- [ ] Match reference silhouettes, attachments, moving parts, arms, gloves and finger/grip poses.
+- [ ] Add arm/hand IK, camera-follow lag, layered idle sway, stride-driven bob and richer reload/inspection/draw transitions.
+- [ ] Preserve sight alignment, ammo-transfer timing, interruption behavior, indoor lighting and the independent viewmodel render/AA path.
+
+**Completion check:** All three weapons pass hip/ADS/fire/reload/inspect comparisons and interrupted reload/switch scenarios with aligned sights and correctly placed hands.
+
+### 8. Reconcile ballistics and regional damage — PARTIAL
+
+- [x] Full-segment projectile queries, travel/drop, measured penetration thickness and per-round damage deduplication.
+- [ ] Add deterministic material penetration deflection.
+- [ ] Add arm hit volumes and reference regional damage scales; reconcile the current 2× head multiplier with the Three.js reference's 4× head collider scale.
+- [ ] Reconcile remaining penetration/falloff tuning and explicitly retain or replace the eye-origin adaptation with a documented muzzle-obstruction rule.
+
+**Completion check:** Firing-range cases cover every damage region, thin/thick and layered materials, entry/exit deflection and an obstructed muzzle. Damage remains deterministic and has one owner.
+
+### 9. Complete soldier variants and animation — PARTIAL
+
+- [x] Shared generated 25-bone soldier, basic idle/walk/aim/recoil/crouch and animated hit volumes.
+- [ ] Generate vanguard, irregular and breacher variants with reference anatomy, equipment and carried weapons.
+- [ ] Add run/crouch locomotion, turning steps, wounded poses, regional hit reactions, reload and vault animation layers.
+- [ ] Add terrain-following foot/pelvis IK, weapon-grip/reload hand IK and constrained head/spine aiming.
+- [ ] Keep authoritative hit volumes, visible poses, shadows and current/previous temporal palettes consistent; prepare correct joint frames for ragdolls.
+
+**Completion check:** Variant/animation fixtures cover uneven ground, stairs, turning, aiming, reloads and hits without sliding feet, detached hands, incorrect hit volumes or broken motion vectors.
+
+### 10. Add rigid-body debris and ragdoll deaths — NOT IMPLEMENTED
+
+- [ ] Add bounded physics-backed casings, dropped magazines and debris with collision, settling, sleep and lifetime cleanup.
+- [ ] Replace scripted soldier collapse with joint-constrained ragdolls driven by the procedural skeleton and regional hit impulses.
+- [ ] Support blast impulses and consistent visual/shadow interpolation while preserving dead-actor damage rules.
+
+**Completion check:** Deaths on floors, stairs and beside walls settle plausibly; repeated firefights/resets do not grow object counts or physics cost. Existing visual casings and scripted collapse do not count as this feature's completion.
+
+### 11. Complete AI perception, weapons and tactics — PARTIAL
+
+- [x] Visual acquisition, pursuit, squad alerts, protected cover, low-cover peeking, suppression and a coordinated west-loop flank.
+- [ ] Add hearing of shots, footsteps and explosions, investigation/search of observed positions and wounded retreat.
+- [ ] Add magazine/reload cycles, bursts, variant weapon/accuracy tuning and suppression-dependent shooting behavior.
+- [ ] Add tall-cover side peeks, squad peek permissions, recent-last-known-position suppressive fire and general reposition/flank choices across the full map.
+- [ ] Add low-obstacle vaulting using the traversal/animation work, while preserving friendly firing-lane checks and route recovery.
+
+**Completion check:** Repeatable scenarios exercise each behavior without omniscient pursuit, invalid peeks or permanently held cover/flank claims. Six actors complete full-map engagements, loss of contact, deaths and resets without getting stuck.
+
+### 12. Implement enemy grenades — NOT IMPLEMENTED
+
+- [ ] Add squad grenade grants/cooldowns, throwing decisions and animated launch points.
+- [ ] Add ballistic throws, bouncing bodies, fuses, obstruction-aware blast damage and impulses using steps 6, 8 and 10.
+- [ ] Emit grenade/fuse/explosion events for effects, sound, player suppression and HUD warnings; finish their presentation in steps 13, 15 and 16.
+
+**Completion check:** Enemies throw under the reference conditions; fuses pause/reset correctly, cover blocks blast damage appropriately and each actor receives at most one damage application per blast. The end-to-end gate stays open until warnings, FX and audio are connected.
+
+### 13. Complete combat and ambient effects — PARTIAL
+
+- [x] Tracers, visual casings, muzzle flashes/lights, soft smoke/dust and bounded impact marks.
+- [ ] Add surface-specific sparks, splinters, glass fragments, blood, debris and decal variation.
+- [ ] Add explosion fireballs, shockwaves, smoke columns, light and scorch marks, plus footstep/landing dust.
+- [ ] Add ambient dust motes, persistent world smoke sources and the Three.js heat/refraction effects.
+- [ ] Scale bounded pools for sustained combat and preserve transparent sorting, depth intersections and pause/reset cleanup.
+
+**Completion check:** Surface, death, grenade and ambient fixtures match the references without particle rectangles, incorrect receivers or resource growth; normal gameplay drives the same effects as the fixtures.
+
+### 14. Complete animated atmosphere and lighting matching — PARTIAL
+
+- [x] Fixed daylight/sunset/night, cloud decks, sun/moon/stars, environment updates, volumetric fog and window shafts.
+- [ ] Add continuous time-of-day transitions, cloud drift, moving cloud influence on sunlight and animated fog.
+- [ ] Coordinate sky, direct light, environment filtering, shadows and temporal history during changes without synchronous update stalls.
+- [ ] Match equivalent reference lighting/atmosphere views on the full geometry; refine the current bounded scattering approximation where comparisons show a quality gap.
+
+**Completion check:** Fixed states remain reproducible and continuous transitions avoid lighting pops, stale reflections or temporal trails at measured cost.
+
+### 15. Complete audio content and spatial processing — PARTIAL
+
+- [x] Generated weapon/reload/player/surface sounds, ambience, spatial panning, initial occlusion/room variants and bounded mixing.
+- [ ] Add soldier footsteps/voice barks, near-miss cracks/whizzes, grenade/explosion/body-fall cues, heartbeat, hit-confirmation/UI sounds and distant battle scheduling.
+- [ ] Match source weapon timbres and connect casing sounds to physical impacts rather than only ejection.
+- [ ] Add continuous occlusion, richer room reverberation, bus ducking and concussion/deafening behavior.
+- [ ] Resolve and implement the audio processing path needed for Three.js HRTF/convolution parity or record an explicitly accepted equivalent. Verify portability and cost before selecting a native extension.
+
+**Completion check:** Indoor/outdoor, obstructed-source, near-miss and sustained-fire listening scenarios exercise real output without clipping, stale cues or leaked voices; generated content and simulation randomness remain independent.
+
+### 16. Complete HUD feedback — PARTIAL
+
+- [x] Core HUD, compass, geometry minimap, killfeed, basic damage feedback, pause and encounter restart.
+- [ ] Add enemy minimap contacts, grenade danger/fuse indicators, floating damage numbers and elimination banners.
+- [ ] Match reload/ammo feedback, more precise directional damage indicators, low-health/recovery presentation, styling, transitions and sounds.
+- [ ] Port objective/prompt display contracts only as reference UI capabilities; do not infer a missing objective game mode from unused hooks.
+
+**Completion check:** Combat events drive the complete HUD, including offscreen grenade warnings, with bounded nodes, correct floor/map behavior and usable layouts across supported aspect ratios.
+
+### 17. Complete input adapters and user settings — PARTIAL
+
+- [x] Keyboard/mouse gameplay, pause/menu navigation, sensitivity/audio/render controls and focus/input quarantine.
+- [ ] Add full gamepad actions and Kaigen-style touch movement, look, sprint and action buttons, including touch ADS and pause behavior.
+- [ ] Match keyboard alternatives, wheel weapon switching and crouch/prone toggle behavior; move diagnostic camera bindings out of the normal reference weapon-selection keys.
+- [ ] Add adjustable FOV, invert look and restore-defaults controls; retain common simulation commands across input devices.
+- [ ] Connect whole-game preset selection and automatic/default quality mode to step 18.
+
+**Completion check:** Mouse, gamepad and touch can each complete movement, combat, reload/switch, death/restart and settings flows without stuck inputs. Verify actual browser pointer lock and touch/audio activation, not just synthetic input calls.
+
+### 18. Complete quality scaling and sustained performance — PARTIAL
+
+- [x] Budgeted generation, bounded pools, resource snapshots, material tiers, photographic tiers and short diagnostic timing samples.
+- [ ] Provide coherent low/medium/high/ultra whole-game presets spanning resolution, shadows, materials, effects, decals and post-processing.
+- [ ] Add Kaigen-equivalent automatic quality adjustment toward the device's recorded frame target, with manual override and Defaults restoring automatic mode.
+- [ ] Profile and optimize full-map generation, shader warm-up, route-planning spikes, animation/palette uploads, draw submission and physics/FX/audio under sustained combat.
+- [ ] Measure real process/GPU memory, loading time, thermal behavior and frame-time distributions at actual target resolutions; distinguish short GPU probes from sustained measurements.
+
+**Completion check:** The step-1 budgets hold during movement, firing, grenades and ragdolls, with no lazy shader-compilation stalls or progressive resource growth. Each preset has measured quality/cost evidence.
+
+### 19. Close cross-engine and platform qualification — OPEN
+
+- [ ] Complete matched still/motion, gameplay and audio comparisons against both references after geometry, lighting and content converge. Use exact pixel checks only for controlled within-backend regressions.
+- [ ] Run the full traversal, weapons, six-actor AI, grenades/ragdolls, audio, HUD/input and pause/restart scenarios on the target Mac native and desktop browser builds. Physical mobile qualification is deferred.
+- [ ] Qualify floating-point HDR renderability/filtering/blending beyond Metal; retain and verify the encoded fallback where needed, with limitations recorded.
+- [ ] Resolve and requalify the recorded forced WebGL context-restoration failure (`OpenGLSetRenderTarget` / `GL_FRAMEBUFFER_UNSUPPORTED`) and generated-resource recovery. Lua rebake tests alone do not close this gate.
+- [ ] Exercise resizing, focus/background transitions, repeated quality changes and long combat sessions on the target Mac native and desktop browser backends.
+- [ ] Update README.md and this status ledger with reproducible commands, reference/build fingerprints, captures, sustained measurements and any explicitly accepted deviations.
+
+**Completion check:** All required parity scenarios and device budgets have evidence. Missing Kaigen captures, incomplete geometry/lighting matching or unqualified device paths prevent an unqualified claim of full parity.
+
+## Scope boundaries
+
+- The user selected Mac native and desktop browser at 60 FPS on 2026-10-15. Touch-control feature parity remains in step 17, but physical mobile performance/platform qualification is outside the current acceptance gate.
+- Enemy grenades are required parity work. Kaigen documents player melee, use, grenade and flashlight bindings as inactive; those bindings do not establish implemented player features to port.
+- Objective/prompt APIs do not establish an objective-based game mode. Multiplayer, progression and additional weapons are outside this parity plan.
+- Saved preferences remain an optional Defold follow-up. Session settings already survive encounter restart; persistence was not established as a reference feature by this audit and is not a parity gate.
+- Equivalent implementations may satisfy visual/audio behavior without duplicating the reference engine's renderer, physics solver or DSP internals. Record observable differences and verify them before accepting an adaptation.
+
+## Historical implementation record
+
+The sections below preserve the original subsystem plan and incremental validation history. Their numbered subsystem/rendering sequences are historical, not the remaining execution order. Test counts, resource costs and statements such as “not part of this step” apply to the increment being described; the current status tables and ordered backlog above take precedence.
 
 **What the two implementations tell us**
 
@@ -641,21 +886,19 @@ Begin with weapon layers, reloads, surface footsteps, impacts and ambience. Appl
 
 Recreate the crosshair, hitmarker, ammo, health feedback, compass, minimap, killfeed and pause settings using GUI components. Normalize mouse, gamepad and touch into the same gameplay commands.
 
-**Implementation milestones**
+**Original milestones mapped to current status (2026-10-15)**
 
-| Milestone | Deliverable | Completion check |
+| Milestone | Current status | Remaining completion check |
 |---|---|---|
-| 1. Technical foundation | Generated geometry and material, capsule movement, generated sound, procedural skinned character, separate weapon pass | These paths work in representative native, browser and mobile builds |
-| 2. Playable street block | One detailed block, one enterable building, one rifle and one enemy | Move, aim, shoot, reload, take damage and respawn |
-| 3. World and movement | Full layout, interiors, stairs, props, slide, mantle and lean | Traversal course passes; visual geometry and collision agree |
-| 4. Combat parity | Three weapons, six enemies, navigation, cover, squads and penetration | Repeatable combat scenarios complete without stuck AI or duplicate damage |
-| 5. Presentation | Procedural materials, lighting, sky, shadows, FX, audio and complete HUD | Matched reference views establish the visual quality |
-| 6. Optimization and advanced effects | Quality presets, loading improvements, selected advanced rendering | Frame-time and memory targets hold during sustained combat |
-
-The first milestone should resolve the expensive uncertainties before translating thousands of lines of world detail.
+| 1. Technical foundation | Implementation complete; platform qualification open | Representative native, full browser and physical mobile scenarios; remaining step 19 |
+| 2. Playable street block | Complete for the existing desktop slice; expanded to three weapons, two enterable buildings and six enemies | Preserve its regression scenarios as the map expands |
+| 3. World and movement | Partial: excerpt and core traversal complete | Full map, recipes, dressing, vaulting and camera feel; remaining steps 2–5 |
+| 4. Combat parity | Partial: weapons and basic squad combat complete | Health, detailed weapon/soldier behavior, regional damage, ragdolls, tactics and grenades; remaining steps 6–12 |
+| 5. Presentation | Partial: core renderer, audio and HUD implemented | Content/FX, animated atmosphere, audio, HUD/input and matched reference views; remaining steps 1, 3–4, 7, 9 and 13–17 |
+| 6. Optimization and advanced effects | Partial: major render effects and component quality tiers implemented | Whole-game presets, adaptive quality, sustained performance and platform gates; remaining steps 18–19 |
 
 The [project configuration](/Users/bjornritzl/projects/defold-claude-of-duty/game.project) now establishes 3D physics, metre-based units and the source game's movement gravity. The Automation Bridge setup supports traversal scripts, combat scenarios and screenshot capture.
 
 For validation, carry over the original named camera shots and fixed seeds. Compare cross-engine images for composition and appearance; reserve exact image regression checks for controlled runs within a backend. Measure loading time, memory, draw calls and p95/p99 frame times during movement and firing.
 
-The first concrete implementation should be a generated street block with one room, one rifle and one procedural soldier—backed by the skinning, collision and audio prototypes above. That establishes whether the proposed architecture delivers the game's feel and runtime-generated identity before expanding to the entire map.
+The original street-block prototype is implemented. Continue with the remaining work in the ordered backlog above; retain these earlier measurements as historical evidence rather than current full-map or all-platform budgets.

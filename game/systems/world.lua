@@ -19,12 +19,12 @@ function M.update(ctx, dt)
     if world.phase == "geometry" then
         generator.step(world, 24, deadline, os.clock)
     elseif world.phase == "meshes" then
-        local batch = world.batches[world.cursor]
-        if batch then
+        for _ = 1, 8 do
+            if os.clock() >= deadline then break end
+            local batch = world.batches[world.cursor]
+            if not batch then world.phase, world.cursor = "collision", 1; break end
             if adapter then adapter.api.add_batch(adapter, batch) end
             world.cursor = world.cursor + 1
-        else
-            world.phase, world.cursor = "collision", 1
         end
     elseif world.phase == "collision" then
         for _ = 1, 8 do

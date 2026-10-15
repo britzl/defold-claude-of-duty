@@ -17,7 +17,7 @@ local function generate(budget, options)
         local jobs = generator.step(world, budget)
         assert(jobs <= budget)
         frames = frames + 1
-        assert(frames < 2000, "Generation did not finish")
+        assert(frames < 7000, "Generation did not finish")
     end
     return world, frames
 end
@@ -151,7 +151,7 @@ test("adapter receives each resource once; readiness waits for installation and 
         final = function() disposed = true end,
     } }
     local ctx = runtime.new({ world = adapter })
-    for _ = 1, 300 do
+    for _ = 1, 700 do
         if ctx.world.ready then break end
         runtime.update(ctx, 1/60)
     end
@@ -179,7 +179,7 @@ test("room light bounds include the actual floor, walls and ceiling without reac
     assert(light.maximum.x < -layout.street.half_width)
 end)
 
-test("all three flights have matching treads and standing headroom under stacked stairs", function()
+test("all five flights have matching treads and standing headroom under stacked stairs", function()
     local world=generate(24)
     local interior=require "game.world.interior"
     local nodes,shapes={},{}
@@ -189,7 +189,7 @@ test("all three flights have matching treads and standing headroom under stacked
     end
     for _,s in ipairs(world.colliders) do shapes[s.id]=s end
     for _,b in ipairs(layout.buildings) do
-        if b.room then
+        if b.stairs then
             for level=1,b.floors-1 do
                 local prefix=interior.prefix(b,level)
                 for i=1,b.stairs.steps do
@@ -249,7 +249,7 @@ test("minimap selects each floor and preserves the stair opening within the GUI 
     local world = generate(24)
     local hud = require "game.ui.hud"
     local base,upper = layout.street.walk_height,layout.street.walk_height+layout.storey
-    assert(#world.minimap <= hud.map_limit)
+    assert(#hud.map_visible(world.minimap,0,0,0,176) <= hud.map_limit)
     local shapes = {}
     for _,s in ipairs(world.minimap) do shapes[s.id]=s end
     assert(not hud.map_rect(shapes["W2/upper/floor/east"],-14,base,0,176))
@@ -289,7 +289,7 @@ test("west flank forms a second route even when the central street connection is
             for _,edge in ipairs(nav.edges) do
                 local rear=edge.from:match("^west_loop/") and edge.to:match("^west_loop/")
                     and not edge.from:match("/street$") and not edge.to:match("/street$")
-                local centre=edge.from=="E2/street" and edge.to=="W2/street"
+                local centre=not rear and not (edge.from:match("^west_loop/") and edge.to:match("^west_loop/"))
                 if (flank or not rear) and (street or not centre) then
                     if found[edge.from] then found[edge.to]=true end
                     if found[edge.to] then found[edge.from]=true end
@@ -308,9 +308,9 @@ test("flank edges have continuous ground and full standing capsule clearance",fu
     local nodes={}
     for _,n in ipairs(world.navigation.nodes) do nodes[n.id]=n end
     for _,edge in ipairs(world.navigation.edges) do
-        if edge.from:match("^west_loop/") or edge.to:match("^west_loop/") then
+        if nodes[edge.from].layer==0 and nodes[edge.to].layer==0 and edge.kind~="stairs" then
             local a,b=nodes[edge.from],nodes[edge.to]
-            local steps=math.ceil(math.sqrt((b.x-a.x)^2+(b.z-a.z)^2)/.1)
+            local steps=math.max(1,math.ceil(math.sqrt((b.x-a.x)^2+(b.z-a.z)^2)/.1))
             for i=0,steps do
                 local t=i/steps
                 local x,z=a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t
@@ -321,7 +321,7 @@ test("flank edges have continuous ground and full standing capsule clearance",fu
                             if math.abs(x+dx-s.x)<=s.w/2+1e-7 and math.abs(z+dz-s.z)<=s.d/2+1e-7 then
                                 local top,bottom=s.y+s.h/2,s.y-s.h/2
                                 supported=supported or (top>=-1e-7 and top<=.146)
-                                assert(top<=.43 or bottom>=1.78,"Blocked flank: "..edge.from.." by "..s.id)
+                                assert(top<=.43 or bottom>=1.925,"Blocked flank: "..edge.from.." by "..s.id)
                             end
                         end
                         assert(supported,"Ground gap: "..edge.from.." at "..x..","..z)
@@ -354,15 +354,105 @@ test("cover positions have support and clearance; closed shopfronts face the str
         if not b.room then
             local mass=shapes[b.id.."/mass"]
             assert(mass and math.abs(mass.y-mass.h/2)<1e-7,"Facade floats above alley")
-            local shop=shapes[b.id.."/shop/1"]
-            assert((shop.x-b.x)*b.side>b.w/2)
-            assert(shop.z-shop.d/2>=b.z-b.d/2 and shop.z+shop.d/2<=b.z+b.d/2)
+            if not b.arcade then
+                local shop=shapes[b.id.."/shop/1"]
+                if b.facade_axis=="z" then
+                    assert((shop.z-b.z)*b.side>b.d/2)
+                    assert(shop.x-shop.w/2>=b.x-b.w/2 and shop.x+shop.w/2<=b.x+b.w/2)
+                else
+                    assert((shop.x-b.x)*b.side>b.w/2)
+                    assert(shop.z-shop.d/2>=b.z-b.d/2 and shop.z+shop.d/2<=b.z+b.d/2)
+                end
+            end
         end
     end
-    -- Conforming clipped edges remove depth ties; the bounded extra vertices
-    -- raise streams to 1.39 MiB while retaining the same material/chunk batches.
-    assert(world.stats.batches<100 and world.stats.mesh_bytes<3*1024*1024)
-    assert(#world.minimap<=require("game.ui.hud").map_limit)
+    -- Full-map bounds include terrain chunks, five flights and all background rows.
+    assert(world.stats.batches<400 and world.stats.mesh_bytes<12*1024*1024)
+    assert(#world.minimap<700)
+end)
+
+-- Source layout.js / world_layout.h footprints, in metres. Keep the oracle
+-- independent of the procedural recipes so missing or shifted rows fail.
+test("full reference extent and all twenty footprints are present",function()
+    local expected={
+        W1={-13.5,15,14,10,2},W2={-14,-1.5,15,13,2},W3={-13,-19,13,14,2},
+        W4={-14.5,-34.5,16,15,2},W5={-12.5,31,12,14,2},
+        E1={14,16,15,16,3},E2={13.5,-5,14,14,3},E3={14,-22,15,16,2},
+        E4={13.5,-39,14,14,3},E5={12.5,33,12,14,2},
+        BW1={-30,8,16,22,3},BW2={-31,-18,18,24,2},BE1={31,18,18,20,3},
+        BE2={32,-8,18,20,2},BE3={30,-34,16,18,3},
+        BS1={-19,-58,20,14,3},BS2={14,-60,24,16,2},BS3={-4,-53,9,8,4},
+        BN1={-16,50,20,14,2},BN2={14,52,22,16,3},
+    }
+    assert(layout.street.z_min==-58 and layout.street.z_max==46)
+    assert(#layout.buildings==20 and #layout.routes==5)
+    for _,b in ipairs(layout.buildings) do
+        local e=assert(expected[b.id],b.id)
+        for i,k in ipairs({"x","z","w","d","floors"}) do assert(b[k]==e[i],b.id.."/"..k) end
+        expected[b.id]=nil
+    end
+    assert(next(expected)==nil)
+end)
+
+test("all intended floors have shared room audio, lighting and navigation",function()
+    local world=generate(24)
+    local nodes={}
+    for _,n in ipairs(world.navigation.nodes) do nodes[n.id]=n end
+    assert(#world.navigation.stairs==5 and #world.lighting_volumes==8)
+    for _,id in ipairs({"W2/upper_room","E1/upper_room","E1/floor2/upper_room",
+        "E2/upper_room","E2/floor2/upper_room","E3/room","E1/alley_door"}) do assert(nodes[id],id) end
+    for _,n in ipairs(world.navigation.nodes) do
+        assert(not n.id:match("^E3/") or n.layer==0,"E3 must not invent upstairs access")
+        if n.id:match("/room$") or n.id:match("/upper_room$") then
+            local contained=false
+            for _,light in ipairs(world.lights) do
+                if light.kind=="room" and n.x>=light.minimum.x and n.x<=light.maximum.x
+                    and n.y>=light.minimum.y and n.y<=light.maximum.y
+                    and n.z>=light.minimum.z and n.z<=light.maximum.z then contained=true end
+            end
+            assert(contained,"Room acoustic bounds missing: "..n.id)
+        end
+    end
+end)
+
+test("full-map minimap never loses distant geometry and fits the visible node pool",function()
+    local world=generate(24)
+    local hud=require "game.ui.hud"
+    assert(#world.minimap>hud.map_limit,"Fixture must exercise more stored shapes than GUI nodes")
+    local maximum=0
+    for x=-84,84,4 do for z=-84,84,4 do
+        for _,y in ipairs({0,3.345,6.545}) do
+            maximum=math.max(maximum,#hud.map_visible(world.minimap,x,y,z,148))
+        end
+    end end
+    for _,n in ipairs(world.navigation.nodes) do hud.map_visible(world.minimap,n.x,n.y,n.z,148) end
+    assert(maximum>0 and maximum<=hud.map_limit)
+    local tower
+    for _,s in ipairs(world.minimap) do if s.id=="gate/tower" then tower=s end end
+    assert(tower and hud.map_rect(tower,0,0,-42.5,148))
+end)
+
+test("spawn and patrol anchors have floor support and standing clearance",function()
+    local world=generate(24)
+    local points={layout.spawn}
+    for _,p in ipairs(world.spawn_anchors) do points[#points+1]=p end
+    for _,p in ipairs(world.spawn_points) do
+        points[#points+1]=p.position
+        if p.patrol then points[#points+1]=p.patrol end
+    end
+    for _,p in ipairs(points) do
+        local supported=false
+        for _,s in ipairs(world.colliders) do
+            if math.abs(p.x-s.x)<=s.w/2+.32 and math.abs(p.z-s.z)<=s.d/2+.32 then
+                assert(s.y+s.h/2<=p.y+.43 or s.y-s.h/2>=p.y+1.78,
+                    "Blocked spawn/patrol by "..s.id)
+            end
+            if math.abs(p.x-s.x)<=s.w/2 and math.abs(p.z-s.z)<=s.d/2 then
+                supported=supported or math.abs(s.y+s.h/2-p.y)<1e-7
+            end
+        end
+        assert(supported,"Unsupported spawn/patrol")
+    end
 end)
 
 print(count .. " world tests passed")

@@ -144,6 +144,9 @@ function init(self)
     if sys.get_config_int("rendering_validation.enabled",0)==1 then
         self.rendering_validation=require("tests.rendering_browser").new()
     end
+    if sys.get_config_int("market_validation.enabled",0)==1 then
+        self.market_validation=require("tests.market_browser").new()
+    end
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -296,10 +299,30 @@ function init(self)
             schema = { type = "object", properties = { ready = { type = "boolean" }, phase = { type = "string" } } },
         })
         automation_bridge.command("world.snapshot", function() return world_snapshot(self.ctx.world) end)
-        automation_bridge.command("world.navigation", function() return self.ctx.world.navigation end)
-        automation_bridge.command("world.validate", function()
+        automation_bridge.command("world.navigation", function(data)
+            -- A full-map graph exceeds the bridge's 32 KiB JSON limit. Return
+            -- explicit pages with totals so inspection never silently truncates.
+            local offset,limit=data.offset or 0,data.limit or 32
+            assert(offset>=0 and offset==math.floor(offset),"Invalid navigation offset")
+            assert(limit>=1 and limit<=32 and limit==math.floor(limit),"Navigation page limit must be 1-32")
+            local result={offset=offset,limit=limit,counts={}}
+            for _,key in ipairs({"nodes","edges","surfaces","flanks","stairs"}) do
+                local items=self.ctx.world.navigation[key] or {}
+                local page={}
+                result.counts[key]=#items
+                for i=offset+1,math.min(#items,offset+limit) do page[#page+1]=items[i] end
+                result[key]=page
+            end
+            return result
+        end)
+        automation_bridge.command("world.validate", function(data)
             assert(self.ctx.world.ready, "World is still loading")
-            return world_adapter.validate(self.ctx.world.adapter, self.ctx.world)
+            local query
+            if data.capsules then
+                local e=assert(self.ctx.ai.actors["enemy_1"],"No soldier for capsule validation")
+                query=assert(soldier_adapter.query(self.ctx.services.soldiers,e),"Soldier physics is settling")
+            end
+            return world_adapter.validate(self.ctx.world.adapter, self.ctx.world, query)
         end)
         automation_bridge.command("world.raycast", function(data)
             assert(self.ctx.world.ready, "World is still loading")
@@ -359,8 +382,8 @@ function init(self)
         end
         for name, description in pairs({
             ["world.snapshot"] = "Read generated world counts, loading phase and CPU loading time.",
-            ["world.navigation"] = "Read generated layered nodes, stair/doorway edges and floor surfaces.",
-            ["world.validate"] = "Compare all installed collision dimensions and positions; ray-check navigation support and connections.",
+            ["world.navigation"] = "Read graph pages with totals: {offset=0,limit=32}; increment offset until every counts entry is reached.",
+            ["world.validate"] = "Compare installed collision and navigation support. Set {capsules=true} to sweep every edge in both directions using AI physics.",
             ["world.raycast"] = "Cast from/to {x,y,z} through generated collision; returns the hit surface identifier and position.",
             ["world.view"] = "Select street, courtyard, rear, alley, shop, room, stairs, upstairs, e2_shop, e2_stairs, e2_upstairs or e2_top inspection camera.",
         }) do
@@ -407,6 +430,7 @@ function update(self, dt)
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then return end
     runtime.update(self.ctx, dt)
+    if self.market_validation then require("tests.market_browser").update(self.market_validation,self,dt) end
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
     end
@@ -425,7 +449,12 @@ local function update_lights(self,camera,dt)
     self.light_camera={x=camera.x,y=camera.y,z=camera.z}
     if self.active_volumes~=self.ctx.world.lighting_volumes then
         self.active_volumes=self.ctx.world.lighting_volumes
-        msg.post("@render:","renderer_volumes",{volumes=self.active_volumes})
+        -- Eight nested volume tables exceed HTML5's message payload budget.
+        -- Ordered messages install one complete volume at a time before draw.
+        msg.post("@render:","renderer_volumes",{count=#self.active_volumes})
+        for i,volume in ipairs(self.active_volumes) do
+            msg.post("@render:","renderer_volumes",{index=i,volume=volume})
+        end
     end
     local lights_source=self.capture and self.capture.shot.laboratory and require("game.render.laboratory").lights or self.ctx.world.lights
     self.light_selection=require("game.render.local_lights").update(self.light_selection,lights_source,camera,dt,not self.active_lights)
@@ -539,8 +568,7 @@ function late_update(self, dt)
     msg.post("/hud#gui", HUD_STATE, state)
     if self.ctx.world.ready and not self.map_sent then
         -- Keep each message below Defold's message payload limit.
-        for i, shape in ipairs(self.ctx.world.minimap) do
-            if i > hud_model.map_limit then break end
+        for _, shape in ipairs(self.ctx.world.minimap) do
             msg.post("/hud#gui", "map_rect", shape)
         end
         self.map_sent = true

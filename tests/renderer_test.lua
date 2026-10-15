@@ -32,7 +32,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==36680544-320*180*8+photo.bytes(1280,720,true,settings.defaults())-photo.bytes(1280,720,false,settings.defaults()))
 end)
 
-test("camera light selection covers both buildings and every floor within four slots",function()
+test("camera light selection covers all enterable buildings and floors within four slots",function()
     local world=require("game.world.generator").new(require "game.world.layout")
     assert(#world.lights>settings.max_lights)
     for _,light in ipairs(world.lights) do
@@ -49,7 +49,7 @@ end)
 test("indirect volumes cover every storey but exclude exterior walls and roof terraces",function()
     local layout=require "game.world.layout"
     local world=require("game.world.generator").new(layout)
-    assert(#world.lighting_volumes==4 and #world.lighting_volumes<=daylight.max_volumes)
+    assert(#world.lighting_volumes==8 and #world.lighting_volumes<=daylight.max_volumes)
     local function contains(v,p,inset)
         for i=1,3 do if p[i]<v.minimum[i]+inset or p[i]>v.maximum[i]-inset then return false end end
         return true
@@ -247,16 +247,21 @@ test("capture isolates the laboratory, hides HUD/actors, and restores ordinary p
 end)
 test("volume updates clear stale slots and laboratory capture isolates world volumes",function()
     local volumes=require("game.world.generator").new(require "game.world.layout").lighting_volumes
-    on_message(self,"renderer_volumes",{volumes=volumes})
+    on_message(self,"renderer_volumes",{count=#volumes})
+    for i,volume in ipairs(volumes) do
+        on_message(self,"renderer_volumes",{index=i,volume=volume})
+        assert(self.lighting.volume_data[(i-1)*5+1].args[1]==volume.minimum[1])
+    end
     update(self)
-    assert(self.volume_count==4 and #self.lighting.volume_data==40)
-    assert(self.lighting.lighting_features.args[1]==1 and self.lighting.lighting_features.args[3]==4)
+    assert(self.volume_count==8 and #self.lighting.volume_data==40)
+    assert(self.lighting.lighting_features.args[1]==1 and self.lighting.lighting_features.args[3]==8)
     on_message(self,"capture_configure",{active=true,laboratory=true});update(self)
     assert(self.lighting.lighting_features.args[1]==0)
     on_message(self,"capture_configure",{active=false,laboratory=false});update(self)
     assert(self.lighting.lighting_features.args[1]==1)
-    on_message(self,"renderer_volumes",{volumes={volumes[1]}})
-    assert(self.volume_count==1 and self.lighting.volume_data[6].args[1]==0)
+    on_message(self,"renderer_volumes",{count=1})
+    on_message(self,"renderer_volumes",{index=1,volume=volumes[1]})
+    assert(self.volume_count==1 and (self.lighting.volume_data[6].args[1] or 0)==0)
     on_message(self,"renderer_configure",{interior_lighting=false,environment_filter=false});update(self)
     assert(self.lighting.lighting_features.args[1]==0 and self.lighting.lighting_features.args[2]==0)
 end)

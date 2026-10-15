@@ -22,7 +22,7 @@ function M.pane(id,x,y,z,w,h,axis)
 end
 function M.world(layout)
     local result={}
-    for _,b in ipairs(layout.buildings) do if b.room then
+    for _,b in ipairs(layout.buildings) do if b.counter then
         local c=b.counter
         local x=b.x-b.w/2+c.x*b.w
         local z=b.z-b.d/2+c.z*b.d

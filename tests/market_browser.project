@@ -1,0 +1,6 @@
+[market_validation]
+enabled = 1
+[display]
+width = 1280
+height = 720
+high_dpi = 0

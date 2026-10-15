@@ -18,7 +18,10 @@ local function metadata(layout)
         nav.nodes[#nav.nodes+1]=n
         return n
     end
-    local hubs={node("street_north",0,0,s.z_max-4),node("street_south",0,0,s.z_min+4)}
+    local hubs={}
+    for _,p in ipairs(layout.street_route or {
+        {id="north",x=0,z=s.z_max-4},{id="south",x=0,z=s.z_min+4},
+    }) do hubs[#hubs+1]=node("street_"..p.id,p.x,0,p.z) end
     for _,b in ipairs(layout.buildings) do
         if b.room then
             local front=b.x+b.side*b.w/2
@@ -34,11 +37,25 @@ local function metadata(layout)
                 x0=b.x-b.w/2+layout.wall,x1=b.x+b.w/2-layout.wall,
                 z0=b.z-b.d/2+layout.wall,z1=b.z+b.d/2-layout.wall}
             interior.navigation(layout,b,nav,prefix.."room")
+            if b.secondary_door then
+                local d,z=b.secondary_door,b.z-b.d/2
+                node(prefix.."alley_inside",d.x,base,z+2)
+                node(prefix.."alley_door",d.x,base,z)
+                node(prefix.."alley_outside",d.x,0,z-1)
+                nav.edges[#nav.edges+1]={from=prefix.."room",to=prefix.."alley_inside",kind="walk"}
+                nav.edges[#nav.edges+1]={from=prefix.."alley_inside",to=prefix.."alley_door",kind="doorway",width=d.width,height=d.height}
+                nav.edges[#nav.edges+1]={from=prefix.."alley_door",to=prefix.."alley_outside",kind="step",rise=base}
+                nav.edges[#nav.edges+1]={from=prefix.."alley_outside",to=d.route_node,kind="walk"}
+            end
         end
     end
     for _,ground in ipairs(layout.ground or {}) do
         nav.surfaces[#nav.surfaces+1]={id=ground.id,layer=0,y=ground.y,
             x0=ground.x0,x1=ground.x1,z0=ground.z0,z1=ground.z1}
+    end
+    if layout.terrain then
+        local t=layout.terrain
+        nav.surfaces[#nav.surfaces+1]={id="terrain",layer=0,y=0,x0=t.x0,x1=t.x1,z0=t.z0,z1=t.z1}
     end
     for _,route in ipairs(layout.routes or {}) do
         local previous
@@ -78,6 +95,7 @@ function M.new(layout, options)
     local world = {
         spawn = layout.spawn, spawn_points = { { id = "player", position = layout.spawn } },
         views = layout.views, layout = layout, seed = options.seed or layout.seed,
+        spawn_anchors = layout.spawn_anchors or {},
         batches = {}, colliders = {}, shapes = {}, navigation = metadata(layout),
         lights = { { kind = "sun", direction = { x = daylight.sun_direction[1], y = daylight.sun_direction[2], z = daylight.sun_direction[3] } } },
         lighting_volumes = {},

@@ -17,6 +17,7 @@ function init(self)
     W.group(TOP,480,640);W.group(BOTTOM,480,0)
     self.menu=menu.new()
     self.map={}
+    self.map_nodes={}
     self.damage={}
     -- Edge washes stretch with the window; gameplay HUD elements retain aspect.
     for _,r in ipairs({{480,635,960,10},{480,5,960,10},{5,320,10,640},{955,320,10,640}}) do
@@ -115,24 +116,28 @@ local function update_hud(self,state)
         W.position(node,480+delta*2,609,TOP)
     end
     gui.set_euler(self.map_player,vmath.vector3(0,0,math.deg(state.yaw)))
-    for _,entry in ipairs(self.map) do
-        local rect=model.map_rect(entry.shape,state.x,state.y,state.z,SIZE)
-        gui.set_enabled(entry.node,rect~=nil)
-        if rect then
-            W.position(entry.node,MX+rect.x,MY+rect.y,TL)
-            gui.set_size(entry.node,vmath.vector3(rect.w,rect.h,0))
-            gui.set_color(entry.node,rect.floor and vmath.vector4(.15,.21,.23,1) or vmath.vector4(.48,.57,.57,1))
-            if rect.floor then gui.move_below(entry.node,nil) end
+    local visible=model.map_visible(self.map,state.x,state.y,state.z,SIZE)
+    for i,rect in ipairs(visible) do
+        local node=self.map_nodes[i]
+        if not node then
+            node=W.box("map_"..i,MX,MY,1,1,W.muted,"map",TL)
+            self.map_nodes[i]=node
         end
+        gui.set_enabled(node,true)
+        W.position(node,MX+rect.x,MY+rect.y,TL)
+        gui.set_size(node,vmath.vector3(rect.w,rect.h,0))
+        gui.set_color(node,rect.floor and vmath.vector4(.15,.21,.23,1) or vmath.vector4(.48,.57,.57,1))
+        -- Keep pooled nodes in their anchored parent. Moving relative to nil
+        -- reparents them to the root and loses the top-left coordinate frame.
+        gui.set_layer(node,rect.floor and "map_floor" or "map")
     end
+    for i=#visible+1,#self.map_nodes do gui.set_enabled(self.map_nodes[i],false) end
 end
 
 function on_message(self,id,message,sender)
     if id==hash("hud_state") then update_hud(self,message)
-    elseif id==hash("map_rect") and #self.map<model.map_limit then
-        local node=W.box("map_"..(#self.map+1),MX,MY,1,1,W.muted,"map",TL)
-        gui.set_enabled(node,false)
-        self.map[#self.map+1]={node=node,shape=message}
+    elseif id==hash("map_rect") then
+        self.map[#self.map+1]=message
     elseif id==hash("menu_state") then menu.state(self.menu,message)
     elseif id==hash("menu_input") then menu.input(self.menu,message) end
 end

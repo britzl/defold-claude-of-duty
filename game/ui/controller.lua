@@ -41,7 +41,7 @@ function M.init(self, restart)
         automation_bridge.command("ui.snapshot", function()
             local state = M.snapshot(self)
             state.hud = hud.snapshot(self.ctx)
-            state.map_rectangles = math.min(#self.ctx.world.minimap, hud.map_limit)
+            state.map_rectangles = #self.ctx.world.minimap
             return state
         end)
         automation_bridge.command("ui.pause", function(data)

@@ -21,7 +21,7 @@ type = 3D
 gravity_y = -20.6
 scale = 1.0
 use_fixed_timestep = 1
-max_collision_object_count = 512
+max_collision_object_count = 1024
 
 [html5]
 scale_mode = stretch
@@ -34,7 +34,10 @@ clear_color_blue = 0.77
 clear_color_alpha = 1.0
 
 [mesh]
-max_count = 384
+max_count = 512
+
+[collection]
+max_instances = 2048
 
 [sound]
 max_component_count = 24

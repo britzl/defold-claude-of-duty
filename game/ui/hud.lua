@@ -1,5 +1,6 @@
 -- Engine-independent presentation state. Notifications never apply damage.
 local events = require "game.events"
+-- map_limit bounds visible GUI nodes, never the stored world geometry.
 local M = { feed_limit = 4, feed_seconds = 6, map_limit = 256, map_range = 22 }
 local function name(id)
     if id == "player" then return "YOU" end
@@ -71,6 +72,16 @@ function M.map_rect(shape, x, y, z, size)
     local scale = size / (range*2)
     return { x=(left+right)*.5*scale, y=(bottom+top)*.5*scale,
         w=(right-left)*scale, h=(top-bottom)*scale, floor=shape.top <= y+.3 }
+end
+
+function M.map_visible(shapes,x,y,z,size)
+    local visible={}
+    for _,shape in ipairs(shapes) do
+        local rect=M.map_rect(shape,x,y,z,size)
+        if rect then visible[#visible+1]=rect end
+    end
+    assert(#visible<=M.map_limit,"Visible minimap geometry exceeds GUI pool")
+    return visible
 end
 
 function M.final(ctx)

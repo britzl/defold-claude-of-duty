@@ -5,10 +5,11 @@ Runtime-generated port targeting Defold 1.14.0. See [PLAN.md](PLAN.md).
 The first plan step is implemented: a gameplay controller, six subsystem modules,
 120 Hz fixed simulation, metre-based 3D physics with gravity -20.6 m/s², buffered
 input, gameplay notifications, centralized damage, and separate camera/HUD
-presentation. The first world slice is also generated at runtime: a 50-metre
-market street, pavements, a two-storey W2 shop/apartment, and an enterable
-three-storey E2 shop with two upper apartments. Closed W1/W3 shopfronts frame
-a west courtyard and alley linked by a rear lane around W2.
+presentation. The full market layout is generated at runtime: a 104-metre
+street, all 20 reference building footprints, five flank routes, the ruin yard,
+far cross street and south gate passage. W2, E1 and E2 have connected upper
+floors; E3 has an enterable ground floor. Detailed architecture and dressing
+remain in parity step 4.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
@@ -63,6 +64,7 @@ views, timing, input, damage and HUD updates, then closes the engine it launched
 PYTHONPATH=automation-bridge-python python3 tests/smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/building_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/market_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/full_market_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
 PYTHONPATH=automation-bridge-python python3 tests/weapons_smoke.py
@@ -517,24 +519,62 @@ Each system must release its generated Defold resources in `final`.
 
 ## Generated world
 
-`game/world/layout.lua` is the authored description. It retains the reference's
-9-metre road, 6.5-metre building line, 0.145-metre pavement and W1/W2/W3/E2 footprints.
-This is an unrotated excerpt. The road spans z=-28..22. W1 and W3 retain the
-reference footprints and use closed shopfronts; their setbacks, balconies and W3
-ruin details remain future work.
-The west courtyard and alley on opposite sides of W2 adapt the reference
-passages to meet the building edges. A four-metre rear lane joins them at
-x=-25.5..-21.5, forming a second route between the street junctions at z=7.5 and
-z=-10. Yard walls close the outer edges. `layout.ground`, `routes`, `walls` and
-`covers` describe the extension; tiled ground and cover solids feed collision,
-surface audio and minimap output. Two low barriers and a rear crate provide cover
-without obstructing the walking route. Seven cover candidates have supported,
-capsule-clear positions; squad AI selects and exclusively claims protected
-positions with a firing lane.
+`game/world/layout.lua` is the shared description for geometry, collision,
+navigation, cover, room audio, lighting and inspection views. The unrotated map
+retains the reference's 9-metre road, 6.5-metre building line, 0.145-metre pavement,
+full z=-58..46 street and all 20 building footprints/storey counts. A 168 × 168 m
+tiled ground plane supports the alleys and yards; visible outer boundary walls
+replace the excerpt-only yard barriers.
 
-W2 has an open ground-floor shop and a furnished upper apartment; E2 has a shop
-and two furnished upper apartments. This is not the full map or the complete
-original building recipe set.
+Five bidirectional flank routes cover the west courtyard/rear lane, northern
+west alley, southern west route, eastern alley/ruin yard and eastern approach to
+the far cross street. The street spine passes through the gate and bends around
+BS3 into the narrow southern gap. E1 connects its street entrance to the eastern
+alley through a second doorway. Eight source spawn anchors are recorded, six
+active enemy spawns/patrols cover the expanded map, and ten usable cover positions
+come from the actual solids. Background rows have open ground-floor arcades to
+preserve the reference's omitted front facades and keep rear routes traversable.
+
+W2 has one upper apartment; E1 and the existing adapted E2 each have two.
+Their five flights use the same tread/opening dimensions for rendering, collision
+and navigation. E3 has no reference staircase, so its upper mass has no fabricated
+navigation connection. These are functional structural recipes: exact balconies,
+setbacks, ruined/collapsed floors, facade apertures, furnishings and the gate's
+pointed arch remain in step 4. E2's additional interior and the outer terrain
+walls are retained Defold adaptations, not claims of exact source geometry.
+
+The full map produces 1,983 boxes, 362 batches, 543 colliders and 10,698,912 bytes
+of world vertex streams. Engine limits reserve 512 meshes, 1,024 collision objects
+and 2,048 collection instances for the map plus actors/effects. Loading uploads
+at most eight batches per update under the existing 2 ms work deadline. A single
+upload can exceed that deadline; the measured peak is reported by `world.snapshot`.
+The minimap retains all collider rectangles and reuses at most 256 GUI nodes for
+visible geometry (145 at the measured grid peak). It no longer truncates the map
+at the first 256 shapes. `world.navigation` returns explicit 32-item pages with
+collection totals; `tests/world_navigation.py` reads the complete graph.
+
+`tests/full_market_smoke.py` checks all 189 nodes and 194 edges with real Bullet
+capsules in both directions, routes all six actors to 13 destinations, walks all
+five flank routes and five stair flights both ways, exercises the new entrances,
+gate and south gap, runs live E1/eastern patrols, and saves eight inspection views
+under `build/full-market-validation`. `--quick` omits live traversal and patrols.
+For browser validation, build debug `wasm-web` with
+`--settings tests/market_browser.project` and a bundle directory outside the
+reserved `build` folder, then run:
+
+```sh
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_market_browser.mjs \
+  --bundle="/path/to/bundle/Claude of Duty"
+PNGJS_MODULE=/path/to/pngjs node tests/market_browser_pixels.mjs
+```
+
+The browser fixture repeats physics and the 78-route matrix and captures the same
+views at 1280 × 720. The pixel check verifies that floors and walls actually appear
+in the minimap. The 2026-10-15 native traversal/patrol run, fresh native quick run,
+browser fixture and all eight pixel checks passed; all 181 Lua checks also passed.
+The final quick-run images are under `build/full-market-quick-validation`.
+These are layout smoke checks; the sustained 60 FPS combat
+qualification in parity steps 18–19 remains open.
 
 Enter W2 through the shopfront, cross to the back-left of the shop, and climb
 the straight staircase along the west wall. The upper landing leads through
@@ -672,7 +712,7 @@ for every supported shot, recording `repeatability.json` and separate per-launch
 manifests. The overlapping wall/slab and trim surfaces have been repaired and
 buried faces clipped. Shared trim/slab edges also use matching endpoints to
 prevent one-pixel depth ties at grazing angles. No pixels are masked or tolerated.
-Catalogue version 10 expands the repeatability gate to 46 supported shots and retains the 0.1–500 m world clip
+Catalogue version 12 contains 56 shots and retains the 0.1–500 m world clip
 range; the 0.1 m near plane improves depth precision while remaining inside the
 player's wall clearance. The separate weapon clip range is unchanged.
 
@@ -704,7 +744,7 @@ Capture the local Three.js source with its own deterministic 90-frame shutter:
 
 ```sh
 # In the reference checkout first: npm ci --ignore-scripts
-node tools/capture_reference.mjs --source=/path/to/Claude-of-Duty-main --baseline=/path/to/defold/manifest.json
+node tools/capture_reference.mjs --source=/path/to/Claude-of-Duty-main --baseline=/path/to/defold/manifest.json --repeats=2
 python3 tools/compare_render_baselines.py /path/to/defold/manifest.json /path/to/threejs/manifest.json --output captures/rendering/comparison
 ```
 
@@ -716,8 +756,14 @@ hash. Each shot boots afresh to avoid inherited temporal history. Reference shot
 use 16:30 daylight, 19:12 sunset or 01:30 night. The generators, partial map and
 lighting differ, so these are visual comparisons, not cross-engine pixel tests.
 The comparison tool also accepts two Defold manifests for later regression review.
-Kaigen reference captures and a corresponding reference laboratory remain pending:
-the local Kaigen download does not include its closed-beta engine.
+The adapter exports the production laboratory geometry, selects the requested
+weapon and solar time, and records actual exposure/renderer state. Glass, cutout,
+local-light and transient combat fixtures remain explicitly pending. The hosted
+Kaigen demo runs as an observational reference; controlled captures and a matching
+laboratory remain unavailable because the local archive lacks its engine and the
+hosted build has no verified capture adapter. See the versioned
+[parity contract, source lock and reproduction guide](parity/README.md) for the
+24 acceptance scenarios, limitations, and Mac/desktop-browser 60 FPS targets.
 
 Automation commands: `capture.catalog`, `capture.shot {name}`, `capture.snapshot`,
 `capture.frame {frame=0..120}`, and `capture.end`. Settings reset to the baseline

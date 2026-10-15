@@ -7,7 +7,7 @@ local function box(id, material, x, y, z, w, h, d, surface, cover)
         w = w, h = h, d = d, surface = surface, cover = cover })
 end
 
-local function window(b, floor, z, base, storey)
+local function window(b, floor, z, base, storey, box)
     local front = b.x + b.side * b.w / 2
     local y = base + floor * storey + 1.8
     local prefix = b.id .. "/window/" .. floor .. "/" .. z
@@ -31,7 +31,8 @@ local function awning(id, x, y, z, width, depth, side)
     end
 end
 
-local function building(layout, b)
+local function building(layout, b, emit)
+    local box = emit or box
     local base, wall, slab, storey = layout.street.walk_height, layout.wall, layout.slab, layout.storey
     local x0, x1, z0, z1 = b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2
     local height = b.floors * storey
@@ -46,7 +47,15 @@ local function building(layout, b)
         box(b.id .. "/floor", "concrete_floor", b.x, base - slab / 2, b.z, b.w, slab, b.d, "concrete")
         box(b.id .. (b.side == 1 and "/west" or "/east"), "plaster_inside", b.x-b.side*(b.w/2-wall/2), base + wall_height / 2, b.z, wall, wall_height, b.d, "plaster")
         box(b.id .. "/north", b.material, b.x, base + wall_height / 2, z1 - wall / 2, b.w-2*wall, wall_height, wall, "plaster")
-        box(b.id .. "/south", b.material, b.x, base + wall_height / 2, z0 + wall / 2, b.w-2*wall, wall_height, wall, "plaster")
+        if b.secondary_door then
+            local door=b.secondary_door
+            local lo,hi=door.x-door.width/2,door.x+door.width/2
+            box(b.id.."/south/left",b.material,(x0+wall+lo)/2,base+wall_height/2,z0+wall/2,lo-x0-wall,wall_height,wall,"plaster")
+            box(b.id.."/south/right",b.material,(hi+x1-wall)/2,base+wall_height/2,z0+wall/2,x1-wall-hi,wall_height,wall,"plaster")
+            box(b.id.."/south/lintel",b.material,door.x,base+(wall_height+door.height)/2,z0+wall/2,door.width,wall_height-door.height,wall,"plaster")
+        else
+            box(b.id .. "/south", b.material, b.x, base + wall_height / 2, z0 + wall / 2, b.w-2*wall, wall_height, wall, "plaster")
+        end
         local door = b.door
         local lo, hi = door.z - door.width / 2, door.z + door.width / 2
         box(b.id .. "/front_left", b.material, front, base + wall_height / 2, (z0 + lo) / 2, wall, wall_height, lo - z0, "plaster")
@@ -55,11 +64,15 @@ local function building(layout, b)
             door.z, wall, wall_height - door.height, door.width, "plaster")
         interior.geometry(layout, b, box)
         local counter, shelves = b.counter, b.shelves
-        local counter_x, counter_z = x0 + counter.x * b.w, z0 + counter.z * b.d
-        box(b.id .. "/counter", "wood", counter_x, base + 0.45, counter_z, counter.w, 0.9, counter.d, "wood")
-        box(b.id .. "/counter_top", "tile", counter_x, base + 0.93, counter_z, counter.w + 0.1, 0.06, counter.d + 0.1)
-        for i = 1, 3 do
-            box(b.id .. "/shelf/" .. i, "wood", x0 + shelves.x * b.w, base + i * 0.6, z0 + shelves.z * b.d, shelves.w, 0.09, shelves.d)
+        if counter then
+            local counter_x, counter_z = x0 + counter.x * b.w, z0 + counter.z * b.d
+            box(b.id .. "/counter", "wood", counter_x, base + 0.45, counter_z, counter.w, 0.9, counter.d, "wood")
+            box(b.id .. "/counter_top", "tile", counter_x, base + 0.93, counter_z, counter.w + 0.1, 0.06, counter.d + 0.1)
+        end
+        if shelves then
+            for i = 1, 3 do
+                box(b.id .. "/shelf/" .. i, "wood", x0 + shelves.x * b.w, base + i * 0.6, z0 + shelves.z * b.d, shelves.w, 0.09, shelves.d)
+            end
         end
         local a=interior.awning(layout,b)
         awning(b.id .. "/awning",a.x,a.y,a.z,a.w,a.d,a.side)
@@ -69,10 +82,17 @@ local function building(layout, b)
         end
     else
         -- Closed footprints meet road-level alleys as well as raised pavements.
-        box(b.id .. "/mass", b.material, b.x, (base + height) / 2, b.z, b.w, base + height, b.d, "plaster")
+        if b.arcade then
+            box(b.id.."/mass",b.material,b.x-b.side*b.arcade/2,(base+storey-slab)/2,b.z,
+                b.w-b.arcade,base+storey-slab,b.d,"plaster")
+            box(b.id.."/upper/mass",b.material,b.x,base+(storey-slab+height)/2,b.z,
+                b.w,height-storey+slab,b.d,"plaster")
+        else
+            box(b.id .. "/mass", b.material, b.x, (base + height) / 2, b.z, b.w, base + height, b.d, "plaster")
+        end
         -- Closed shops face the street on either side and fit the footprint.
         local front, bays = b.x+b.side*b.w/2, math.max(1,math.floor(b.d/4))
-        for i = 1, bays do
+        for i = 1, b.arcade and 0 or bays do
             local z = z0 + (i-.5)*b.d/bays
             box(b.id .. "/shop/" .. i, "metal_painted", front+b.side*.025, base + 1.25, z, 0.06, 2.5, 2.9)
             for j = 1, 10 do
@@ -90,7 +110,7 @@ local function building(layout, b)
         else
             box(b.id .. "/belt/" .. floor, "trim", b.x, base + floor * storey, b.z, b.w + 0.2, 0.18, b.d + 0.2)
         end
-        for i = 1, 4 do window(b, floor, z0 + (i - 0.5) * b.d / 4, base, storey) end
+        for i = 1, 4 do window(b, floor, z0 + (i - 0.5) * b.d / 4, base, storey, box) end
     end
     box(b.id .. "/coping", "trim", b.x, base + height + 0.07, b.z, b.w + 0.25, 0.14, b.d + 0.25)
     for _, sign in ipairs({ -1, 1 }) do
@@ -119,7 +139,39 @@ function M.generate(layout, detail)
             end
         end
     end
-    for _, b in ipairs(layout.buildings) do building(layout, b) end
+    local terrain=layout.terrain
+    if terrain then
+        for x=terrain.x0,terrain.x1-.001,layout.chunk_size do
+            for z=terrain.z0,terrain.z1-.001,layout.chunk_size do
+                local w,d=math.min(layout.chunk_size,terrain.x1-x),math.min(layout.chunk_size,terrain.z1-z)
+                box("terrain/"..x.."/"..z,"dirt",x+w/2,-.15,z+d/2,w,.3,d,"dirt")
+            end
+        end
+        -- Visible boundary walls prevent falling off the finite terrain.
+        for _,side in ipairs({-1,1}) do
+            box("boundary/terrain/x/"..side,"brick",side<0 and terrain.x0 or terrain.x1,1.5,(terrain.z0+terrain.z1)/2,.4,3,terrain.z1-terrain.z0,"plaster")
+            box("boundary/terrain/z/"..side,"brick",(terrain.x0+terrain.x1)/2,1.5,side<0 and terrain.z0 or terrain.z1,terrain.x1-terrain.x0,3,.4,"plaster")
+        end
+    end
+    for _, b in ipairs(layout.buildings) do
+        if b.facade_axis=="z" then
+            local rotated={}
+            for k,v in pairs(b) do rotated[k]=v end
+            rotated.x,rotated.z,rotated.w,rotated.d=b.z,b.x,b.d,b.w
+            building(layout,rotated,function(id,material,x,y,z,w,h,d,surface)
+                box(id,material,z,y,x,d,h,w,surface)
+            end)
+        else building(layout,b) end
+    end
+    local gate=layout.gate
+    if gate then
+        for _,b in ipairs(gate.blocks) do
+            box("gate/"..b.id,"plaster_sand",(b.x0+b.x1)/2,b.height/2,gate.z+b.proud/2,
+                b.x1-b.x0,b.height,gate.depth+b.proud,"plaster")
+        end
+        box("gate/lintel","plaster_sand",0,(gate.height+gate.clearance)/2,gate.z,
+            gate.opening,gate.height-gate.clearance,gate.depth,"plaster")
+    end
     for _, wall in ipairs(layout.walls or {}) do
         box("boundary/"..wall.id,"brick",wall.x,wall.h/2,wall.z,wall.w,wall.h,wall.d,"plaster")
     end

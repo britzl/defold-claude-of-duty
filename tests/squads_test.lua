@@ -93,6 +93,8 @@ end)
 test("one squad member takes every west-loop waypoint while a living ally engages",function()
     local ctx=context()
     local lead,flanker=ctx.ai.actors.enemy_1,ctx.ai.actors.enemy_3
+    flanker.position={x=2,y=0,z=-16}
+    ctx.ai.actors.enemy_2.position={x=-2,y=0,z=-15}
     lead.state="fire";lead.visible=true
     tactics.alert(ctx,lead,{x=0,y=0,z=8})
     assert(tactics.flank(ctx,ctx.ai.actors.enemy_2)==nil)
@@ -115,6 +117,8 @@ end)
 test("death releases flank ownership and a surviving member can take over",function()
     local ctx=context()
     local lead,flanker=ctx.ai.actors.enemy_1,ctx.ai.actors.enemy_3
+    flanker.position={x=2,y=0,z=-16}
+    ctx.ai.actors.enemy_2.position={x=-2,y=0,z=-15}
     lead.state="fire";lead.visible=true;tactics.alert(ctx,lead,{x=0,y=0,z=8})
     assert(tactics.flank(ctx,flanker))
     combat.request(ctx.combat,{target=flanker.id,amount=999});combat.fixed_update(ctx)
@@ -128,6 +132,8 @@ end)
 test("an unreachable flank approach releases its claim and waits before retrying",function()
     local ctx=context()
     local lead,flanker=ctx.ai.actors.enemy_1,ctx.ai.actors.enemy_3
+    flanker.position={x=2,y=0,z=-16}
+    ctx.ai.actors.enemy_2.position={x=-2,y=0,z=-15}
     lead.state="fire";lead.visible=true;tactics.alert(ctx,lead,{x=0,y=0,z=8})
     assert(tactics.flank(ctx,flanker))
     function flanker.query:walkable() return false end

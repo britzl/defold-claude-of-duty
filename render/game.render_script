@@ -766,10 +766,14 @@ function on_message(self,id,message)
     elseif id==hash("renderer_photographic_state") then
         self.photo_state=message
     elseif id==hash("renderer_volumes") then
-        assert(#message.volumes<=daylight.max_volumes,"Indirect lighting volume budget exceeded")
-        self.volume_count=#message.volumes
-        for i=1,daylight.max_volumes do
-            local volume=message.volumes[i] or {}
+        if message.count then
+            assert(message.count>=0 and message.count<=daylight.max_volumes and message.count==math.floor(message.count),
+                "Indirect lighting volume budget exceeded")
+            self.volume_count=message.count
+            for i=1,daylight.max_volumes*5 do self.lighting.volume_data[i]=vmath.vector4() end
+        else
+            local i,volume=message.index,message.volume
+            assert(i and i>=1 and i<=self.volume_count and i==math.floor(i) and volume,"Invalid lighting volume slot")
             for field_index,field in ipairs({"minimum","maximum","params","doorway","aperture"}) do
                 local v=volume[field] or {0,0,0,0}
                 self.lighting.volume_data[(i-1)*5+field_index]=vmath.vector4(v[1],v[2],v[3],v[4] or 0)

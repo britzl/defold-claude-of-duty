@@ -7,6 +7,7 @@ import shutil
 import time
 from pathlib import Path
 from automation_bridge import editor, engine
+from world_navigation import read_navigation
 
 
 def main(ai_only=False, e2_only=False, w2_only=False):
@@ -72,7 +73,7 @@ def main(ai_only=False, e2_only=False, w2_only=False):
         errors = [line for line in project.console.read().lines if "ERROR:" in line]
         assert not errors, "\n".join(errors)
         cmd("ai.configure", {"enabled": False})
-        nav = cmd("world.navigation")
+        nav = read_navigation(cmd)
         nodes = {n["id"]: n for n in nav["nodes"]}
         valid = cmd("world.validate")
         assert valid["max_error"] < 1e-5 and all(n["supported"] for n in valid["nodes"]), valid

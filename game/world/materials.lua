@@ -4,6 +4,7 @@ return {
     asphalt = { color = { 1, 1, 1 }, kind = 1 },
     concrete = { color = { .663, .643, .604 }, kind = 5 },
     plaster_sand = { color = { .725, .647, .510 }, kind = 0 },
+    plaster_pink = { color = { .729, .584, .533 }, kind = 0 },
     plaster_blue = { color = { .561, .604, .627 }, kind = 0 },
     plaster_cream = { color = { .812, .753, .643 }, kind = 0 },
     dirt = { color = { 1, 1, 1 }, kind = 9 },

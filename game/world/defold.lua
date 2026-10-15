@@ -67,7 +67,7 @@ function M.raycast(adapter, from, to)
         x = hit.position.x, y = hit.position.y, z = hit.position.z, fraction = hit.fraction }
 end
 
-function M.validate(adapter, world)
+function M.validate(adapter, world, query)
     local maximum_error = 0
     for _, item in ipairs(adapter.collisions) do
         local dims = physics.get_shape(item.url, "box").dimensions
@@ -86,7 +86,12 @@ function M.validate(adapter, world)
     for _, edge in ipairs(world.navigation.edges) do
         local a, b = by_name[edge.from], by_name[edge.to]
         local hit = M.raycast(adapter, { x = a.x, y = a.y + 0.9, z = a.z }, { x = b.x, y = b.y + 0.9, z = b.z })
-        edges[#edges + 1] = { from = edge.from, to = edge.to, clear = not hit.hit }
+        local result={ from = edge.from, to = edge.to, clear = not hit.hit }
+        if query then
+            result.forward=query:walkable(a,b)
+            result.reverse=query:walkable(b,a)
+        end
+        edges[#edges + 1] = result
     end
     return { max_error = maximum_error, colliders = #adapter.collisions, nodes = nav, edges = edges }
 end

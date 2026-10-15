@@ -1,0 +1,1157 @@
+{
+  "schema_version": 1,
+  "contract_sha256": "d654a5737f97fcfc3fa0b72823c1c35658657a30177201999ddde6abae379cc0",
+  "fingerprint_method": "Sorted relative UTF-8 path + NUL + decimal byte length + NUL + file bytes; SHA-256.",
+  "sources": {
+    "defold": {
+      "sha256": "e9289bf7cdebba2cf07113e918225ce19acc6d65701ceb56d620d64745ff7fc6",
+      "files": 236,
+      "scopes": [
+        "game",
+        "main",
+        "render",
+        "world",
+        "weapons",
+        "soldiers",
+        "audio",
+        "input",
+        "game.project"
+      ],
+      "git_revision": "8146e120850b0b25c58e83b238cf1ea0675a9819",
+      "revision_status": "Git commit plus working source hash"
+    },
+    "threejs": {
+      "sha256": "d188d2c84f31f5d23810be0c4eb572c06158d0cb648989d7adda3cb2af734e2b",
+      "files": 163,
+      "scopes": [
+        "src",
+        "package.json",
+        "package-lock.json",
+        "index.html",
+        "vite.config.js"
+      ],
+      "git_revision": null,
+      "revision_status": "Source archive; exact commit unavailable"
+    },
+    "kaigen": {
+      "sha256": "eb5d03db76140a5a7d7862001388293b98be47fc2f4a715c4566b6a7b982ae23",
+      "files": 334,
+      "scopes": [
+        "src",
+        "shaders",
+        "assets",
+        "gameplay_blocks",
+        "hzproject.hzt",
+        "web"
+      ],
+      "git_revision": null,
+      "revision_status": "Source archive; exact commit unavailable"
+    }
+  },
+  "catalog": {
+    "comparison": "Adapted framing in the unrotated partial map; not cross-engine pixel equality.",
+    "height": 720,
+    "level_to_world": {
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "yaw_radians": 0
+    },
+    "lighting": {
+      "exposure": 1,
+      "matched_time_of_day": false,
+      "mode": "fixed_presets",
+      "north_rotation_degrees": 61,
+      "presets": [
+        "daylight",
+        "sunset",
+        "night"
+      ],
+      "reference_daylight_hour": 16.5,
+      "rig": {
+        "atmosphere_data": [
+          [
+            -0.3820739650237272,
+            0.5295444263012461,
+            -0.7573652921967918,
+            0
+          ],
+          [
+            5.12,
+            5.12,
+            5.12
+          ],
+          [
+            1,
+            0,
+            1,
+            0
+          ],
+          [
+            -0.3820739650237272,
+            0.5295444263012461,
+            -0.7573652921967918,
+            0
+          ],
+          [
+            0.2491142421301497,
+            0.7456655539128805,
+            0.6180007897047691,
+            0
+          ]
+        ],
+        "environment_height": 594,
+        "environment_width": 396,
+        "fog_data": [
+          0.0044,
+          0.16,
+          180,
+          0.006
+        ],
+        "fog_tint": [
+          0.88,
+          0.96,
+          1.08,
+          0
+        ],
+        "ground_radiance": [
+          0.18416354644283772,
+          0.15881493954359283,
+          0.1254366961645385
+        ],
+        "hour": 16.5,
+        "indirect": [
+          1,
+          1,
+          0.18,
+          0.025
+        ],
+        "moon_direction": [
+          0.2491142421301497,
+          0.7456655539128805,
+          0.6180007897047691,
+          0
+        ],
+        "name": "daylight",
+        "sky_height": 384,
+        "sky_horizon": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "sky_width": 768,
+        "sky_zenith": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "solar_direction": [
+          -0.3820739650237272,
+          0.5295444263012461,
+          -0.7573652921967918,
+          0
+        ],
+        "sun_direction": [
+          -0.3820739650237272,
+          0.5295444263012461,
+          -0.7573652921967918,
+          0
+        ],
+        "sun_radiance": [
+          4.552394597977254,
+          3.9257946907573458,
+          3.1007077624061874
+        ],
+        "sun_shape": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "sun_direction": [
+        -0.3820739650237272,
+        0.5295444263012461,
+        -0.7573652921967918,
+        0
+      ]
+    },
+    "settle_frames": 40,
+    "shots": [
+      {
+        "fov": 75,
+        "id": "street",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Overall colour, lighting, material scale and shadow depth.",
+        "reference": "hero",
+        "target": [
+          0,
+          1.66,
+          -8
+        ]
+      },
+      {
+        "fov": 70,
+        "id": "interior",
+        "position": [
+          -14.5,
+          1.805,
+          -3.2
+        ],
+        "purpose": "Interior fill, contact depth and bright doorway.",
+        "reference": "interior",
+        "target": [
+          -6.5,
+          1.805,
+          0
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "detail",
+        "position": [
+          -5.1,
+          1.45,
+          2.4
+        ],
+        "purpose": "Plaster/trim relief, tiling, weathering and filtering.",
+        "reference": "detail",
+        "target": [
+          -6.5,
+          1.4,
+          1.9
+        ]
+      },
+      {
+        "fov": 70,
+        "id": "courtyard",
+        "position": [
+          -7.8,
+          1.66,
+          7.4
+        ],
+        "purpose": "Ground, shade and contact under the west courtyard walls.",
+        "reference": false,
+        "target": [
+          -22,
+          1.5,
+          7.4
+        ]
+      },
+      {
+        "fov": 80,
+        "id": "weapon",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "World/viewmodel light balance and weapon materials.",
+        "reference": "weapon",
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip"
+      },
+      {
+        "fov": 58,
+        "id": "ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Sight readability, edge stability and weapon exposure.",
+        "reference": "ads",
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads"
+      },
+      {
+        "fov": 65,
+        "id": "sunset",
+        "lighting": "sunset",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Spectral sunset colour, low sun and distance contrast.",
+        "reference": "sunset",
+        "requested_hour": 19.2,
+        "target": [
+          0,
+          1.66,
+          -8
+        ]
+      },
+      {
+        "fov": 75,
+        "id": "night",
+        "lighting": "night",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Moon phase, cool night fill and warm local light.",
+        "reference": "night",
+        "requested_hour": 1.5,
+        "target": [
+          0,
+          1.66,
+          -8
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "laboratory",
+        "laboratory": true,
+        "position": [
+          6.8,
+          4.2,
+          9.5
+        ],
+        "purpose": "Fifteen surface recipes, dielectric/metal roughness rows and furniture contact.",
+        "reference": false,
+        "target": [
+          0,
+          1.3,
+          -1
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_plaster",
+        "laboratory": true,
+        "position": [
+          -6,
+          2,
+          -2.4
+        ],
+        "purpose": "Plaster trowel relief, pinholes and coating variation at close range.",
+        "reference": false,
+        "target": [
+          -6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_concrete",
+        "laboratory": true,
+        "position": [
+          -3.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Concrete aggregate, pores, formwork and tie holes.",
+        "reference": false,
+        "target": [
+          -3.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_asphalt",
+        "laboratory": true,
+        "position": [
+          -1.2,
+          2,
+          -2.4
+        ],
+        "purpose": "Asphalt binder, aggregate, patches and roughness.",
+        "reference": false,
+        "target": [
+          -1.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_wood",
+        "laboratory": true,
+        "position": [
+          1.2,
+          2,
+          -2.4
+        ],
+        "purpose": "Wood planks, grain, knots, joints and nails.",
+        "reference": false,
+        "target": [
+          1.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 70,
+        "id": "material_grazing",
+        "position": [
+          0,
+          0.3,
+          4
+        ],
+        "purpose": "Road minification and grazing-angle filtering.",
+        "reference": false,
+        "target": [
+          0,
+          0.1,
+          -8
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_metal_brushed",
+        "laboratory": true,
+        "position": [
+          3.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference recipe close-up: sheen, grain and filtering.",
+        "reference": false,
+        "target": [
+          3.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_fabric",
+        "laboratory": true,
+        "position": [
+          6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference recipe close-up: sheen, grain and filtering.",
+        "reference": false,
+        "target": [
+          6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 58,
+        "id": "shadow_cutout",
+        "laboratory": true,
+        "position": [
+          5,
+          3.8,
+          7
+        ],
+        "purpose": "Matching perforated panel and shadow silhouette; near-cascade contact/softness.",
+        "reference": false,
+        "target": [
+          2,
+          1.1,
+          3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "shadow_distance",
+        "position": [
+          0,
+          3,
+          27
+        ],
+        "purpose": "All four cascades, near/distant coverage and blended boundaries in motion.",
+        "reference": false,
+        "target": [
+          0,
+          1.5,
+          -30
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "shadow_remote",
+        "laboratory": true,
+        "position": [
+          164,
+          4,
+          7
+        ],
+        "purpose": "Camera-following shadows at a fixture 160 m outside the old fixed map.",
+        "reference": false,
+        "target": [
+          160,
+          0.5,
+          0
+        ]
+      },
+      {
+        "fov": 60,
+        "id": "contact_furniture",
+        "laboratory": true,
+        "position": [
+          7.5,
+          1.7,
+          5.3
+        ],
+        "purpose": "Table legs, near-ground contacts and silhouette rejection.",
+        "reference": false,
+        "target": [
+          4.8,
+          0.4,
+          2.1
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "contact_corner",
+        "laboratory": true,
+        "position": [
+          -4.1,
+          1.8,
+          0.2
+        ],
+        "purpose": "Stacked boxes and floor/wall contact without black halos.",
+        "reference": false,
+        "target": [
+          -6.7,
+          0.5,
+          -3.6
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "reflections",
+        "laboratory": true,
+        "position": [
+          42,
+          1.35,
+          5.5
+        ],
+        "purpose": "Smooth metal reflects the visible box, with edge fade and roughness fallback.",
+        "reference": false,
+        "target": [
+          42,
+          0.4,
+          -2
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "glass",
+        "laboratory": true,
+        "position": [
+          43.5,
+          1.8,
+          5.5
+        ],
+        "purpose": "Two overlapping thin panes, opaque occlusion and sorted linear transparency.",
+        "reference": false,
+        "target": [
+          42,
+          1.2,
+          -2
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "local_lights",
+        "laboratory": true,
+        "position": [
+          56,
+          3,
+          4
+        ],
+        "purpose": "Two bounded point-light shadow cubemaps and occluder contact.",
+        "reference": false,
+        "target": [
+          54,
+          0.3,
+          -1.5
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_concrete_floor",
+        "laboratory": true,
+        "position": [
+          10.8,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference concrete_floor recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          10.8,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_brick",
+        "laboratory": true,
+        "position": [
+          13.2,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference brick recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          13.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_tile",
+        "laboratory": true,
+        "position": [
+          15.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference tile recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          15.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_dirt",
+        "laboratory": true,
+        "position": [
+          18,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference dirt recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          18,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_gravel",
+        "laboratory": true,
+        "position": [
+          20.4,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference gravel recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          20.4,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_metal_painted",
+        "laboratory": true,
+        "position": [
+          22.799999999999997,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference metal_painted recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          22.799999999999997,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_metal_rust",
+        "laboratory": true,
+        "position": [
+          25.200000000000003,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference metal_rust recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          25.200000000000003,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_rubber",
+        "laboratory": true,
+        "position": [
+          27.6,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference rubber recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          27.6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 45,
+        "id": "material_glass",
+        "laboratory": true,
+        "position": [
+          30,
+          2,
+          -2.4
+        ],
+        "purpose": "Reference glass recipe: physical scale, relief, roughness and filtering.",
+        "reference": false,
+        "target": [
+          30,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 80,
+        "id": "materials_extended",
+        "laboratory": true,
+        "position": [
+          20,
+          4.6,
+          7
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          20,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "materials_far",
+        "laboratory": true,
+        "position": [
+          20,
+          5,
+          22
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          20,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "laboratory_far",
+        "laboratory": true,
+        "position": [
+          0,
+          5,
+          20
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          0,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 75,
+        "id": "weathering_facade",
+        "laboratory": true,
+        "position": [
+          -20,
+          2.1,
+          2
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -20,
+          2.1,
+          -5.3
+        ]
+      },
+      {
+        "fov": 50,
+        "id": "weathering_close",
+        "laboratory": true,
+        "position": [
+          -24.8,
+          2.8,
+          -3.9
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -25.9,
+          3.7,
+          -5.3
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "weathering_far",
+        "laboratory": true,
+        "position": [
+          -20,
+          3,
+          15
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -20,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 50,
+        "id": "micro_detail",
+        "laboratory": true,
+        "position": [
+          -5.8,
+          2,
+          -4.75
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          -6,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "fov": 55,
+        "id": "parallax_tile",
+        "laboratory": true,
+        "position": [
+          16.25,
+          2,
+          -4.8
+        ],
+        "purpose": "Near/mid/far filtering, anchored weathering and bounded relief.",
+        "reference": false,
+        "target": [
+          15.2,
+          2,
+          -5.3
+        ]
+      },
+      {
+        "clouds": false,
+        "fov": 65,
+        "id": "window_shafts",
+        "laboratory": true,
+        "lighting": "sunset",
+        "position": [
+          82,
+          1.7,
+          2.5
+        ],
+        "purpose": "Real window aperture, mullion and shadowed room air.",
+        "reference": false,
+        "target": [
+          79.8,
+          1.4,
+          -3.8
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "sky_daylight",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Atmospheric sky and two procedural cloud decks.",
+        "reference": false,
+        "target": [
+          0,
+          28,
+          -30
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "sky_sunset",
+        "lighting": "sunset",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Low solar disc, warm cumulus and thin high cloud.",
+        "reference": false,
+        "target": [
+          0,
+          16,
+          -30
+        ]
+      },
+      {
+        "fov": 65,
+        "id": "sky_night",
+        "lighting": "night",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Phased lunar disc, stars and cloud occlusion.",
+        "reference": false,
+        "target": [
+          -6,
+          28,
+          -30
+        ]
+      },
+      {
+        "clouds": false,
+        "fov": 20,
+        "id": "moon",
+        "lighting": "night",
+        "position": [
+          0,
+          12,
+          10
+        ],
+        "purpose": "Clear-sky lunar terminator and stable stars at fixed exposure.",
+        "reference": false,
+        "target": [
+          -7.6,
+          28,
+          -30
+        ]
+      },
+      {
+        "fov": 80,
+        "id": "rifle_hip",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip",
+        "weapon_id": "rifle"
+      },
+      {
+        "fov": 58,
+        "id": "rifle_ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads",
+        "weapon_id": "rifle"
+      },
+      {
+        "fov": 80,
+        "id": "smg_hip",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip",
+        "weapon_id": "smg"
+      },
+      {
+        "fov": 58,
+        "id": "smg_ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads",
+        "weapon_id": "smg"
+      },
+      {
+        "fov": 80,
+        "id": "pistol_hip",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip",
+        "weapon_id": "pistol"
+      },
+      {
+        "fov": 58,
+        "id": "pistol_ads",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Generated weapon surfaces and readable sights.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "ads",
+        "weapon_id": "pistol"
+      },
+      {
+        "fov": 80,
+        "id": "weapon_indoor",
+        "position": [
+          -14.5,
+          1.805,
+          -3.2
+        ],
+        "purpose": "Weapon indirect light follows the camera into a dark interior.",
+        "reference": false,
+        "target": [
+          -6.5,
+          1.805,
+          0
+        ],
+        "weapon": "hip"
+      },
+      {
+        "firing": true,
+        "fov": 80,
+        "id": "weapon_fire",
+        "position": [
+          0,
+          1.66,
+          10
+        ],
+        "purpose": "Emissive feathered flash and isolated viewmodel coverage.",
+        "reference": false,
+        "target": [
+          0,
+          1.66,
+          -8
+        ],
+        "weapon": "hip"
+      },
+      {
+        "combat_fixture": true,
+        "fov": 60,
+        "id": "combat_effects",
+        "position": [
+          0,
+          1.1,
+          8.2
+        ],
+        "purpose": "Soft smoke intersection, surface decals and world flash.",
+        "reference": false,
+        "target": [
+          0.1,
+          0.1,
+          6.3
+        ]
+      },
+      {
+        "combat_fixture": "glass",
+        "fov": 55,
+        "id": "combat_glass",
+        "laboratory": true,
+        "position": [
+          43.5,
+          1.8,
+          5.5
+        ],
+        "purpose": "Glass and smoke share depth sorting in front of, between and behind panes.",
+        "reference": false,
+        "target": [
+          42,
+          1.2,
+          -2
+        ]
+      }
+    ],
+    "sweep_fps": 30,
+    "sweep_frames": 121,
+    "version": 12,
+    "width": 1280,
+    "world_clip": {
+      "far": 500,
+      "near": 0.1
+    },
+    "world_seed": 1337
+  },
+  "created_utc": "2026-10-15T07:51:52.367165+00:00",
+  "evidence": [],
+  "parity_qualified": false
+}
