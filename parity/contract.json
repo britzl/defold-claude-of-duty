@@ -138,8 +138,8 @@
   "adaptations": [
     {
       "id": "map",
-      "state": "reconcile",
-      "current": "Full 104 m street and 20 footprints; connected W2/E1/E2 floors, ground-only E3, open infill arcades and bounded flat terrain. E2 interior and terrain boundary walls are Defold adaptations; detailed source architecture/dressing remains step 4.",
+      "state": "retained-with-documented-adaptations",
+      "current": "Full market with source-derived setbacks, balconies, recessed windows, damaged W3/E3 floors, gate and all dressing families. E1 shop/storage and E3 ruin/storage are furnished. W2 keeps its validated stairs and gains the 2.4 m setback, with adjusted upstairs furniture and an additional ground-floor hall opening. E2 retains its extra three-floor interior. Selected props shift to preserve the standing routes; infill arcades and flat terrain/boundary walls remain Defold adaptations. Room partitions, simplified collision envelopes and reduced decorative tessellation differ from the references.",
       "reference": "Full authored market including E1/E3 interiors",
       "gate": "world-layout"
     },
@@ -244,10 +244,16 @@
         "threejs:src/world/dressing.js",
         "kaigen:src/claude_of_duty/cod_world_dress.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Compare street, courtyard, gate, ruined building and furnished-room compositions.",
       "expect": "Reference silhouette, content density and traversable openings are present.",
-      "coverage": []
+      "coverage": [
+        "tests/world_test.lua",
+        "tests/full_market_smoke.py",
+        "tests/world_detail_capture.py",
+        "tests/market_browser.lua",
+        "tools/validate_market_browser.mjs"
+      ]
     },
     {
       "id": "surfaces",

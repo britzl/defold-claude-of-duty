@@ -8,8 +8,8 @@ input, gameplay notifications, centralized damage, and separate camera/HUD
 presentation. The full market layout is generated at runtime: a 104-metre
 street, all 20 reference building footprints, five flank routes, the ruin yard,
 far cross street and south gate passage. W2, E1 and E2 have connected upper
-floors; E3 has an enterable ground floor. Detailed architecture and dressing
-remain in parity step 4.
+floors; E3 has an enterable ruined ground floor. Source-derived setbacks, balconies,
+recessed windows, roof props, a pointed gate and the market dressing are generated too.
 A swept kinematic capsule now supports walking, sprinting, tactical sprint,
 sliding, mantling, leaning, jumping, crouching, prone movement, stairs and slopes.
 The M4A1, MPX-9 and P-19 now have fixed-tick fire control, projectile ballistics,
@@ -27,6 +27,61 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Parity step 4: architecture, interiors and dressing
+
+The world now builds W1/W2/W4/W5 setbacks and terraces, balconies with rails and
+brackets, recessed upper windows, arched trim, chamfered caps, roof tanks, huts,
+sheets, dishes and aerials. W3 and E3 have broken upper walls, surviving slab
+strips, exposed beams and rebar; E3's ground floor remains connected without
+inventing stairs. The gate has a pointed opening with wedge stones, four stepped
+masses, cornices, corbels, loggia details, merlons and rampart sandbags.
+
+W2 has the source shop/storage/living programme and a 2.4 m upper setback. Its
+hall opening and upstairs furniture are adjusted around the validated stairs;
+a second opening preserves the reference interior sightline. E1 adds its shop
+and storage divisions, stocked shelves and wall/ceiling furnishings. E3 gains
+ruin/storage furnishings and fallen material. E2 retains the existing adapted
+three-floor interior. Seven new navigation nodes reach the added room areas.
+
+Eight open-legged stalls, eight additional barriers, four sandbag emplacements,
+three wrecks, seven palms, five lamps, six cable spans, six laundry lines, four
+tyre stacks, rugs, rubble and small props complete the authored families.
+Several placements move slightly to keep the street and flank routes clear.
+Heavy objects use simple collision envelopes and explicit cover positions;
+small scatter has independent, named random streams and never changes physics,
+spawns or weapons. Rounded/rotated/cutout geometry cannot subtract rectangular
+holes from nearby walls. Compatible surface families share batches; fully hidden
+batches are discarded before upload.
+
+The final map has **4,450 shapes, 478 batches, 1,224 colliders, 409,386 vertices and 29,475,792
+vertex-stream bytes (28.1 MiB)**. Pools reserve 640 meshes, 1,280 collision objects
+and 2,048 collection instances. Geometry processing permits 48 jobs per update
+under the existing 2 ms deadline; uploads remain limited to eight batches.
+Individual jobs may exceed the deadline, and `world.snapshot` reports the peak.
+These are allocation/submission counts, not measured GPU or process residency.
+The final native run accumulated 1,430.944 ms of loading work, with a 13.489 ms
+largest update. Frozen street/interior/courtyard/detail views submitted
+3,379 / 3,264 / 2,762 / 2,370 draw calls across all render passes; the profiler
+delivered 16–17 samples per 60-frame request. This is not a sustained frame-time
+measurement. The material atlas allocation remains the step-3 medium-tier
+76.92 MiB for its three maps; no new targets were added.
+
+`tests/world_detail_capture.py` captures the matched street/interior/courtyard
+views plus facade detail, checks exact repeats, and requests 60 frames of CPU scopes
+and render counters (the delivered sample counts are retained in the manifest). The corresponding Three.js adapter selection is
+`--shots=street,interior,courtyard`. Source-derived content and route validation
+are implemented; reduced geometry, partition/prop placement adaptations and
+remaining lighting/exposure differences are explicit. The final cross-engine
+visual and sustained 60 FPS gates remain in steps 18–19.
+
+Validation passed 185 Lua checks, 12 baseline-tool checks, the native full
+player/AI traversal matrix, final native/WebGL capsule checks and 108 route
+queries per backend, eight browser minimap pixel gates, and four exact native
+still repeats. The full player walk preceded the last stall/frond refinements;
+the final stall collision passed fresh capsule checks on both backends.
+The current source lock includes the four native and three Three.js still
+receipts; other camera scenarios remain unqualified for this increment.
+
 ## Parity step 3: complete surface catalogue
 
 The runtime catalogue now contains nineteen surface families plus the shared
@@ -39,12 +94,12 @@ the visible UV scale for that bake incorrectly triples its slopes. Foliage
 uses a 0.6 m tile of overlapping, varied leaves. All maps, wear, roughness and
 relief are generated during bounded loading.
 
-The existing outer terrain now uses sand, including its collision/audio surface
-name. This separates twelve more material batches: the full map has 374 batches,
+At the surface-catalogue increment, outer terrain gained sand, including its
+collision/audio surface name. That version used 374 batches,
 1,983 boxes, 543 colliders and 148,596 vertices / 10,698,912 mesh bytes. Its 189
 navigation nodes and 194 edges are unchanged. The mesh pool is 640 to accommodate
 the full map, six soldiers, weapons, effects and the expanded optional laboratory.
-Detailed palms, sandbags, roofing and other world dressing remain step 4.
+The subsequent step-4 resource account below supersedes these historical map counts.
 
 Foliage cards have both windings and a negative vertex-alpha coverage tag.
 Colour, camera depth/motion, sun shadows and point-light shadows sample the same
@@ -601,21 +656,19 @@ west alley, southern west route, eastern alley/ruin yard and eastern approach to
 the far cross street. The street spine passes through the gate and bends around
 BS3 into the narrow southern gap. E1 connects its street entrance to the eastern
 alley through a second doorway. Eight source spawn anchors are recorded, six
-active enemy spawns/patrols cover the expanded map, and ten usable cover positions
-come from the actual solids. Background rows have open ground-floor arcades to
+active enemy spawns/patrols cover the expanded map. Cover positions come from
+the authored barriers, crates, sandbags and wrecks. Background rows have open ground-floor arcades to
 preserve the reference's omitted front facades and keep rear routes traversable.
 
 W2 has one upper apartment; E1 and the existing adapted E2 each have two.
 Their five flights use the same tread/opening dimensions for rendering, collision
-and navigation. E3 has no reference staircase, so its upper mass has no fabricated
-navigation connection. These are functional structural recipes: exact balconies,
-setbacks, ruined/collapsed floors, facade apertures, furnishings and the gate's
-pointed arch remain in step 4. E2's additional interior and the outer terrain
-walls are retained Defold adaptations, not claims of exact source geometry.
+and navigation. E3 has no reference staircase, so its collapsed upper floor has
+no fabricated navigation connection. Step 4 adds the architecture and furnishing
+recipes described above. E2's additional interior, simplified collision and the
+outer terrain walls are retained Defold adaptations.
 
-The full map produces 1,983 boxes, 362 batches, 543 colliders and 10,698,912 bytes
-of world vertex streams. Engine limits reserve 512 meshes, 1,024 collision objects
-and 2,048 collection instances for the map plus actors/effects. Loading uploads
+Current mesh/collider counts and engine limits are listed in the step-4 resource
+account above. Loading uploads
 at most eight batches per update under the existing 2 ms work deadline. A single
 upload can exceed that deadline; the measured peak is reported by `world.snapshot`.
 The minimap retains all collider rectangles and reuses at most 256 GUI nodes for
@@ -623,8 +676,8 @@ visible geometry (145 at the measured grid peak). It no longer truncates the map
 at the first 256 shapes. `world.navigation` returns explicit 32-item pages with
 collection totals; `tests/world_navigation.py` reads the complete graph.
 
-`tests/full_market_smoke.py` checks all 189 nodes and 194 edges with real Bullet
-capsules in both directions, routes all six actors to 13 destinations, walks all
+`tests/full_market_smoke.py` checks all 196 nodes and 201 edges with real Bullet
+capsules in both directions, routes all six actors to 18 destinations, walks all
 five flank routes and five stair flights both ways, exercises the new entrances,
 gate and south gap, runs live E1/eastern patrols, and saves eight inspection views
 under `build/full-market-validation`. `--quick` omits live traversal and patrols.
@@ -638,11 +691,11 @@ PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_market_browser.mjs \
 PNGJS_MODULE=/path/to/pngjs node tests/market_browser_pixels.mjs
 ```
 
-The browser fixture repeats physics and the 78-route matrix and captures the same
+The browser fixture repeats physics and the 108-route matrix and captures the same
 views at 1280 × 720. The pixel check verifies that floors and walls actually appear
-in the minimap. The 2026-10-15 native traversal/patrol run, fresh native quick run,
-browser fixture and all eight pixel checks passed; all 181 Lua checks also passed.
-The final quick-run images are under `build/full-market-quick-validation`.
+in the minimap. Step-4 validation receipts are under `build/full-market-validation`,
+`build/world-detail-browser-final` and `build/world-detail-native-validation`.
+The final native quick run is under `build/full-market-quick-validation`.
 These are layout smoke checks; the sustained 60 FPS combat
 qualification in parity steps 18–19 remains open.
 
@@ -689,7 +742,7 @@ is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
 settling frame before `ready`. Geometry collects recipes, clips faces and indexes shared edge endpoints, then
-meshes them, handling at most 24 jobs per frame across these three stages;
+meshes them, handling at most 48 jobs per update across these three stages;
 collision creation at most eight; uploads at most one bounded batch. A soft
 2 ms CPU deadline is checked between geometry/collision jobs. A single upload
 is indivisible. `world.snapshot` reports total CPU work and the peak loading

@@ -15,7 +15,7 @@ The 2026-10-15 source audit used Defold revision `8146e12` and the two local ref
 ### Already implemented
 
 - [x] Gameplay framework: six subsystem modules, 120 Hz fixed simulation, buffered input, independent random streams, gameplay events, centralized damage and interpolated presentation.
-- [x] Generated full market layout: 104-metre road, all 20 reference footprints, five flank routes, far cross street, ruin yard and gate passage; connected W2/E1/E2 floors, ground-only E3, shared collision/navigation/cover/room metadata and a full-map minimap. Detailed architecture and dressing remain step 4.
+- [x] Generated full market layout: 104-metre road, all 20 reference footprints, five flank routes, far cross street, ruin yard and gate passage; connected W2/E1/E2 floors, ground-only E3, shared collision/navigation/cover/room metadata and a full-map minimap. Step 4 adds source-derived architecture, furnished rooms and street dressing.
 - [x] Core traversal: swept capsule, walking/sprinting/tactical sprint, jump buffering/coyote time, crouch/prone, steps/slopes, sliding, clearance-checked mantling and collision-limited leaning.
 - [x] Core weapons: M4A1/MPX-9/P-19, fire modes, magazine/chamber state, reload/inspection/switching timelines, ADS, recoil, spread, projectile travel/drop and material penetration; generated simplified viewmodels in an independent render pass.
 - [x] Core soldiers/combat: generated 25-bone soldier, animated hit volumes, patrol/detection/pursuit/fire/death, two squads of three, shared alerts, cover claims, low-cover peeking, suppression, friendly firing-lane checks and a west-loop flank.
@@ -95,15 +95,19 @@ The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json
 
 **2026-10-15 validation:** 183 Lua checks and 12 Node/Python baseline-tool checks passed. Native Metal passed all three atlas tiers (174/194/214 mip regions per map), leaf-mask mip energy, 45 exact still repeats, front/back leaf coverage, matching depth/normal occupancy, sun/local shadow toggles and exact restores. Four medium-tier 121-frame sweeps retained temporal history without resets. Chromium WebGL2 / ANGLE Metal passed the focused 62-stage medium-tier fixture and its map/coverage/depth/shadow/motion pixel gates. All test engines closed without runtime errors. A fresh native full-market quick run confirmed 543 collider dimensions, all 189 supported nodes, all 194 links in both directions, 78 six-actor route queries and eight inspection views. Full player circuits were not rerun because geometry/navigation did not change. Reports are in `build/material-catalogue-validation`, `build/material-catalogue-browser-validation` and `build/full-market-quick-validation`.
 
-### 4. Complete building recipes, interiors and dressing — PARTIAL
+### 4. Complete building recipes, interiors and dressing — IMPLEMENTED
 
-- [x] Reusable shop/apartment recipes, stairs, furnishings, simple stalls/crates and closed façades.
-- [ ] Add setbacks, balconies, arches, façade recesses/bevels, damage, collapsed floors, roof details and the arched gate's complete silhouette.
-- [ ] Match the remaining room/furnishing recipes, especially the reference E1/E3 interiors; reconcile the current W2/E2 adaptations with the reference layout.
-- [ ] Add the remaining stalls, sandbags, barriers, wrecks, palms, lamps, cables, laundry, rugs, rubble, tyres and small props.
-- [ ] Assign materials, update collision/navigation/cover where appropriate and retain chunk bounds, bounded loading and independent decorative randomness.
+- [x] Reusable shop/apartment recipes, stairs, furnishings, stalls/crates and closed façades.
+- [x] W1/W2/W4/W5 setbacks, terraces, balconies, arched trim, recessed windows, bevels, chipped render, W3/E3 broken floors and roof details; pointed gate with rampart, corbels, merlons and stepped gatehouses.
+- [x] E1 shop/storage and E3 ruin/storage programmes, stocked shelves, rugs, wall/ceiling furnishings and seven additional room navigation nodes. W2 gains its source setback with adjusted furniture and hall openings; E2 retains its documented three-floor adaptation.
+- [x] All authored dressing families: eight stalls, barriers, course-laid sandbags, three wrecks, seven palms, five lamps, cables, laundry, rugs, rubble, tyres and small props. Geometric palm leaflets retain connected silhouettes at distance.
+- [x] Material assignments, simple collision envelopes, 25 cover candidates, navigation/minimap metadata, tight mesh bounds, bounded loading and independent decorative streams. Compatible surface families batch together; hidden batches never reach buffer upload.
 
-**Completion check:** Matched street/interior/courtyard views reproduce the reference composition and content density, while the step-2 traversal matrix still passes. Track draw calls, generation cost and memory as content grows.
+**Implementation check:** The content recipes and traversal checks are implemented. Matched street/interior/courtyard captures document the result. W2/E2 room adaptations, route-safe prop shifts, reduced tessellation and simplified collision are explicit; exact cross-engine content density, lighting and visual acceptance remain part of step 18. This is not a claim of pixel or sustained-performance parity.
+
+**2026-10-15 validation:** 185 Lua checks and 12 Node/Python baseline-tool checks passed. Native player traversal completed all five flank circuits, all five stair flights, E1's alley entrance, E3's entrance, all five added room routes and the gate/south gap in both directions (16 sequences), plus live E1/eastern AI patrols. Final native and WebGL checks validated 196 supported nodes, 201 capsule-clear bidirectional links and 108 six-actor route queries. Eight inspection captures and eight browser minimap pixel gates passed. The full walk preceded the final stall/frond refinements; the final collision changes were rechecked by both native and WebGL capsule/route matrices. Four native comparison stills repeat exactly; three matching Three.js camera captures were inspected. All owned engines/browsers shut down cleanly.
+
+**Resource account:** 4,450 shapes, 478 batches, 1,224 colliders, 409,386 vertices and 29,475,792 vertex-stream bytes (28.1 MiB). The final native load accumulated 1,430.944 ms of work with a 13.489 ms peak update. Frozen street/interior/courtyard/detail views submitted 3,379 / 3,264 / 2,762 / 2,370 draws across all passes (16–17 profiler samples per request). Full records are in the README and `build/world-detail-native-validation/manifest.json`. Physics and traversal receipts are in `build/full-market-validation`, `build/full-market-quick-validation` and `build/world-detail-browser-final`; matched reference images are in `build/world-detail-threejs-validation`. No render targets or atlas tiers were added. The implementation keeps the 2 ms work deadline, permits 48 geometry jobs and at most eight uploads per update, and reserves 640 meshes / 1,280 collision objects / 2,048 collection instances. Individual jobs can exceed that deadline; measured peaks are retained.
 
 ### 5. Complete traversal and camera feel — PARTIAL
 

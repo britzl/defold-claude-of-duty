@@ -21,7 +21,7 @@ type = 3D
 gravity_y = -20.6
 scale = 1.0
 use_fixed_timestep = 1
-max_collision_object_count = 1024
+max_collision_object_count = 2000
 
 [html5]
 scale_mode = stretch
@@ -53,3 +53,4 @@ application_api = 1
 
 [shader]
 glsl_es_default_precision_float = highp
+

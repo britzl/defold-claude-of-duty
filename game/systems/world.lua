@@ -17,7 +17,7 @@ function M.update(ctx, dt)
     local deadline = started + 0.002
     local adapter = world.adapter
     if world.phase == "geometry" then
-        generator.step(world, 24, deadline, os.clock)
+        generator.step(world, 48, deadline, os.clock)
     elseif world.phase == "meshes" then
         for _ = 1, 8 do
             if os.clock() >= deadline then break end

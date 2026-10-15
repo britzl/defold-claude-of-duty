@@ -17,7 +17,7 @@ local function generate(budget, options)
         local jobs = generator.step(world, budget)
         assert(jobs <= budget)
         frames = frames + 1
-        assert(frames < 7000, "Generation did not finish")
+        assert(frames < 15000, "Generation did not finish")
     end
     return world, frames
 end
@@ -57,7 +57,7 @@ test("every vertex fits its culling bounds; triangle winding agrees with normals
     assert(math.abs(ramp.bounds[5] - (1.5+math.cos(math.rad(30))*0.1+1.5)) < 1e-7)
     world.batches[#world.batches+1] = ramp
     for _, batch in ipairs(world.batches) do
-        assert(batch.boxes <= 64 and batch.vertex_count == #batch.positions / 3)
+        assert(batch.boxes <= 64 and batch.vertex_count>0 and batch.vertex_count == #batch.positions / 3)
         assert(#batch.normals == #batch.positions and #batch.colors == batch.vertex_count * 4)
         for i, value in ipairs(batch.positions) do
             local axis = (i - 1) % 3 + 1
@@ -151,7 +151,7 @@ test("adapter receives each resource once; readiness waits for installation and 
         final = function() disposed = true end,
     } }
     local ctx = runtime.new({ world = adapter })
-    for _ = 1, 700 do
+    for _ = 1, 3000 do
         if ctx.world.ready then break end
         runtime.update(ctx, 1/60)
     end
@@ -338,7 +338,7 @@ test("cover positions have support and clearance; closed shopfronts face the str
     for _,s in ipairs(world.shapes) do shapes[s.id]=s end
     for _,cover in ipairs(world.cover) do
         local shape=shapes[cover.id]
-        assert(cover.height==shape.h)
+        assert(math.abs(cover.height+cover.y-(shape.y+shape.h/2))<1e-7)
         local support=false
         for _,s in ipairs(world.colliders) do
             if math.abs(cover.x-s.x)<=s.w/2+.32 and math.abs(cover.z-s.z)<=s.d/2+.32 then
@@ -367,8 +367,8 @@ test("cover positions have support and clearance; closed shopfronts face the str
         end
     end
     -- Full-map bounds include terrain chunks, five flights and all background rows.
-    assert(world.stats.batches<400 and world.stats.mesh_bytes<12*1024*1024)
-    assert(#world.minimap<700)
+    assert(world.stats.batches<560 and world.stats.mesh_bytes<32*1024*1024)
+    assert(#world.minimap<1240)
 end)
 
 -- Source layout.js / world_layout.h footprints, in metres. Keep the oracle
@@ -453,6 +453,39 @@ test("spawn and patrol anchors have floor support and standing clearance",functi
         end
         assert(supported,"Unsupported spawn/patrol")
     end
+end)
+
+test("architecture and all authored dressing families survive generation",function()
+    local world=generate(24)
+    local shapes={};for _,s in ipairs(world.shapes) do shapes[s.id]=s end
+    for _,id in ipairs({"W2/detail/terrace","W1/detail/arch/1/1/0","E1/detail/balcony/1/1/slab",
+        "E3/ruin/slab/back","W3/ruin/roof/remnant","E1/furnishing/storage",
+        "W2/furnishing/shop_wall/lintel/1","gate/arch/0","gate/arch/15","gate/walkway",
+        "stall/8/table","dressing/jersey/8/core","dressing/bags/4/core",
+        "dressing/wreck/3/body","dressing/palm/7/frond/8","dressing/lamp/5/head",
+        "dressing/cable/6/12","dressing/laundry/6/cloth/4","dressing/tyres/4/3",
+        "dressing/rubble/5/14","dressing/courtyard/rug"}) do assert(shapes[id],id) end
+    assert(not shapes["E3/upper/mass"] and not shapes["E3/coping"],"Ruin collapse filled in")
+    assert(shapes["W2/coping"].w<15 and shapes["W2/floor"].w==15,"Missing setback")
+    assert(shapes["gate/arch/0"].y-shapes["gate/arch/0"].h/2>2)
+    assert(shapes["gate/arch/7"].y-shapes["gate/arch/7"].h/2>4)
+    for _,s in ipairs(world.shapes) do
+        if s.kind=="frond" then assert(not s.surface and s.material=="foliage") end
+    end
+    for _,b in ipairs(world.batches) do
+        if b.material=="foliage" then
+            for i=4,#b.colors,4 do assert(b.colors[i]==1,"Geometric leaflets must not use the broadleaf card mask") end
+        end
+    end
+end)
+
+test("curved and rotated decoration cannot cut rectangular holes in adjacent walls",function()
+    local faces=require "game.world.visible_faces"
+    local bounds={faces.bounds({x=0,y=0,z=0,w=2,h=2,d=2}),
+        faces.bounds({x=1,y=0,z=0,w=2,h=2,d=2,kind="torus"}),
+        faces.bounds({x=-1,y=0,z=0,w=2,h=2,d=2,rotation_y=.5})}
+    assert(faces.for_box(2,bounds)==nil and faces.for_box(3,bounds)==nil)
+    for _,rects in ipairs(faces.for_box(1,bounds)) do assert(#rects==1 and rects[1][1]==-1 and rects[1][3]==1) end
 end)
 
 print(count .. " world tests passed")

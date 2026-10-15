@@ -1,18 +1,16 @@
 local interior = require "game.world.interior"
+local architecture=require "game.world.architecture"
+local kit=require "game.world.kit"
 local M = {}
 
-local function box(id, material, x, y, z, w, h, d, surface, cover)
-    assert(w > 0 and h > 0 and d > 0, "Invalid box: " .. id)
-    coroutine.yield({ id = id, material = material, x = x, y = y, z = z,
-        w = w, h = h, d = d, surface = surface, cover = cover })
-end
+local box=kit.box
 
 local function window(b, floor, z, base, storey, box)
     local front = b.x + b.side * b.w / 2
     local y = base + floor * storey + 1.8
     local prefix = b.id .. "/window/" .. floor .. "/" .. z
-    box(prefix, "dark", front + b.side * 0.025, y, z, 0.06, 1.65, 1.25)
-    box(prefix .. "/shutter", "shutters", front + b.side * 0.07, y, z, 0.06, 1.5, 1.1)
+    box(prefix, "dark", front - b.side * .23, y, z, 0.04, 1.65, 1.25,"wood")
+    box(prefix .. "/shutter", "shutters", front - b.side * .12, y, z+.3, 0.06, 1.5, .55)
     for _, sign in ipairs({ -1, 1 }) do
         box(prefix .. "/jamb/" .. sign, "trim", front + b.side * 0.08, y, z + sign * 0.7, 0.16, 1.85, 0.14)
     end
@@ -85,10 +83,18 @@ local function building(layout, b, emit)
         if b.arcade then
             box(b.id.."/mass",b.material,b.x-b.side*b.arcade/2,(base+storey-slab)/2,b.z,
                 b.w-b.arcade,base+storey-slab,b.d,"plaster")
-            box(b.id.."/upper/mass",b.material,b.x,base+(storey-slab+height)/2,b.z,
-                b.w,height-storey+slab,b.d,"plaster")
+            box(b.id.."/upper/mass",b.material,b.x-b.side*.2,base+(storey-slab+height)/2,b.z,
+                b.w-.4,height-storey+slab,b.d,"plaster")
+            for level=1,b.floors-1 do architecture.window_wall(layout,b,level,box) end
         else
-            box(b.id .. "/mass", b.material, b.x, (base + height) / 2, b.z, b.w, base + height, b.d, "plaster")
+            box(b.id .. "/mass", b.material, b.x, (base + storey) / 2, b.z, b.w, base + storey, b.d, "plaster")
+            for level=1,b.floors-1 do
+                local f=architecture.floor_spec(b,level)
+                if not b.ruin then
+                    box(b.id.."/mass/"..level,b.material,f.x-b.side*.2,base+(level+.5)*storey,b.z,f.w-.4,storey,b.d,"plaster")
+                    architecture.window_wall(layout,f,level,box)
+                end
+            end
         end
         -- Closed shops face the street on either side and fit the footprint.
         local front, bays = b.x+b.side*b.w/2, math.max(1,math.floor(b.d/4))
@@ -101,17 +107,20 @@ local function building(layout, b, emit)
         end
     end
     for floor = 1, b.floors - 1 do
+        local f=architecture.floor_spec(b,floor)
         if b.room then
             -- Exterior trim must not span the open stairwell like the old solid facade.
             for _, sign in ipairs({-1,1}) do
-                box(b.id.."/belt/"..floor.."/x/"..sign,"trim",b.x+sign*b.w/2,base+floor*storey,b.z,.2,.18,b.d+.2)
-                box(b.id.."/belt/"..floor.."/z/"..sign,"trim",b.x,base+floor*storey,b.z+sign*b.d/2,b.w-.2,.18,.2)
+                box(b.id.."/belt/"..floor.."/x/"..sign,"trim",f.x+sign*f.w/2,base+floor*storey,b.z,.2,.18,b.d+.2)
+                box(b.id.."/belt/"..floor.."/z/"..sign,"trim",f.x,base+floor*storey,b.z+sign*b.d/2,f.w-.2,.18,.2)
             end
         else
-            box(b.id .. "/belt/" .. floor, "trim", b.x, base + floor * storey, b.z, b.w + 0.2, 0.18, b.d + 0.2)
+            box(b.id .. "/belt/" .. floor, "trim", f.x, base + floor * storey, b.z, f.w + 0.2, 0.18, b.d + 0.2)
         end
-        for i = 1, 4 do window(b, floor, z0 + (i - 0.5) * b.d / 4, base, storey, box) end
+        if not b.ruin then for i = 1, 4 do window(f, floor, z0 + (i - 0.5) * b.d / 4, base, storey, box) end end
     end
+    if b.ruin then return end
+    b=architecture.floor_spec(b,b.floors-1)
     box(b.id .. "/coping", "trim", b.x, base + height + 0.07, b.z, b.w + 0.25, 0.14, b.d + 0.25)
     for _, sign in ipairs({ -1, 1 }) do
         box(b.id .. "/parapet_x/" .. sign, b.material, b.x + sign * (b.w / 2 - 0.13), base + height + 0.4, b.z, 0.26, 0.7, b.d, "plaster")
@@ -119,7 +128,8 @@ local function building(layout, b, emit)
     end
 end
 
-function M.generate(layout, detail)
+function M.generate(layout, detail, seed)
+    local random=require("game.rng").new(seed or layout.seed,"dressing")
     local s = layout.street
     -- Ground is tiled into chunks, not a single enormous culling bound.
     for z = s.z_min, s.z_max - 0.001, 7 do
@@ -161,26 +171,25 @@ function M.generate(layout, detail)
             building(layout,rotated,function(id,material,x,y,z,w,h,d,surface)
                 box(id,material,z,y,x,d,h,w,surface)
             end)
-        else building(layout,b) end
-    end
-    local gate=layout.gate
-    if gate then
-        for _,b in ipairs(gate.blocks) do
-            box("gate/"..b.id,"plaster_sand",(b.x0+b.x1)/2,b.height/2,gate.z+b.proud/2,
-                b.x1-b.x0,b.height,gate.depth+b.proud,"plaster")
+        else
+            building(layout,b)
         end
-        box("gate/lintel","plaster_sand",0,(gate.height+gate.clearance)/2,gate.z,
-            gate.opening,gate.height-gate.clearance,gate.depth,"plaster")
+        architecture.details(layout,b,detail,random)
     end
+    architecture.gate(layout,detail)
     for _, wall in ipairs(layout.walls or {}) do
         box("boundary/"..wall.id,"brick",wall.x,wall.h/2,wall.z,wall.w,wall.h,wall.d,"plaster")
     end
     for i, stall in ipairs(layout.stalls) do
         local id = "stall/" .. i
-        box(id .. "/table", "wood", stall.x, 0.45, stall.z, stall.w, 0.9, 1.15, "wood")
-        awning(id .. "/canopy", stall.x, 2.35, stall.z, stall.w + 0.15, 1.6)
+        local depth=stall.d or 1.15
+        box(id .. "/table", "wood", stall.x, .84, stall.z, stall.w, .12, depth, "wood")
+        for _,x in ipairs({-1,1}) do for _,z in ipairs({-1,1}) do
+            box(id.."/leg/"..x.."/"..z,"wood",stall.x+x*(stall.w/2-.06),.4,stall.z+z*(depth/2-.06),.1,.8,.1,"wood")
+        end end
+        awning(id .. "/canopy", stall.x, 2.35, stall.z, stall.w + 0.15, depth+.45)
         for _, sign in ipairs({ -1, 1 }) do
-            box(id .. "/post/" .. sign, "wood", stall.x + sign * (stall.w / 2 - 0.05), 1.2, stall.z - 0.6, 0.08, 2.4, 0.08)
+            box(id .. "/post/" .. sign, "wood", stall.x + sign * (stall.w / 2 - 0.05), 1.2, stall.z - depth/2-.025, 0.08, 2.4, 0.08)
         end
         if detail then
             for j = 1, 8 do
@@ -202,6 +211,7 @@ function M.generate(layout, detail)
         box("cover/"..cover.id,"concrete",cover.x,(cover.y or 0)+cover.h/2,cover.z,
             cover.w,cover.h,cover.d,"concrete",cover)
     end
+    require("game.world.dressing").generate(layout,detail,seed)
 end
 
 return M

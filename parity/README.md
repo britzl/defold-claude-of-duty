@@ -26,6 +26,24 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Architecture and dressing increment — 2026-10-15
+
+Step 4 implements source-derived setbacks, balconies, windows, the gate, ruined
+floors, room programmes and all authored dressing families. The map adaptation
+record describes the retained W2/E2 layouts, route-safe placement shifts and
+simplified collision/tessellation. Seven room nodes extend the graph to 196
+nodes and 201 links, with 108 six-actor route queries on native and WebGL.
+
+The native full walk/patrol matrix passed; later stall collision refinements
+passed fresh bidirectional capsule checks on both backends. Four native stills
+have exact repeats; three matching Three.js camera views document the street,
+interior and courtyard. Captures retain the visible lighting/exposure and
+geometry differences. They are implementation evidence, not final visual or
+sustained 60 FPS qualification. `tests/world_detail_capture.py` records resource
+counts and frozen-scene render/CPU counters alongside its images. The current lock retains four native and three Three.js capture receipts;
+omitted cameras are not marked as captured. See the README for final measured
+costs and validation commands.
+
 ## Complete material catalogue increment — 2026-10-15
 
 The current lock includes nineteen surface families, the full market and capture

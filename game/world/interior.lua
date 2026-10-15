@@ -1,6 +1,7 @@
 -- Shared dimensions for each floor opening, stair flight and layered route.
 -- side faces the street (+X/-X); stairs.direction is the ascent direction on Z.
 local M = {}
+local architecture=require "game.world.architecture"
 
 function M.prefix(b, level)
     return b.id .. (level == 1 and "/" or "/floor" .. level .. "/")
@@ -42,6 +43,7 @@ function M.describe(layout, b, level)
 end
 
 local function floor_geometry(layout, b, level, box)
+    b=architecture.floor_spec(b,level)
     local s, u = M.describe(layout,b,level), upper(b,level)
     local node_prefix = M.prefix(b,level)
     local wall, slab, storey = layout.wall, layout.slab, layout.storey
@@ -68,7 +70,9 @@ local function floor_geometry(layout, b, level, box)
         box(prefix.."guard/end","wood",s.x,s.upper+.55,s.start-s.direction*.06,s.x1-s.x0,1.1,.12,"wood")
     end
     for _, side in ipairs({{"west",x0+wall/2},{"east",x1-wall/2}}) do
-        box(prefix..side[1],b.material,side[2],s.upper+wall_height/2,b.z,wall,wall_height,b.d,"plaster")
+        if (side[1]=="west" and b.side==-1) or (side[1]=="east" and b.side==1) then
+            architecture.window_wall(layout,b,level,box)
+        else box(prefix..side[1],b.material,side[2],s.upper+wall_height/2,b.z,wall,wall_height,b.d,"plaster") end
     end
     for _, side in ipairs({{"south",z0+wall/2},{"north",z1-wall/2}}) do
         box(prefix..side[1],b.material,b.x,s.upper+wall_height/2,side[2],b.w-2*wall,wall_height,wall,"plaster")
@@ -101,17 +105,14 @@ end
 
 function M.geometry(layout,b,box)
     if not b.stairs then
-        -- E3 has an enterable shell but no authored stair flight. Keep the
-        -- inaccessible upper mass out of both navigation and room acoustics.
-        local base=layout.street.walk_height+layout.storey-layout.slab
-        local height=(b.floors-1)*layout.storey+layout.slab
-        box(b.id.."/upper/mass",b.material,b.x,base+height/2,b.z,b.w,height,b.d,"plaster")
+        architecture.ruin(layout,b)
         return
     end
     for level=1,b.floors-1 do floor_geometry(layout,b,level,box) end
 end
 
 local function floor_navigation(layout,b,level,nav,entry)
+    b=architecture.floor_spec(b,level)
     local s,u=M.describe(layout,b,level),upper(b,level)
     nav.stairs=nav.stairs or {}
     local flight={x0=s.x-s.width/2,x1=s.x+s.width/2,z0=s.z0,z1=s.z1,
@@ -157,6 +158,22 @@ local function floor_navigation(layout,b,level,nav,entry)
 end
 
 function M.navigation(layout,b,nav,entry)
+    local function ground(id,x,z,from)
+        id=b.id.."/"..id
+        nav.nodes[#nav.nodes+1]={id=id,x=x,y=layout.street.walk_height,z=z,layer=0}
+        nav.edges[#nav.edges+1]={from=from,to=id,kind="walk"}
+        return id
+    end
+    if b.id=="W2" then
+        local approach=ground("shop_back",-11.8,-3.58,entry)
+        local door=ground("storage_door",-13.25,-3.58,approach)
+        ground("storage",-15.6,-3.58,door)
+        ground("living",-16.2,3.1,b.id.."/stair_approach")
+    elseif b.id=="E1" then ground("storage",11.5,12,entry)
+    elseif b.id=="E3" then
+        ground("storage",10,-25.5,entry)
+        ground("ruin",16,-18.4,entry)
+    end
     if not b.stairs then return end
     for level=1,b.floors-1 do
         floor_navigation(layout,b,level,nav,entry)

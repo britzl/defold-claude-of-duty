@@ -42,6 +42,13 @@ focus rules in `render/exposure.fp`, `render/bloom.fp` and `render/lens.fp` adap
 that project. Portable packed exposure, the 2D LUT layout, bounded blur and the
 Defold scheduling/resource tiers are local adaptations.
 
+The building footprints, setback depths, room programmes, gate design and
+set-piece locations in `game/world/layout.lua`, `architecture.lua`, `interior.lua`
+and `dressing.lua` adapt `src/world/layout.js`, `buildings.js`, `interiors.js`,
+`kit.js` and `dressing.js` from the same project. The bounded Lua geometry kit,
+shared collision/navigation descriptions, route-safe placement changes, mesh
+batching and reduced tessellation are local implementations.
+
 MIT License
 
 Copyright (c) 2026 mshumer

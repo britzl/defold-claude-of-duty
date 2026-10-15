@@ -6,7 +6,7 @@ local M={}
 local views={"north_plaza","east_alley","ruin_yard","cross_street","gate","e1_shop","e1_top","e3_room"}
 local targets={"street_north","street_south","street_gate","west_near/rear_north","west_far/rear_south",
     "east_loop/ruin_yard","east_far/rear_south","W2/bedroom","E2/bedroom","E2/floor2/bedroom",
-    "E1/bedroom","E1/floor2/bedroom","E3/room"}
+    "E1/bedroom","E1/floor2/bedroom","E3/room","W2/storage","W2/living","E1/storage","E3/storage","E3/ruin"}
 local function report(kind,data) print("MARKET_BROWSER "..kind.." "..json.encode(data)) end
 function M.new() return {elapsed=0,view=0,routes=0} end
 function M.update(test,self,dt)

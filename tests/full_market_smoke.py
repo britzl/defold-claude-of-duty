@@ -73,8 +73,8 @@ def main(quick=False):
         running()
         game.wait_frames(5)
         report['world'] = cmd('world.snapshot')
-        assert report['world']['batches'] < 400 and report['world']['mesh_bytes'] < 12*1024*1024
-        assert report['world']['colliders'] < 700
+        assert report['world']['batches'] < 560 and report['world']['mesh_bytes'] < 32*1024*1024
+        assert report['world']['colliders'] < 1240
         assert cmd('ui.snapshot')['map_rectangles'] == report['world']['colliders']
         valid = cmd('world.validate', {'capsules': True})
         assert valid['max_error'] < 1e-5
@@ -91,7 +91,8 @@ def main(quick=False):
                         'west_near/rear_north', 'west_far/rear_south',
                         'east_loop/ruin_yard', 'east_far/rear_south',
                         'W2/bedroom', 'E2/bedroom', 'E2/floor2/bedroom',
-                        'E1/bedroom', 'E1/floor2/bedroom', 'E3/room']
+                        'E1/bedroom', 'E1/floor2/bedroom', 'E3/room',
+                        'W2/storage', 'W2/living', 'E1/storage', 'E3/storage', 'E3/ruin']
         for actor in cmd('ai.snapshot')['actors']:
             for name in destinations:
                 route = cmd('ai.route', {'id': actor['id'], 'target': nodes[name]})['points']
@@ -113,6 +114,14 @@ def main(quick=False):
             player_route('E1_alley_entrance', [nodes[n] for n in
                 ('east_loop/alley', 'E1/alley_outside', 'E1/alley_door', 'E1/alley_inside', 'E1/room')])
             player_route('E3_ground_room', [nodes[n] for n in ('E3/street', 'E3/walk', 'E3/door', 'E3/room')])
+            for name,names in (
+                ('W2_storage', ('W2/room','W2/shop_back','W2/storage_door','W2/storage')),
+                ('W2_living', ('W2/room','W2/stair_approach','W2/living')),
+                ('E1_storage', ('E1/room','E1/storage')),
+                ('E3_storage', ('E3/room','E3/storage')),
+                ('E3_ruin', ('E3/room','E3/ruin')),
+            ):
+                player_route(name,[nodes[n] for n in names])
             player_route('gate_and_south_gap', [nodes[n] for n in
                 ('street_gate', 'street_cross', 'street_south_gap', 'street_south')])
             # Real patrol locomotion exercises both newly added flights and the

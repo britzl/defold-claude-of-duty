@@ -47,7 +47,7 @@ try {
   }
   if(!complete) throw new Error('Full-map browser fixture timed out');
   await pending;
-  if(report.result.routes!==78 || report.shots.length!==8) throw new Error('Incomplete route/capture matrix');
+  if(report.result.routes!==108 || report.shots.length!==8) throw new Error('Incomplete route/capture matrix');
   if(report.errors.length) throw new Error(report.errors.join('\n'));
   report.webgl=await page.evaluate(()=>{
     const gl=document.querySelector('canvas').getContext('webgl2');

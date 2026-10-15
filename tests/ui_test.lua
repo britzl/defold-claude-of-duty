@@ -76,7 +76,12 @@ end)
 test("pausing during loading still finishes bounded world generation", function()
     local ctx=runtime.new()
     runtime.set_paused(ctx,true)
-    for _=1,500 do runtime.fixed_update(ctx,h);runtime.update(ctx,h) end
+    -- This is a pause/progress check, not a fixed wall-clock loading budget.
+    -- Dense world clipping still obeys each update's 2 ms work deadline.
+    for _=1,3000 do
+        runtime.fixed_update(ctx,h);runtime.update(ctx,h)
+        if ctx.world.ready then break end
+    end
     assert(ctx.world.ready and ctx.time.tick==0 and ctx.audio.ready)
     runtime.set_paused(ctx,false)
     runtime.fixed_update(ctx,h)

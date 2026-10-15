@@ -5,8 +5,10 @@ local M = {}
 local epsilon = 1e-7
 local axes = {{1,2,3},{1,2,3},{2,1,3},{2,1,3},{3,1,2},{3,1,2}}
 function M.bounds(s)
-    assert(not s.rotation_x or s.rotation_x==0, "World face clipping requires axis-aligned recipes")
-    return {s.x-s.w/2,s.y-s.h/2,s.z-s.d/2,s.x+s.w/2,s.y+s.h/2,s.z+s.d/2}
+    -- Curved/rotated decoration cannot occlude its entire bounding box: doing
+    -- so cuts holes in walls behind a tyre, cable or transparent palm frond.
+    return {s.x-s.w/2,s.y-s.h/2,s.z-s.d/2,s.x+s.w/2,s.y+s.h/2,s.z+s.d/2,
+        unclipped=s.kind~=nil or s.rotation_x~=nil or s.rotation_y~=nil or s.rotation_z~=nil}
 end
 local function subtract(rects, cut)
     local result = {}
@@ -25,9 +27,10 @@ local function subtract(rects, cut)
 end
 function M.for_box(index, bounds)
     local a=bounds[index]
+    if a.unclipped then return nil end
     local neighbours={}
     for j,b in ipairs(bounds) do
-        if j~=index and b[1]<=a[4]+epsilon and b[4]>=a[1]-epsilon
+        if j~=index and not b.unclipped and b[1]<=a[4]+epsilon and b[4]>=a[1]-epsilon
             and b[2]<=a[5]+epsilon and b[5]>=a[2]-epsilon
             and b[3]<=a[6]+epsilon and b[6]>=a[3]-epsilon then
             neighbours[#neighbours+1]=j

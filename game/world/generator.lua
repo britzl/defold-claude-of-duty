@@ -4,6 +4,7 @@ local recipes = require "game.world.recipes"
 local interior = require "game.world.interior"
 local visible_faces = require "game.world.visible_faces"
 local daylight = require "game.render.daylight"
+local materials=require "game.world.materials"
 local M = {}
 
 local function metadata(layout)
@@ -117,14 +118,17 @@ function M.new(layout, options)
     world.decoration_rng = rng.new(world.seed, "decoration")
     world.spawn_rng = rng.new(world.seed, "spawns")
     world.weapon_rng = rng.new(world.seed, "weapons")
-    world.job = coroutine.create(function() recipes.generate(layout, options.detail ~= false) end)
+    world.job = coroutine.create(function() recipes.generate(layout, options.detail ~= false, world.seed) end)
     return world
 end
 
 local function add(world, shape, faces)
     local chunk = world.layout.chunk_size
     local cx, cz = math.floor(shape.x / chunk), math.floor(shape.z / chunk)
-    local key = shape.material .. "/" .. cx .. "/" .. cz
+    -- Tint is already in the vertex stream. Materials with the same atlas
+    -- family and weather settings share a draw, including coloured plaster.
+    local material=materials[shape.material]
+    local key = material.kind .. ":" .. (material.weather or 1) .. "/" .. cx .. "/" .. cz
     local batch = world.batch_lookup[key]
     -- Bound each upload job as well as each geometry job.
     if not batch or batch.boxes == 64 then
@@ -133,16 +137,17 @@ local function add(world, shape, faces)
         world.batch_lookup[key] = batch
     end
     local before=batch.vertex_count
-    mesh.box(batch, shape, 0.94 + world.decoration_rng() * 0.12, faces, world.edge_points)
+    mesh.shape(batch, shape, 0.94 + world.decoration_rng() * 0.12, faces, world.edge_points)
     if shape.surface then
         world.colliders[#world.colliders + 1] = shape
         world.minimap[#world.minimap + 1] = { id = shape.id, x = shape.x, z = shape.z, w = shape.w, d = shape.d,
             bottom = shape.y - shape.h / 2, top = shape.y + shape.h / 2, surface = shape.surface }
         if shape.cover then
             local nx,nz=shape.cover.normal_x,shape.cover.normal_z
+            local floor=shape.cover.ground_y or shape.y-shape.h/2
             world.cover[#world.cover + 1] = { id = shape.id,
                 x = shape.x + nx*(shape.w/2+.4), z = shape.z + nz*(shape.d/2+.4),
-                y = shape.y - shape.h / 2, height = shape.h, normal_x = nx, normal_z = nz }
+                y = floor, height = shape.y+shape.h/2-floor, normal_x = nx, normal_z = nz }
         end
     end
     local stats = world.stats
@@ -174,7 +179,7 @@ function M.step(world, max_jobs, deadline, now)
             if i<=#world.shapes then
                 local faces=visible_faces.for_box(i,world.shape_bounds)
                 world.shape_faces[i]=faces
-                visible_faces.register_edges(world.edge_points,world.shape_bounds[i],faces)
+                if faces then visible_faces.register_edges(world.edge_points,world.shape_bounds[i],faces) end
                 world.face_index=i+1
             else world.face_index=nil;world.mesh_index=1 end
         elseif world.mesh_index<=#world.shapes then
@@ -184,6 +189,11 @@ function M.step(world, max_jobs, deadline, now)
         else
             world.batch_lookup,world.decoration_rng,world.shape_bounds=nil,nil,nil
             world.shape_faces,world.edge_points=nil,nil
+            local visible={}
+            for _,batch in ipairs(world.batches) do
+                if batch.vertex_count>0 then visible[#visible+1]=batch end
+            end
+            world.batches=visible
             for _,batch in ipairs(require("game.render.glass").world(world.layout)) do
                 world.batches[#world.batches+1]=batch
                 world.stats.vertices=world.stats.vertices+batch.vertex_count
