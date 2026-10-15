@@ -10,7 +10,7 @@ local function window(b, floor, z, base, storey, box)
     local y = base + floor * storey + 1.8
     local prefix = b.id .. "/window/" .. floor .. "/" .. z
     box(prefix, "dark", front - b.side * .23, y, z, 0.04, 1.65, 1.25,"wood")
-    box(prefix .. "/shutter", "shutters", front - b.side * .12, y, z+.3, 0.06, 1.5, .55)
+    box(prefix .. "/shutter", "shutters", front - b.side * .18, y, z+.3, 0.08, 1.5, .55,nil,nil,{unclipped=true})
     for _, sign in ipairs({ -1, 1 }) do
         box(prefix .. "/jamb/" .. sign, "trim", front + b.side * 0.08, y, z + sign * 0.7, 0.16, 1.85, 0.14)
     end
@@ -128,7 +128,7 @@ local function building(layout, b, emit)
     end
 end
 
-function M.generate(layout, detail, seed)
+local function structure(layout, detail, seed)
     local random=require("game.rng").new(seed or layout.seed,"dressing")
     local s = layout.street
     -- Ground is tiled into chunks, not a single enormous culling bound.
@@ -168,8 +168,8 @@ function M.generate(layout, detail, seed)
             local rotated={}
             for k,v in pairs(b) do rotated[k]=v end
             rotated.x,rotated.z,rotated.w,rotated.d=b.z,b.x,b.d,b.w
-            building(layout,rotated,function(id,material,x,y,z,w,h,d,surface)
-                box(id,material,z,y,x,d,h,w,surface)
+            building(layout,rotated,function(id,material,x,y,z,w,h,d,surface,cover,extra)
+                box(id,material,z,y,x,d,h,w,surface,cover,extra)
             end)
         else
             building(layout,b)
@@ -211,7 +211,22 @@ function M.generate(layout, detail, seed)
         box("cover/"..cover.id,"concrete",cover.x,(cover.y or 0)+cover.h/2,cover.z,
             cover.w,cover.h,cover.d,"concrete",cover)
     end
-    require("game.world.dressing").generate(layout,detail,seed)
+end
+
+function M.generate(layout,detail,seed)
+    -- Give suspended dressing the actual generated walls, including recesses,
+    -- openings and ruins, rather than inferring a facade from its footprint.
+    local supports={}
+    local job=coroutine.create(function() structure(layout,detail,seed) end)
+    while coroutine.status(job)~="dead" do
+        local ok,shape=coroutine.resume(job)
+        assert(ok,shape)
+        if shape then
+            if shape.surface=="plaster" and not shape.kind then supports[#supports+1]=shape end
+            coroutine.yield(shape)
+        end
+    end
+    require("game.world.dressing").generate(layout,detail,seed,supports)
 end
 
 return M

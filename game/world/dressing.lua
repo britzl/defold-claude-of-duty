@@ -10,9 +10,10 @@ local function barrel(id,x,y,z)
     kit.solid("cylinder",id,"metal_rust",x,y+.45,z,.65,.9,.65,"metal")
     for _,h in ipairs({.12,.75}) do kit.solid("cylinder",id.."/band/"..h,"metal",x,y+h,z,.68,.045,.68) end
 end
-local function goods(id,x,y,z,n,along_z)
+local function goods(id,x,y,z,n,along_z,span)
+    local spacing=span and math.min(.32,(span-.23)/(n-1)) or .32
     for i=1,n do
-        local offset=(i-(n+1)/2)*.32
+        local offset=(i-(n+1)/2)*spacing
         local px,pz=x+(along_z and 0 or offset),z+(along_z and offset or 0)
         if i%3==0 then
             kit.solid("cylinder",id.."/can/"..i,"metal_painted",px,y+.12,pz,.15,.24,.15)
@@ -73,8 +74,8 @@ local function furnish(layout,b,detail,seed)
     if not detail then return end
     local random=rng.new(seed,id)
     if b.counter then
-        local c=b.counter;goods(id.."/counter/goods",x0+c.x*b.w,y+.97,z0+c.z*b.d,7)
-        box(id.."/till","metal_painted",x0+c.x*b.w-c.w*.3,y+1.13,z0+c.z*b.d,.45,.3,.35)
+        local c=b.counter;goods(id.."/counter/goods",x0+c.x*b.w,y+.96,z0+c.z*b.d,7)
+        box(id.."/till","metal_painted",x0+c.x*b.w-c.w*.3,y+1.11,z0+c.z*b.d,.45,.3,.35)
     end
     if b.shelves then
         local s=b.shelves
@@ -100,7 +101,7 @@ local function furnish(layout,b,detail,seed)
             box(p.."/conduit","metal",b.x,fy+2.76,z1-.33,b.w-.6,.035,.035)
             box(p.."/conduit/drop","metal",b.x+1,fy+2,z1-.33,.035,1.5,.035)
             box(p.."/switch","metal_painted",b.x+1,fy+1.3,z1-.34,.16,.2,.07)
-            kit.beam(p.."/bulb/cord","dark",{b.x,fy+2.98,b.z+2},{b.x,fy+2.45,b.z+2},.018)
+            kit.beam(p.."/bulb/cord","dark",{b.x,fy+layout.storey-layout.slab+.015,b.z+2},{b.x,fy+2.45,b.z+2},.018)
             kit.solid("cylinder",p.."/bulb/shade","metal",b.x,fy+2.45,b.z+2,.38,.12,.38,nil,nil,{taper=.45})
             kit.solid("cylinder",p.."/bulb","awning_cream",b.x,fy+2.34,b.z+2,.09,.13,.09)
             local shelf_x=b.id=="W2" and b.x-2.6 or b.x-2
@@ -129,7 +130,38 @@ local function furnish(layout,b,detail,seed)
     end
 end
 
-function M.generate(layout,detail,seed)
+local function wall_anchor(id,point,supports)
+    local best,normal,distance
+    local axes,sizes={"x","y","z"},{"w","h","d"}
+    for _,wall in ipairs(supports) do
+        for face=1,3 do for _,side in ipairs({-1,1}) do
+            local p={}
+            for i,key in ipairs(axes) do
+                local half=wall[sizes[i]]/2
+                p[i]=i==face and wall[key]+side*half
+                    or math.max(wall[key]-half+.03,math.min(wall[key]+half-.03,point[i]))
+            end
+            local d=(p[1]-point[1])^2+(p[2]-point[2])^2+(p[3]-point[3])^2
+            if not distance or d<distance then
+                best,normal,distance=p,{0,0,0},d
+                normal[face]=side
+            end
+        end end
+    end
+    assert(best,"Suspended dressing needs a structural wall anchor")
+    -- A visible fixing bridges the wall to an exterior endpoint. Keeping the
+    -- cord itself outside the wall also keeps its hanging cloth out of plaster.
+    local center,size={},{}
+    for i=1,3 do
+        center[i]=best[i]+normal[i]*.025
+        size[i]=normal[i]~=0 and .12 or .09
+        best[i]=best[i]+normal[i]*.06
+    end
+    box(id,"metal_rust",center[1],center[2],center[3],size[1],size[2],size[3],nil,nil,{unclipped=true})
+    return best
+end
+
+function M.generate(layout,detail,seed,supports)
     seed=seed or layout.seed
     local d=layout.dressing or {}
     local function base(x) return math.abs(x)>=layout.street.half_width and math.abs(x)<=layout.street.kerb and layout.street.walk_height or 0 end
@@ -182,22 +214,28 @@ function M.generate(layout,detail,seed)
         for j=1,p[3] do kit.solid("torus",id.."/"..j,"rubber",p[1],y+(j-.5)*.25,p[2],.85,.25,.85) end
     end
     if not detail then return end
-    for i,p in ipairs(d.cables or {}) do kit.cable("dressing/cable/"..i,{p[1],p[2],p[3]},{p[4],p[5],p[6]},p[7]) end
+    for i,p in ipairs(d.cables or {}) do
+        local id="dressing/cable/"..i
+        kit.cable(id,wall_anchor(id.."/anchor/start",{p[1],p[2],p[3]},supports),wall_anchor(id.."/anchor/end",{p[4],p[5],p[6]},supports),p[7])
+    end
     for i,p in ipairs(d.laundry or {}) do
         local id="dressing/laundry/"..i
-        kit.cable(id,{p[1],p[2],p[3]},{p[4],p[5],p[6]},.18)
+        local a=wall_anchor(id.."/anchor/start",{p[1],p[2],p[3]},supports)
+        local b=wall_anchor(id.."/anchor/end",{p[4],p[5],p[6]},supports)
+        kit.cable(id,a,b,.18)
+        local yaw=math.atan2(b[1]-a[1],b[3]-a[3])
         for j=1,4 do
-            local t=j/5;local y=p[2]+(p[5]-p[2])*t-.18*4*t*(1-t)
-            kit.box(id.."/cloth/"..j,j%2==0 and "awning_cream" or "awning_red",p[1],y-.48,p[3]+(p[6]-p[3])*t,
-                .025,.95,.65,nil,nil,{rotation_z=.07})
+            local t=j/5;local y=a[2]+(b[2]-a[2])*t-.18*4*t*(1-t)
+            kit.box(id.."/cloth/"..j,j%2==0 and "awning_cream" or "awning_red",a[1]+(b[1]-a[1])*t,y-.475,a[3]+(b[3]-a[3])*t,
+                .025,.95,.65,nil,nil,{rotation_y=yaw})
         end
     end
     for i,p in ipairs(d.rubble or {}) do rubble("dressing/rubble/"..i,p[1],base(p[1]),p[2],p[3],p[4],rng.new(seed,"rubble/"..i)) end
     -- Cluster crates, sacks, trays and small refuse at the authored stalls.
     for i,p in ipairs(layout.stalls) do
         local id="dressing/stall/"..i
-        box(id.."/tray","wood",p.x,1.03,p.z,p.w-.25,.13,.65)
-        goods(id.."/stock",p.x,1.1,p.z,5)
+        box(id.."/tray","wood",p.x,.965,p.z,p.w-.25,.13,.65)
+        goods(id.."/stock",p.x,1.03,p.z,5,false,p.w-.25)
         kit.solid("bevel",id.."/sack","burlap",p.x+.5,.29,p.z+.75,.55,.58,.48)
         kit.solid("cylinder",id.."/bucket","metal",p.x-.6,.2,p.z+.72,.35,.4,.35,nil,nil,{taper=1.12})
     end

@@ -20,6 +20,17 @@ test("partly buried trim is clipped to the facade, including its underside",func
     assert(math.abs(area(trim[4])-.24)<1e-7)
     for _,r in ipairs(trim[4]) do assert(r[1]>=1 or r[4]<=-1 or r[2]>=1) end
 end)
+test("small attached fittings preserve facade faces and use bounded box geometry",function()
+    local wall={x=0,y=2,z=0,w=.3,h=4,d=6,material="concrete"}
+    local fixing={x=.175,y=1,z=0,w=.12,h=.06,d=.12,material="metal",unclipped=true}
+    local bounds={visible.bounds(wall),visible.bounds(fixing)}
+    assert(visible.for_box(2,bounds)==nil)
+    local faces=visible.for_box(1,bounds)
+    assert(#faces[1]==1 and area(faces[1])==24,"Fixing fragmented its supporting wall")
+    local batch=mesh.new("fixing","metal",0,0)
+    mesh.shape(batch,fixing,1,visible.for_box(2,bounds),{})
+    assert(batch.vertex_count==36)
+end)
 test("coincident surfaces have one geometric owner independent of batch submission",function()
     local bounds={{-1,-1,-1,1,1,1},{0,-1,-1,2,1,1}}
     local a,b=visible.for_box(1,bounds),visible.for_box(2,bounds)

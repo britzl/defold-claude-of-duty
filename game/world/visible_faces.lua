@@ -7,8 +7,10 @@ local axes = {{1,2,3},{1,2,3},{2,1,3},{2,1,3},{3,1,2},{3,1,2}}
 function M.bounds(s)
     -- Curved/rotated decoration cannot occlude its entire bounding box: doing
     -- so cuts holes in walls behind a tyre, cable or transparent palm frond.
+    -- Small attached fittings can also opt out to avoid subdividing whole
+    -- facades around their tiny contact areas. Depth testing hides their backs.
     return {s.x-s.w/2,s.y-s.h/2,s.z-s.d/2,s.x+s.w/2,s.y+s.h/2,s.z+s.d/2,
-        unclipped=s.kind~=nil or s.rotation_x~=nil or s.rotation_y~=nil or s.rotation_z~=nil}
+        unclipped=s.unclipped==true or s.kind~=nil or s.rotation_x~=nil or s.rotation_y~=nil or s.rotation_z~=nil}
 end
 local function subtract(rects, cut)
     local result = {}

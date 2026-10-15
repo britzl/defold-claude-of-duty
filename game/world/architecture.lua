@@ -57,7 +57,15 @@ function M.details(layout,b,detail,random)
                 local p=id.."/balcony/"..level.."/"..i
                 kit.solid("bevel",p.."/slab","concrete",x,y-.08,z,1.3,.24,2.5,"concrete")
                 for _,s in ipairs({-1,1}) do
-                    kit.beam(p.."/bracket/"..s,"metal",{x-b.side*.5,y-.85,z+s*.85},{x+b.side*.4,y-.17,z+s*.85},.09)
+                    -- A setback balcony rests on the terrace slab. Its old
+                    -- diagonal supports hung inside the room below it.
+                    if M.floor_spec(b,level-1).x==f.x then
+                        local bz,by=z+s*.85,y-.85
+                        if level==1 and b.door and math.abs(bz-b.door.z)<b.door.width/2 then
+                            by=math.max(by,base+b.door.height+.1)
+                        end
+                        kit.beam(p.."/bracket/"..s,"metal",{f.x+b.side*(f.w/2-.02),by,bz},{x+b.side*.4,y-.17,bz},.09)
+                    end
                     box(p.."/return/"..s,"metal",x,y+.9,z+s*1.18,1.3,.055,.055)
                 end
                 box(p.."/rail","metal",x+b.side*.6,y+.95,z,.06,.06,2.5)
@@ -92,16 +100,37 @@ function M.details(layout,b,detail,random)
     box(id.."/roof/door","shutters",rx,roof+.7,rz-1.06,.85,1.4,.045)
     kit.solid("cylinder",id.."/roof/tank","metal_painted",top.x+b.side*1.4,roof+.9,top.z-1.6,1.4,1.8,1.4,"metal")
     kit.solid("cylinder",id.."/roof/lid","metal",top.x+b.side*1.4,roof+1.84,top.z-1.6,1.5,.08,1.5)
-    kit.beam(id.."/roof/aerial","metal",{rx,roof+1.85,rz},{rx+.12,roof+4,rz},.035)
-    for j=1,3 do box(id.."/roof/aerial/"..j,"metal",rx,roof+2.4+j*.4,rz,1.2-j*.22,.035,.035) end
+    kit.beam(id.."/roof/aerial","metal",{rx,roof+1.82,rz},{rx+.12,roof+4,rz},.035)
+    for j=1,3 do
+        local h=2.4+j*.4
+        box(id.."/roof/aerial/"..j,"metal",rx+.12*(h-1.82)/(4-1.82),roof+h,rz,1.2-j*.22,.035,.035)
+    end
     if not detail then return end
-    box(id.."/roof/sheet","corrugated",top.x,roof+.35,top.z+2,2.3,.055,1.9,nil,nil,{rotation_x=.18})
+    -- Loose sheets rest on the visible .14 m roof cap, clear of the hut/tank.
+    box(id.."/roof/sheet","corrugated",top.x-b.side*1.2,roof+.14+.0275,top.z-1.6,2.3,.055,1.9,nil,nil,{rotation_y=.18})
     kit.solid("cylinder",id.."/roof/dish","metal",rx-1.8,roof+.9,rz,1.1,.15,1.1,nil,nil,{rotation_x=.9,taper=.75})
     kit.beam(id.."/roof/dish/stand","metal",{rx-1.8,roof,rz},{rx-1.8,roof+.9,rz},.07)
     if b.facade_axis=="z" then return end
     local front=b.x+b.side*(b.w/2+.07)
     local pipe_top=base+(b.setback and b.setback.from or b.floors)*storey
-    box(id.."/pipe","metal_rust",front,pipe_top/2,b.z-b.d/2+.5,.07,pipe_top,.07)
+    local pz=b.z-b.d/2+.5
+    if b.arcade then
+        -- Follow the recessed ground wall, then offset below the soffit to
+        -- reach the upper facade. Never leave a downpipe hanging in the lane.
+        local elbow=base+storey-layout.slab-.055
+        local lower=front-b.side*b.arcade
+        box(id.."/pipe","metal_rust",front,(pipe_top+elbow)/2,pz,.07,pipe_top-elbow,.07)
+        box(id.."/pipe/ground","metal_rust",lower,elbow/2,pz,.07,elbow,.07)
+        box(id.."/pipe/offset","metal_rust",(front+lower)/2,elbow,pz,b.arcade+.07,.07,.07)
+    else
+        box(id.."/pipe","metal_rust",front,pipe_top/2,pz,.07,pipe_top,.07)
+    end
+    for level=0,(b.setback and b.setback.from or b.floors)-1 do
+        local wall=b.x+b.side*(b.w/2-(level==0 and b.arcade or 0))
+        for _,height in ipairs({.5,2.5}) do
+            box(id.."/pipe/mount/"..level.."/"..height,"metal_rust",wall+b.side*.04,base+level*storey+height,pz,.12,.06,.12,nil,nil,{unclipped=true})
+        end
+    end
     for i=1,4 do
         local z=b.z-b.d/2+.9+random()*(b.d-1.8)
         local y=base+.5+random()*(b.floors*storey-1)
@@ -140,14 +169,14 @@ function M.ruin(layout,b)
         kit.box(id.."/slab/end/"..s,"concrete_floor",b.x+b.side*1.8,y-.1,z,b.w-3.6,.2,2.4,"concrete")
         local h=s==1 and 1.9 or 2.8
         kit.box(id.."/wall/"..s,b.material,b.x,y+h/2,b.z+s*(b.d/2-.15),b.w,h,.3,"plaster")
-        kit.prism(id.."/break/"..s,"brick",{{broken,y+1.1},{broken+2.3,y+1.1},{broken+1.7,y+2.7},{broken,y+2.3}},z,.32)
+        kit.prism(id.."/break/"..s,"brick",{{broken,y+1.1},{broken+2.3,y+1.1},{broken+1.7,y+2.7},{broken,y+2.3}},b.z+s*(b.d/2-.15),.32)
     end
     kit.box(id.."/back",b.material,back,y+1.5,b.z,.3,3,b.d,"plaster")
     kit.box(id.."/roof/remnant","concrete_floor",b.x-b.side*(b.w/2-1.4),y+3.1,b.z,2.8,.2,b.d,"concrete")
     for i=1,3 do
         local z=z0+2+i*2.7
         kit.beam(id.."/beam/"..i,"concrete",{b.x+b.side*2,y-.15,z},{back,y-.15,z+.4},.18)
-        for j=1,3 do kit.beam(id.."/rebar/"..i.."/"..j,"metal_rust",{strip+b.side*1.9,y,z+j*.14},{strip+b.side*2.7,y+.16,z+j*.14},.018) end
+        for j=1,3 do kit.beam(id.."/rebar/"..i.."/"..j,"metal_rust",{strip+b.side*1.72,y,z+j*.14},{strip+b.side*2.7,y+.16,z+j*.14},.018) end
     end
     for i=0,4 do
         local h=.6+(i%3)*.48
@@ -170,7 +199,8 @@ function M.gate(layout,detail)
         box(id.."/belt","trim",x,b.height*.46,z+d/2+.08,b.x1-b.x0+.15,.17,.24)
         for j=1,math.floor(b.x1-b.x0) do
             local px=b.x0+(j-.5)*(b.x1-b.x0)/math.floor(b.x1-b.x0)
-            box(id.."/merlon/"..j,material,px,b.height+.38,z+d/2-.16,.58,.62+(j%2)*.15,.34)
+            local h=.62+(j%2)*.15
+            box(id.."/merlon/"..j,material,px,b.height+h/2,z+d/2-.16,.58,h,.34)
             box(id.."/corbel/"..j,"concrete",px,b.height-.55,z+d/2+.16,.2,.5,.45)
         end
         for j=1,(i==1 and 3 or 2) do
@@ -180,7 +210,7 @@ function M.gate(layout,detail)
             for _,s in ipairs({-1,1}) do box(id.."/jamb/"..j.."/"..s,"trim",px+s*.45,y,z+d/2+.13,.12,1.45,.24) end
             kit.solid("bevel",id.."/lintel/"..j,"trim",px,y+.7,z+d/2+.13,1,.15,.28)
         end
-        kit.bags(id.."/bags",x,b.height+.1,z,math.min(2.4,b.x1-b.x0-.4),3,false)
+        kit.bags(id.."/bags",x,b.height+.005,z,math.min(2.4,b.x1-b.x0-.4),3,false)
     end
     -- Pointed arch, with real depth and individual wedge stones. Collision
     -- envelopes start above 2.1 m even at the spring, leaving the route clear.
@@ -198,7 +228,7 @@ function M.gate(layout,detail)
         box("gate/walkway/corbel/"..i,"concrete",x,g.height-.24,g.z+g.depth/2+.3,.2,.46,.65)
         box("gate/walkway/merlon/"..i,"plaster_sand",x,g.height+.56,g.z+g.depth/2+.7,.6,.7,.3)
     end
-    kit.bags("gate/walkway/bags",-.6,g.height+.23,g.z+.5,2,3,false)
+    kit.bags("gate/walkway/bags",-.6,g.height+.225,g.z+g.depth/2+.35,2,3,false)
     kit.beam("gate/aerial","metal_rust",{8.7,12.5,g.z+1},{8.9,15.4,g.z+1},.055)
 end
 return M
