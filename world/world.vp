@@ -3,14 +3,17 @@ attribute mediump vec3 normal;
 attribute lowp vec4 color;
 attribute highp vec4 surface_edges;
 attribute mediump vec4 surface_masks;
+attribute highp vec2 surface_data;
 uniform highp mat4 view_proj;
 varying highp vec3 var_world;
 varying mediump vec3 var_normal;
 varying lowp vec4 var_color;
 varying highp vec4 var_edges;
 varying mediump vec4 var_masks;
+varying highp vec2 var_surface;
 void main() {
     var_world=position; var_normal=normal; var_color=color;
     var_edges=surface_edges;var_masks=surface_masks;
+    var_surface=surface_data;
     gl_Position=view_proj*vec4(position,1.0);
 }

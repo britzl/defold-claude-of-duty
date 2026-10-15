@@ -44,14 +44,37 @@ def main():
                 assert a.size==b.size==(1280,720)
                 assert ImageChops.difference(a.convert('RGB'),b.convert('RGB')).getbbox() is None,name
             costs=game.profiler.capture(frames=60,warmup_frames=10,timeout=30)
+            counters=costs.counters()
+            draw_calls=next(c for c in counters if c.name=='DrawCalls')
+            assert draw_calls.values.max < 650,(name,draw_calls)
             report['shots'][name]={'status':'captured','image':path.name,'capture':snapshot,
                 'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'repeat_identical':True,
                 'renderer':cmd('renderer.snapshot'),'profile':{
                     'scope':'Frozen scene; submitted counters and CPU scopes, not sustained combat, GPU timing or process residency.',
                     'scopes':[asdict(s) for s in costs.scopes()[:16]],
-                    'counters':[asdict(c) for c in costs.counters()]}}
+                    'counters':[asdict(c) for c in counters]}}
             print('PASS matched still, exact repeat and profile',name,flush=True)
         cmd('capture.end')
+        cmd('movement.reset',{'x':0,'y':.01,'z':4,'yaw':0})
+        cmd('ai.configure',{'enabled':True})
+        cmd('ui.focus',{'focused':True})
+        cmd('ui.pause',{'paused':False})
+        before=cmd('gameplay.snapshot')
+        ai=cmd('ai.snapshot')
+        assert ai['enabled'] and len(ai['actors'])==6
+        costs=game.profiler.capture(frames=240,warmup_frames=60,timeout=30)
+        after=cmd('gameplay.snapshot')
+        assert not after['paused'] and after['tick']>before['tick'],(before,after)
+        counters=costs.counters()
+        draw_calls=next(c for c in counters if c.name=='DrawCalls')
+        assert draw_calls.values.max < 800,draw_calls
+        report['gameplay_profile']={
+            'scope':'Live spawn view with AI, weapon, HUD and temporal AA; short sample, not a sustained combat benchmark.',
+            'simulation_ticks':after['tick']-before['tick'],
+            'actors':len(ai['actors']),
+            'scopes':[asdict(s) for s in costs.scopes()[:16]],
+            'counters':[asdict(c) for c in counters]}
+        print('PASS live gameplay draw-call budget',draw_calls.values.max,flush=True)
         report['engine_health']=game.health()
         report['complete']=True
         (OUTPUT/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')

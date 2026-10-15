@@ -5,7 +5,25 @@ local interior = require "game.world.interior"
 local visible_faces = require "game.world.visible_faces"
 local daylight = require "game.render.daylight"
 local materials=require "game.world.materials"
-local M = {}
+local M = { max_batch_vertices = 12288 }
+
+local function append(batch, shape, material)
+    for _,name in ipairs({"positions","normals","colors","edges","masks"}) do
+        local target,source=batch[name],shape[name]
+        local offset=#target
+        for i=1,#source do target[offset+i]=source[i] end
+    end
+    for _=1,shape.vertex_count do
+        batch.surfaces[#batch.surfaces+1]=material.kind
+        batch.surfaces[#batch.surfaces+1]=material.weather or 1
+    end
+    for i=1,3 do
+        batch.bounds[i]=math.min(batch.bounds[i],shape.bounds[i])
+        batch.bounds[i+3]=math.max(batch.bounds[i+3],shape.bounds[i+3])
+    end
+    batch.vertex_count=batch.vertex_count+shape.vertex_count
+    batch.boxes=batch.boxes+1
+end
 
 local function metadata(layout)
     local s, base = layout.street, layout.street.walk_height
@@ -123,21 +141,27 @@ function M.new(layout, options)
 end
 
 local function add(world, shape, faces)
-    local chunk = world.layout.chunk_size
+    -- Sparse terrain uses larger cells; detailed architecture retains 16 m
+    -- culling cells. Surface selection travels with vertices, not draw state.
+    local terrain=shape.id and shape.id:match("^terrain/")
+    local chunk = world.layout.chunk_size * (terrain and 4 or 1)
     local cx, cz = math.floor(shape.x / chunk), math.floor(shape.z / chunk)
-    -- Tint is already in the vertex stream. Materials with the same atlas
-    -- family and weather settings share a draw, including coloured plaster.
     local material=materials[shape.material]
-    local key = material.kind .. ":" .. (material.weather or 1) .. "/" .. cx .. "/" .. cz
+    local key = (terrain and "terrain/" or "world/") .. cx .. "/" .. cz
+    local geometry=mesh.new(shape.id,shape.material,cx,cz)
+    mesh.shape(geometry,shape,0.94 + world.decoration_rng() * 0.12,faces,world.edge_points)
     local batch = world.batch_lookup[key]
-    -- Bound each upload job as well as each geometry job.
-    if not batch or batch.boxes == 64 then
-        batch = mesh.new(key .. "/" .. (#world.batches + 1), shape.material, cx, cz)
-        world.batches[#world.batches + 1] = batch
-        world.batch_lookup[key] = batch
+    if geometry.vertex_count>0 then
+        -- Bound uploads by actual vertex work, including curved primitives.
+        assert(geometry.vertex_count<=M.max_batch_vertices,"World primitive exceeds mesh upload budget")
+        if not batch or batch.vertex_count+geometry.vertex_count>M.max_batch_vertices then
+            batch = mesh.new(key .. "/" .. (#world.batches + 1), shape.material, cx, cz)
+            batch.surfaces={}
+            world.batches[#world.batches + 1] = batch
+            world.batch_lookup[key] = batch
+        end
+        append(batch,geometry,material)
     end
-    local before=batch.vertex_count
-    mesh.shape(batch, shape, 0.94 + world.decoration_rng() * 0.12, faces, world.edge_points)
     if shape.surface then
         world.colliders[#world.colliders + 1] = shape
         world.minimap[#world.minimap + 1] = { id = shape.id, x = shape.x, z = shape.z, w = shape.w, d = shape.d,
@@ -151,8 +175,8 @@ local function add(world, shape, faces)
         end
     end
     local stats = world.stats
-    stats.boxes, stats.vertices = stats.boxes + 1, stats.vertices + batch.vertex_count-before
-    stats.mesh_bytes = stats.vertices * 18 * 4
+    stats.boxes, stats.vertices = stats.boxes + 1, stats.vertices + geometry.vertex_count
+    stats.mesh_bytes = stats.mesh_bytes + geometry.vertex_count * 20 * 4
     stats.batches, stats.colliders = #world.batches, #world.colliders
 end
 
@@ -197,8 +221,9 @@ function M.step(world, max_jobs, deadline, now)
             for _,batch in ipairs(require("game.render.glass").world(world.layout)) do
                 world.batches[#world.batches+1]=batch
                 world.stats.vertices=world.stats.vertices+batch.vertex_count
+                world.stats.mesh_bytes=world.stats.mesh_bytes+batch.vertex_count*18*4
             end
-            world.stats.batches=#world.batches;world.stats.mesh_bytes=world.stats.vertices*18*4
+            world.stats.batches=#world.batches
             world.phase="meshes"
             break
         end

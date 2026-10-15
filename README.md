@@ -50,25 +50,48 @@ Several placements move slightly to keep the street and flank routes clear.
 Heavy objects use simple collision envelopes and explicit cover positions;
 small scatter has independent, named random streams and never changes physics,
 spawns or weapons. Rounded/rotated/cutout geometry cannot subtract rectangular
-holes from nearby walls. Compatible surface families share batches; fully hidden
-batches are discarded before upload.
+holes from nearby walls. Opaque surfaces share spatial batches using per-vertex
+material IDs and weather amounts; fully hidden shapes contribute no mesh data.
 
-The final map has **4,450 shapes, 478 batches, 1,224 colliders, 409,386 vertices and 29,475,792
-vertex-stream bytes (28.1 MiB)**. Pools reserve 640 meshes, 1,280 collision objects
-and 2,048 collection instances. Geometry processing permits 48 jobs per update
-under the existing 2 ms deadline; uploads remain limited to eight batches.
+The final map has **4,450 shapes, 85 batches, 1,224 colliders, 409,386 vertices and
+32,750,736 vertex-stream bytes (31.23 MiB)**. Geometry and collision counts are
+unchanged by batching. The extra two floats per opaque vertex cost 3.12 MiB;
+glass retains its original stream and separate sorted draws. Architecture uses
+16-metre cells and sparse terrain uses 64-metre cells, with a hard 12,288-vertex
+limit per upload. Geometry processing permits 48 jobs per update under the
+existing 2 ms deadline; uploads remain limited to eight batches.
 Individual jobs may exceed the deadline, and `world.snapshot` reports the peak.
 These are allocation/submission counts, not measured GPU or process residency.
-The final native run accumulated 1,430.944 ms of loading work, with a 13.489 ms
-largest update. Frozen street/interior/courtyard/detail views submitted
-3,379 / 3,264 / 2,762 / 2,370 draw calls across all render passes; the profiler
-delivered 16–17 samples per 60-frame request. This is not a sustained frame-time
-measurement. The material atlas allocation remains the step-3 medium-tier
-76.92 MiB for its three maps; no new targets were added.
+The measured native load accumulated 1,482.486 ms of work with a 15.823 ms largest
+update. The material atlas remains 76.92 MiB at medium quality; no render targets
+were added.
+
+World, depth and shadow draws now request all six frustum planes. Defold's
+[default side-plane culling](https://defold.com/ref/render/#render.draw_options)
+omits near/far planes, which previously submitted distant geometry to local
+shadow maps. Combined with spatial batching, native 1280 × 720 measurements are:
+
+| Frozen view | Before draw calls | After draw calls |
+| --- | ---: | ---: |
+| Street | 3,379 | 535 |
+| Interior | 3,264 | 498 |
+| Courtyard | 2,762 | 423 |
+| Facade detail | 2,370 | 363 |
+
+The live spawn view with AI, weapon, HUD and temporal AA submitted 578 calls
+across 64 delivered profiler samples. The frozen views delivered 15–16 samples
+per 60-frame request. These are short submission measurements, not sustained
+combat frame-time or GPU benchmarks. All visual features remain enabled.
+
+Batching validation passed 72 Lua checks, the native shadow coverage/camera/resize
+suite, 108 native route queries, four repeatable native stills, and all 62 WebGL
+catalogue stages with material, foliage, depth, shadow and motion pixel checks.
 
 `tests/world_detail_capture.py` captures the matched street/interior/courtyard
 views plus facade detail, checks exact repeats, and requests 60 frames of CPU scopes
-and render counters (the delivered sample counts are retained in the manifest). The corresponding Three.js adapter selection is
+and render counters. It enforces fewer than 650 calls in these frozen views and
+fewer than 800 in a subsequent live spawn sample (delivered sample counts are
+retained in the manifest). The corresponding Three.js adapter selection is
 `--shots=street,interior,courtyard`. Source-derived content and route validation
 are implemented; reduced geometry, partition/prop placement adaptations and
 remaining lighting/exposure differences are explicit. The final cross-engine
@@ -729,13 +752,13 @@ The shop front consists of separate side walls and a lintel, leaving a genuine
 trim, shelves, canopy fabric and produce are visual detail; tables, crates,
 walls and floors have simple solid proxies.
 
-`generator.lua` merges geometry by material and 16-metre spatial bucket, capped
-at 64 boxes per mesh upload. Every batch carries explicit AABB buffer metadata
+`generator.lua` merges opaque geometry into spatial buckets with per-vertex
+surface selection and a 12,288-vertex upload cap. Every batch carries explicit AABB buffer metadata
 for Defold's frustum culling. There are no game objects per decorative piece.
 Slabs own the top of each storey, and walls/trim use butt joints at corners.
 `visible_faces.lua` subtracts buried surfaces and gives coincident outward faces
 one owner before triangulation. This removes depth ties at slab edges, trim
-undersides and kerbs without changing collision proxies. The slice generates
+undersides and kerbs without changing collision proxies. The original slice generated
 519 boxes, 77 mesh batches, 36,552 vertices and 190
 collision objects. Vertex streams occupy 1,462,080 bytes (CPU/GPU resource overhead
 is additional; the batch count is not a measured per-frame draw-call count).

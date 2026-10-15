@@ -103,14 +103,25 @@ function M.details(layout,b,detail,random)
     local pipe_top=base+(b.setback and b.setback.from or b.floors)*storey
     box(id.."/pipe","metal_rust",front,pipe_top/2,b.z-b.d/2+.5,.07,pipe_top,.07)
     for i=1,4 do
-        local f=M.floor_spec(b,math.min(i% b.floors,b.floors-1))
-        local fx=f.x+b.side*(f.w/2+.009)
         local z=b.z-b.d/2+.9+random()*(b.d-1.8)
         local y=base+.5+random()*(b.floors*storey-1)
-        if b.setback and y>base+b.setback.from*storey then fx=top.x+b.side*(top.w/2+.009) end
-        -- Irregular chipped render on solid piers, below the window band.
-        y=base+math.floor((y-base)/storey)*storey+.45
-        box(id.."/spall/"..i,"brick",fx,y,z,.023,.25+random()*.25,.3+random()*.5,nil,nil,{rotation_x=(random()-.5)*.4})
+        local level=math.floor((y-base)/storey)
+        local f=M.floor_spec(b,level)
+        local recess=level==0 and b.arcade or 0
+        local fx=f.x+b.side*(f.w/2-recess+.009)
+        -- Use the patch's actual floor: arcades recess the ground wall and
+        -- setbacks move only upper walls. Keep chipped render below windows.
+        y=base+level*storey+.45
+        local h,d,angle=.25+random()*.25,.3+random()*.5,(random()-.5)*.4
+        if level==0 and b.room then
+            -- The entire rotated patch must sit on a solid doorway pier.
+            local extent=(math.abs(math.sin(angle))*h+math.abs(math.cos(angle))*d)/2
+            local clearance=b.door.width/2+extent+.02
+            if math.abs(z-b.door.z)<clearance then
+                z=b.door.z+(z<b.door.z and -clearance or clearance)
+            end
+        end
+        box(id.."/spall/"..i,"brick",fx,y,z,.023,h,d,nil,nil,{rotation_x=angle})
     end
 end
 

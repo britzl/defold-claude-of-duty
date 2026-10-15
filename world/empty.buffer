@@ -87,5 +87,18 @@
       0,
       0
     ]
+  },
+  {
+    "name": "surface_data",
+    "type": "float32",
+    "count": 2,
+    "data": [
+      0,
+      1,
+      0,
+      1,
+      0,
+      1
+    ]
   }
 ]

@@ -3,6 +3,7 @@ local materials = require "game.world.materials"
 local M = {}
 local POSITION, NORMAL, COLOR = hash("position"), hash("normal"), hash("color")
 local EDGES,MASKS=hash("surface_edges"),hash("surface_masks")
+local SURFACES=hash("surface_data")
 local atlas=require "game.render.surface_atlas"
 local WORLD = { hash("world") }
 
@@ -19,18 +20,28 @@ function M.add_batch(adapter, batch)
         end
         for i,v in ipairs({c.x,c.y,c.z}) do batch.bounds[i]=batch.bounds[i]-v;batch.bounds[i+3]=batch.bounds[i+3]-v end
     end
-    local data = buffer.create(batch.vertex_count, {
+    local declarations = {
         { name = POSITION, type = buffer.VALUE_TYPE_FLOAT32, count = 3 },
         { name = NORMAL, type = buffer.VALUE_TYPE_FLOAT32, count = 3 },
         { name = COLOR, type = buffer.VALUE_TYPE_FLOAT32, count = 4 },
         { name = EDGES, type = buffer.VALUE_TYPE_FLOAT32, count = 4 },
         { name = MASKS, type = buffer.VALUE_TYPE_FLOAT32, count = 4 },
-    })
+    }
+    if not batch.glass then declarations[#declarations+1]={name=SURFACES,type=buffer.VALUE_TYPE_FLOAT32,count=2} end
+    local data = buffer.create(batch.vertex_count, declarations)
     local positions, normals, colors = buffer.get_stream(data, POSITION), buffer.get_stream(data, NORMAL), buffer.get_stream(data, COLOR)
     for i = 1, #batch.positions do positions[i] = batch.positions[i]; normals[i] = batch.normals[i] end
     for i = 1, #batch.colors do colors[i] = batch.colors[i] end
     local edges,masks=buffer.get_stream(data,EDGES),buffer.get_stream(data,MASKS)
     for i=1,batch.vertex_count*4 do edges[i]=batch.edges[i];masks[i]=batch.masks[i] end
+    if not batch.glass then
+        local surfaces=buffer.get_stream(data,SURFACES)
+        local material=materials[batch.material]
+        for i=1,batch.vertex_count do
+            surfaces[i*2-1]=batch.surfaces and batch.surfaces[i*2-1] or (batch.surface and batch.surface[1] or material.kind)
+            surfaces[i*2]=batch.surfaces and batch.surfaces[i*2] or material.weather or 1
+        end
+    end
     buffer.set_metadata(data, "AABB", batch.bounds, buffer.VALUE_TYPE_FLOAT32)
     local factory_url=batch.glass and (adapter.mesh_factory=="#capture_mesh" and "#capture_glass" or "#glass_mesh") or adapter.mesh_factory
     local id = factory.create(factory_url,batch.glass and vmath.vector3(batch.centre.x,batch.centre.y,batch.centre.z) or nil)
@@ -40,14 +51,17 @@ function M.add_batch(adapter, batch)
     local url = msg.url(nil, id, "mesh")
     go.set(url, "vertices", path)
     local surface=batch.surface or {materials[batch.material].kind,0,0,0}
-    go.set(url, "surface", vmath.vector4(surface[1],surface[2],surface[3],surface[4]))
-    local s=assert(atlas.surfaces[surface[1]+1])
-    go.set(url,"surface_info",vmath.vector4(s.metres,s.size,s.relief,s.last_level))
-    local weather=materials[batch.material].weather or 1
-    if not batch.glass then go.set(url,"surface_effects",vmath.vector4(s.parallax,s.detail,weather,0)) end
+    if batch.glass then
+        go.set(url, "surface", vmath.vector4(surface[1],surface[2],surface[3],surface[4]))
+        local s=assert(atlas.surfaces[surface[1]+1])
+        go.set(url,"surface_info",vmath.vector4(s.metres,s.size,s.relief,s.last_level))
+    elseif batch.surface then
+        go.set(url,"surface_override",vmath.vector4(surface[1],surface[2],surface[3],surface[4]))
+    end
     batch.object, batch.resource = id, path
     -- The resource owns the buffer now. Keep only bounds/stats in Lua.
     batch.positions, batch.normals, batch.colors, batch.edges, batch.masks = nil, nil, nil, nil, nil
+    batch.surfaces=nil
 end
 
 function M.add_collision(adapter, shape)

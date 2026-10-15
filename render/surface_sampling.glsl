@@ -1,8 +1,15 @@
 // Explicit mip rectangles avoid atlas bleed on all backends, including GLES.
 // 20 recipes x 11 slots (short chains repeat their last level).
 uniform highp vec4 surface_rects[220];
+#ifdef WORLD_SURFACE_STREAM
+uniform highp vec4 surface_infos[20];
+uniform highp vec4 surface_parameters[20];
+#define surface_info surface_infos[int(surface.x)]
+#define surface_effects vec4(surface_parameters[int(surface.x)].xy,var_surface.y,0.0)
+#else
 uniform highp vec4 surface_info; // metres, resolution, relief metres, last mip
 uniform highp vec4 surface_effects; // parallax metres, micro amount, weather amount
+#endif
 uniform highp vec4 weather_features; // weather, micro, parallax, detail resolution
 vec4 surface_texel(sampler2D map,vec2 uv,float lod,float kind,float last) {
     lod=clamp(lod,0.0,last);

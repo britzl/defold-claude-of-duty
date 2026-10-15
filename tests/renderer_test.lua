@@ -97,6 +97,7 @@ local targets,draws,bindings,messages={},{},{},{}
 local active,material,listener
 local function noop() end
 render={RENDER_TARGET_DEFAULT="screen",CONTEXT_EVENT_CONTEXT_RESTORED="restored"}
+render.FRUSTUM_PLANES_ALL="all_planes"
 for _,name in ipairs({"set_viewport","set_camera","set_view","set_projection","set_depth_mask",
     "set_stencil_mask","disable_state","enable_state","set_depth_func","clear","draw_debug3d","set_blend_func"}) do
     render[name]=noop
@@ -121,6 +122,9 @@ render.enable_texture=function(name,target) assert(not target.deleted);bindings[
 render.disable_texture=function(name) bindings[name]=nil end
 render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
+    if options and options.frustum then
+        assert(options.frustum_planes==render.FRUSTUM_PLANES_ALL,"3D draw omitted near/far culling")
+    end
     for _,target in pairs(bindings) do assert(target~=active,"render-target feedback loop") end
     if material=="shadow" or material=="local_shadow" or material=="prepass" or predicate=="capture_lab" or predicate=="model" then
         assert(bindings.coverage_texture,"Missing foliage mask in "..tostring(material or predicate))
@@ -144,6 +148,12 @@ dofile("render/game.render_script")
 local self={}
 test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
+    assert(#self.lighting.surface_infos==#atlas.surfaces)
+    for i,s in ipairs(atlas.surfaces) do
+        assert(self.lighting.surface_infos[i].args[1]==s.metres)
+        assert(self.lighting.surface_infos[i].args[2]==s.size)
+        assert(self.lighting.surface_parameters[i].args[1]==s.parallax)
+    end
     assert(#targets==42)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do

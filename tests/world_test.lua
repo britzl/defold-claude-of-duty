@@ -39,6 +39,10 @@ test("changing loading budget does not change meshes, bounds or collider placeme
             assert(#batch[stream] == #other[stream])
             for j, value in ipairs(batch[stream]) do assert(value == other[stream][j]) end
         end
+        if batch.surfaces then
+            assert(#batch.surfaces==batch.vertex_count*2)
+            for j,value in ipairs(batch.surfaces) do assert(value==other.surfaces[j]) end
+        end
     end
     for i, shape in ipairs(a.colliders) do
         for _, key in ipairs({ "id", "surface", "x", "y", "z", "w", "h", "d" }) do
@@ -57,7 +61,7 @@ test("every vertex fits its culling bounds; triangle winding agrees with normals
     assert(math.abs(ramp.bounds[5] - (1.5+math.cos(math.rad(30))*0.1+1.5)) < 1e-7)
     world.batches[#world.batches+1] = ramp
     for _, batch in ipairs(world.batches) do
-        assert(batch.boxes <= 64 and batch.vertex_count>0 and batch.vertex_count == #batch.positions / 3)
+        assert(batch.vertex_count<=generator.max_batch_vertices and batch.vertex_count>0 and batch.vertex_count == #batch.positions / 3)
         assert(#batch.normals == #batch.positions and #batch.colors == batch.vertex_count * 4)
         for i, value in ipairs(batch.positions) do
             local axis = (i - 1) % 3 + 1
@@ -106,8 +110,32 @@ test("structural solids share visual dimensions while trim has no individual col
         assert(surfaces[collider.surface], "Unknown collision surface: "..collider.surface)
     end
     assert(#world.colliders < #world.shapes / 2)
-    assert(world.stats.mesh_bytes == world.stats.vertices * 72)
-    assert(#world.batches < #world.shapes / 4)
+    local bytes=0
+    for _,batch in ipairs(world.batches) do bytes=bytes+batch.vertex_count*(batch.glass and 72 or 80) end
+    assert(world.stats.mesh_bytes == bytes)
+    assert(#world.batches < 100)
+end)
+
+test("spatial batches retain every surface family and weather value per triangle",function()
+    local materials=require "game.world.materials"
+    local names={}
+    for name in pairs(materials) do if name~="glass" then names[#names+1]=name end end
+    table.sort(names)
+    local world=generator.new(layout)
+    world.job=nil;world.mesh_index=1;world.shape_faces={};world.edge_points={}
+    for i,name in ipairs(names) do
+        world.shapes[i]={id=name,material=name,x=1,y=i,z=1,w=.1,h=.1,d=.1}
+    end
+    while world.phase=="geometry" do generator.step(world,1) end
+    local batch=world.batches[1]
+    assert(batch.boxes==#names and batch.vertex_count==#names*36)
+    for i,name in ipairs(names) do
+        local material=materials[name]
+        for vertex=(i-1)*36+1,i*36 do
+            assert(batch.surfaces[vertex*2-1]==material.kind,name)
+            assert(batch.surfaces[vertex*2]==(material.weather or 1),name)
+        end
+    end
 end)
 
 test("decoration detail and seed cannot move collision or change spawn/weapon random streams", function()
@@ -367,7 +395,7 @@ test("cover positions have support and clearance; closed shopfronts face the str
         end
     end
     -- Full-map bounds include terrain chunks, five flights and all background rows.
-    assert(world.stats.batches<560 and world.stats.mesh_bytes<32*1024*1024)
+    assert(world.stats.batches<100 and world.stats.mesh_bytes<32*1024*1024)
     assert(#world.minimap<1240)
 end)
 
@@ -473,8 +501,10 @@ test("architecture and all authored dressing families survive generation",functi
         if s.kind=="frond" then assert(not s.surface and s.material=="foliage") end
     end
     for _,b in ipairs(world.batches) do
-        if b.material=="foliage" then
-            for i=4,#b.colors,4 do assert(b.colors[i]==1,"Geometric leaflets must not use the broadleaf card mask") end
+        for i=1,b.vertex_count do
+            if b.surfaces and b.surfaces[i*2-1]==19 then
+                assert(b.colors[i*4]==1,"Geometric leaflets must not use the broadleaf card mask")
+            end
         end
     end
 end)

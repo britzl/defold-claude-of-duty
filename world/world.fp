@@ -3,7 +3,10 @@ varying mediump vec3 var_normal;
 varying lowp vec4 var_color;
 varying highp vec4 var_edges;
 varying mediump vec4 var_masks;
-uniform highp vec4 surface;
+varying highp vec2 var_surface;
+uniform highp vec4 surface_override;
+#define surface vec4(floor(var_surface.x+0.5),surface_override.yzw)
+#define WORLD_SURFACE_STREAM
 uniform lowp sampler2D albedo_texture;
 uniform lowp sampler2D normal_texture;
 uniform lowp sampler2D material_texture;
