@@ -102,7 +102,7 @@ def main():
         engine.wait_until(lambda:cmd('world.snapshot')['ready'],timeout=45)
         engine.wait_until(lambda:cmd('renderer.snapshot')['ready'],timeout=60)
         resize(1280,720)
-        initial=cmd('renderer.snapshot');assert initial['target_count']==39
+        initial=cmd('renderer.snapshot');assert initial['target_count']==43
         assert initial['prepass_draw_passes']==3 and initial['occlusion_draw_passes']==2
         for name in ('street','interior','laboratory','contact_furniture','contact_corner','shadow_cutout'):
             shot(name);enabled=save(name)

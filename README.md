@@ -1035,14 +1035,37 @@ normal offset and filter footprint, and every tap clamps to its own atlas tile.
 The displayed interpolated camera drives fitting, including ADS, inspection,
 teleports, laboratory captures and aspect-ratio changes.
 
-Static/capture batches and animated soldiers draw into each cascade with their
-own light frustum. The colour and shadow passes share the soldier's 25-bone
+Static/capture batches are cached in four 1024² colour/depth targets. A cached
+projection is reused only while it contains the camera slice, its filter guard
+and the 80 m upstream caster margin; light direction and texel scale must match.
+The cached matrix travels with its pixels. Camera motion can therefore reuse
+static geometry without delaying a shadow update or changing resolution.
+Teleports, capture changes, settings changes, world readiness and context
+restoration invalidate the cache. `shadow_cache=false` selects the original
+uncached path for direct comparisons.
+
+Each frame copies the cached colour **and actual depth attachment** into the
+combined atlas, then draws animated soldiers with that cascade's light frustum.
+The colour and shadow passes share the soldier's 25-bone
 skinning and the world's procedural binary-coverage function. Vertex alpha of
 one stays solid; lower world alpha opens circular holes on a 30 cm grid. Soldier
 alpha remains camouflage weight. A laboratory panel checks matching visible
 holes and projected shadows. The complete atlas clears once per frame, including
 when shadows are disabled; all four tiles draw in that same render pass so tile
 GPUs retain earlier cascades.
+
+Caching adds 32 MiB and four targets (43 steady targets with current defaults).
+It retains every caster, four 1024² cascades, the 120 m range and the original
+PCSS filter. At native 1920 × 1280, repeated paired moving-camera samples measured
+76.5 → 83.1 FPS on the street (530 → 273 draw calls), and 75.3 → 80.8 FPS in the
+distance view (524 → 285 calls). These are short CPU frame-scope measurements
+with live TAA and frozen gameplay, not sustained combat or GPU timings; they do
+not establish 120 FPS. Nine matched stills differed by at most 2/255 per channel,
+on at most 137 pixels out of 2,457,600. Twenty-one moving-camera comparisons with
+TAA disabled also passed: mean channel differences stayed below 0.038/255, with
+fewer than 0.01% of pixels differing by more than 8/255. Run
+`PYTHONPATH=automation-bridge-python python3 tests/shadow_cache_smoke.py` for
+paired stills, motion without TAA and repeated cache-on/off profiles.
 
 Sun visibility uses geometric normals for world-unit normal/slope bias, packed
 16-bit depth, eight blocker taps and nine bilinear comparison taps (36 texture
@@ -1198,7 +1221,8 @@ same 190 colliders. Resize affects fourteen screen-sized targets; zero-sized
 windows skip drawing and finalization releases owned targets.
 
 `renderer.snapshot` reports cascade splits, world texel sizes, atlas dimensions and
-shadow submissions, temporal history/reset status and AA passes, plus bake
+shadow submissions (static refreshes, depth copies and dynamic draws separately),
+cumulative cache refreshes, temporal history/reset status and AA passes, plus bake
 jobs/draws, current/peak target bytes, local-light count,
 shadow frames, environment dimensions/levels/sample count, volume count and active settings.
 It also reports prepass/effect submissions, occlusion dimensions, sample counts,

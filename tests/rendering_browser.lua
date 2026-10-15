@@ -152,7 +152,7 @@ function M.update(test,self,dt)
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==39)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==43)
             assert(stats.surface_count==#atlas.surfaces-1 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             table.sort(test.intervals)
             print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,

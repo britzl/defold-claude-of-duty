@@ -60,7 +60,7 @@ def main(output=ROOT/'captures/rendering/browser-validation'):
     assert ImageChops.difference(lab,isolated).getbbox() is None
     assert stats['volume_count']==4 and stats['reflection_levels']==6
     if stats.get('shadow_cascades')==4:
-        assert stats['shadow_atlas_size']==2048 and stats['shadow_draw_passes']==4
+        assert stats['shadow_atlas_size']==2048 and 0<=stats['shadow_draw_passes']<=4 and stats['shadow_copy_draw_passes']==4
         for name in ('shadow_distance','shadow_cutout','shadow_remote'):
             enabled=Image.open(output/(name+'.png')).convert('RGB')
             disabled=Image.open(output/(name+'_disabled.png')).convert('RGB')

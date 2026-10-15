@@ -76,7 +76,7 @@ def main():
         assert report['tiers']['low']['renderer']['target_bytes']<report['tiers']['medium']['renderer']['target_bytes']<report['tiers']['high']['renderer']['target_bytes']
         for _ in range(3):
             config(photographic_quality='low');config(photographic_quality='high')
-            assert stats()['target_count']==39
+            assert stats()['target_count']==43
         cmd('capture.end');cmd('ui.focus',{'focused':True});cmd('ui.pause',{'paused':False});cmd('ai.configure',{'enabled':False})
         game.wait_frames(45);assert stats()['pipeline']['exposure_mode']=='adaptive_bounded'
         cmd('ui.pause',{'paused':True});game.wait_frames(35);time=stats()['grain_time'];game.wait_frames(35)

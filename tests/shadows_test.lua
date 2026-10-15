@@ -69,4 +69,46 @@ test("near-vertical sun and distant fixtures retain a finite shadow projection",
         for _,fit in ipairs(fits) do for _,row in ipairs(fit.rows) do for _,x in ipairs(row) do assert(x==x and math.abs(x)<math.huge) end end end
     end
 end)
+test("cached projections retain guarded receivers and offscreen casters while the camera moves",function()
+    local function cross(a,b) return {a[2]*b[3]-a[3]*b[2],a[3]*b[1]-a[1]*b[3],a[1]*b[2]-a[2]*b[1]} end
+    local length=math.sqrt(dot(sun,sun));local light={sun[1]/length,sun[2]/length,sun[3]/length}
+    local hits,refreshes=0,0
+    for _,aspect in ipairs({.5,1.5,3}) do for _,pitch in ipairs({-.9,0,.9}) do for _,roll in ipairs({-.4,0,.4}) do
+        local cached={};local v=math.tan(math.rad(75/2));local h=v*aspect
+        for step=0,40 do
+            local yaw=.7+step*.006;local eye={-24+step*.2,7,91}
+            local f={-math.sin(yaw)*math.cos(pitch),math.sin(pitch),-math.cos(yaw)*math.cos(pitch)}
+            local r={math.cos(yaw),0,-math.sin(yaw)};local u=cross(r,f);local right,up={},{}
+            for axis=1,3 do right[axis]=r[axis]*math.cos(roll)+u[axis]*math.sin(roll);up[axis]=u[axis]*math.cos(roll)-r[axis]*math.sin(roll) end
+            for i,fit in ipairs(shadows.fit(eye,f,h,v,sun,right,up)) do
+                if shadows.reusable(cached[i],fit) then
+                    hits=hits+1
+                    for _,depth in ipairs({fit.near,fit.far}) do for _,sx in ipairs({-1,1}) do for _,sy in ipairs({-1,1}) do
+                        for _,distance in ipairs({0,shadows.caster_distance}) do
+                            local p={}
+                            for axis=1,3 do p[axis]=eye[axis]+f[axis]*depth+right[axis]*sx*depth*h+up[axis]*sy*depth*v+light[axis]*distance end
+                            local q=project(cached[i],p)
+                            for axis=1,3 do
+                                local row=cached[i].rows[axis]
+                                local guard=(shadows.max_filter_texels+2)*fit.texel*math.sqrt(dot(row,row))
+                                assert(math.abs(q[axis])+guard<1,"Reused an atlas without caster/filter coverage")
+                            end
+                        end
+                    end end end
+                else cached[i]=fit;refreshes=refreshes+1 end
+            end
+        end
+    end end end
+    assert(hits>refreshes and refreshes>0)
+end)
+test("cache invalidates on teleport, FOV and light changes",function()
+    local original=shadows.fit({0,2,10},{0,0,-1},1,.7,sun)
+    for i,fit in ipairs(original) do assert(shadows.reusable(fit,fit)) end
+    for _,fits in ipairs({
+        shadows.fit({900,180,-700},{1,0,0},1,.7,sun),
+        shadows.fit({0,2,10},{0,0,-1},.6,.5,sun),
+        shadows.fit({0,2,10},{0,0,-1},1,.7,{0,1,0})}) do
+        for i,fit in ipairs(fits) do assert(not shadows.reusable(original[i],fit)) end
+    end
+end)
 print(tests.." shadow tests passed")

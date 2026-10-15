@@ -70,12 +70,15 @@ local function resize(self)
     end
     return true
 end
-local function fullscreen(self,material,constants,blend)
+local function fullscreen(self,material,constants,blend,depth_copy)
     render.set_camera()
     render.set_view(self.identity)
     render.set_projection(self.identity)
-    render.set_depth_mask(false)
-    render.disable_state(G.STATE_DEPTH_TEST)
+    render.set_depth_mask(depth_copy==true)
+    if depth_copy then
+        render.enable_state(G.STATE_DEPTH_TEST)
+        render.set_depth_func(G.COMPARE_FUNC_ALWAYS)
+    else render.disable_state(G.STATE_DEPTH_TEST) end
     render.disable_state(G.STATE_CULL_FACE)
     render.disable_state(G.STATE_BLEND)
     if blend then
@@ -191,6 +194,10 @@ local function report(self)
         shadow_size=shadows.size, shadow_atlas_size=shadows.atlas_size, shadow_cascades=shadows.count,
         shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
         shadow_draw_passes=self.shadow_draw_passes or 0,
+        shadow_static_draw_passes=self.shadow_static_draw_passes or 0,
+        shadow_copy_draw_passes=self.shadow_copy_draw_passes or 0,
+        shadow_dynamic_draw_passes=self.shadow_dynamic_draw_passes or 0,
+        shadow_cache_refreshes=self.shadow_cache_refreshes or 0,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
         target_count=target_count,
         occlusion_width=self.occlusion_width,occlusion_height=self.occlusion_height,
@@ -215,8 +222,9 @@ local function report(self)
         atmosphere_preset=self.options.lighting,environment_updates=self.environment_updates,
         sky_width=daylight.sky_width,sky_height=daylight.sky_height,
         atmosphere_draw_passes=self.atmosphere_draw_passes or 0,fog_steps=daylight.fog_steps,
-        fog_width=self.occlusion_width,fog_height=self.occlusion_height,
-        settings=self.options,pipeline=self.pipeline })
+        fog_width=self.occlusion_width,fog_height=self.occlusion_height })
+    -- Keep settings separate: WebGL's message payload is limited to 2040 bytes.
+    msg.post("main:/controller#script","renderer_configuration",{settings=self.options,pipeline=self.pipeline})
     msg.post("main:/controller#script","renderer_photographic",{
         bloom_levels=photographic.quality(self.options.photographic_quality).levels,bloom_draw_passes=self.bloom_draw_passes or 0,
         exposure_draw_passes=self.exposure_draw_passes or 0,lens_draw_passes=self.lens_draw_passes or 0,
@@ -306,6 +314,7 @@ function init(self)
     for _,constants in ipairs(self.cascade_constants) do coverage_constants(constants) end
     for _,constants in ipairs(self.local_shadow_constants) do coverage_constants(constants) end
     self.targets.shadow=colour_target(shadows.atlas_size,shadows.atlas_size,true,true)
+    for i=1,shadows.count do self.targets["shadow_static_"..i]=colour_target(shadows.size,shadows.size,true,true,false,nil,false,true) end
     for _,name in ipairs({"albedo","normal","material"}) do
         self.targets[name]=colour_target(atlas.width,atlas.height)
     end
@@ -317,6 +326,7 @@ function init(self)
         if event==render.CONTEXT_EVENT_CONTEXT_RESTORED then
             -- Runtime render-target contents are transient across context loss.
             self.bake_step=0
+            self.shadow_cached_fits=nil
             self.grade_ready=false;self.exposure_valid=false
             temporal.reset(self.temporal,"context_restored")
             self.report=true
@@ -367,7 +377,9 @@ function update(self,dt)
             o.parallax and atlas.quality~="low" and 1 or 0,atlas.surfaces[atlas.detail_kind+1].size)
         self.lighting.features=vmath.vector4(o.shadows and 1 or 0,o.normal_maps and 1 or 0,
             o.local_lights and 1 or 0,o.fog and 1 or 0)
-        local fits,matrices,data=shadows.update(inverse_view,projection,self.rig.sun_direction,vmath.vector4,vmath.matrix4)
+        local cache_shadows=o.shadow_cache and self.shadow_cache_ready
+        local fits,matrices,data,shadow_dirty=shadows.update(inverse_view,unjittered,self.rig.sun_direction,vmath.vector4,vmath.matrix4,
+            cache_shadows and self.shadow_cached_fits or nil)
         data[18].w=o.view=="cascades" and 1 or o.view=="shadow_visibility" and 2 or 0
         self.lighting.shadow_data=data
         self.shadow_texels={fits[1].texel,fits[2].texel,fits[3].texel,fits[4].texel}
@@ -385,18 +397,37 @@ function update(self,dt)
         self.sky_constants.eye_position=eye
         self.sky_constants.inverse_view_proj=vmath.inv(projection*view)
 
-        -- Clear every frame even when disabled, so re-enabling cannot expose stale data.
+        -- Each static cascade owns a complete pass. Never rely on preserving
+        -- other atlas tiles across render-target switches (DONT_CARE on Metal).
         render.set_camera()
-        render.set_render_target(t.shadow)
-        render.set_viewport(0,0,shadows.atlas_size,shadows.atlas_size)
         render.set_depth_mask(true)
         render.disable_state(G.STATE_BLEND)
         render.enable_state(G.STATE_DEPTH_TEST)
         render.enable_state(G.STATE_CULL_FACE)
         render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
-        render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
         bind("coverage_texture",t.albedo)
         self.shadow_draw_passes=0
+        self.shadow_static_draw_passes,self.shadow_copy_draw_passes,self.shadow_dynamic_draw_passes=0,0,0
+        if o.shadows and cache_shadows then
+            render.set_view(self.identity)
+            render.enable_material("shadow")
+            for i=1,shadows.count do if shadow_dirty[i] then
+                render.set_render_target(t["shadow_static_"..i])
+                render.set_viewport(0,0,shadows.size,shadows.size)
+                render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+                render.set_projection(matrices[i])
+                local constants=self.cascade_constants[i];constants.sun_matrix=matrices[i]
+                render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,
+                    {constants=constants,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrices[i]})
+                self.shadow_static_draw_passes=self.shadow_static_draw_passes+1
+            end end
+            render.disable_material()
+            self.shadow_cached_fits=fits
+            self.shadow_cache_refreshes=(self.shadow_cache_refreshes or 0)+self.shadow_static_draw_passes
+        end
+        render.set_render_target(t.shadow)
+        render.set_viewport(0,0,shadows.atlas_size,shadows.atlas_size)
+        render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
         if o.shadows then
             -- Bind/clear ONCE: switching targets between tiles discards earlier
             -- cascades on tile GPUs. Each draw keeps its own immutable constants.
@@ -404,22 +435,34 @@ function update(self,dt)
             for i,fit in ipairs(fits) do
                 local vp=fit.viewport
                 render.set_viewport(vp[1],vp[2],vp[3],vp[4])
-                render.set_projection(matrices[i])
                 local constants=self.cascade_constants[i]
                 constants.sun_matrix=matrices[i]
-                render.enable_material("shadow")
-                render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,
-                    {constants=constants,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrices[i]})
-                self.shadow_draw_passes=self.shadow_draw_passes+1
+                if cache_shadows then
+                    bind("source_texture",t["shadow_static_"..i])
+                    render.enable_texture("source_depth",t["shadow_static_"..i],DEPTH)
+                    fullscreen(self,"shadow_copy",nil,false,true)
+                    render.disable_texture("source_texture");render.disable_texture("source_depth")
+                    self.shadow_copy_draw_passes=self.shadow_copy_draw_passes+1
+                    render.enable_state(G.STATE_CULL_FACE)
+                    render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
+                else
+                    render.set_view(self.identity);render.set_projection(matrices[i])
+                    render.enable_material("shadow")
+                    render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,
+                        {constants=constants,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrices[i]})
+                    self.shadow_static_draw_passes=self.shadow_static_draw_passes+1
+                end
                 if not self.capture.active or self.capture.actors then
+                    render.set_view(self.identity);render.set_projection(matrices[i])
                     render.enable_material("shadow_skinned")
                     render.draw(self.soldier_shadow,{constants=constants,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrices[i]})
-                    self.shadow_draw_passes=self.shadow_draw_passes+1
+                    self.shadow_dynamic_draw_passes=self.shadow_dynamic_draw_passes+1
                 end
             end
             render.disable_material()
             self.shadow_frames=self.shadow_frames+1
         end
+        self.shadow_draw_passes=self.shadow_static_draw_passes+self.shadow_dynamic_draw_passes
 
         render.set_render_target(t.local_shadow)
         render.set_viewport(0,0,local_lights.shadow_width,local_lights.shadow_height)
@@ -758,15 +801,21 @@ function update(self,dt)
     report(self)
 end
 function on_message(self,id,message)
-    if id==hash("renderer_reset_history") then
+    if id==hash("renderer_world_ready") then
+        self.shadow_cache_ready=true
+        self.shadow_cached_fits=nil
+    elseif id==hash("renderer_reset_history") then
+        self.shadow_cached_fits=nil
         temporal.reset(self.temporal,message.reason or "explicit")
         self.exposure_valid=false
         self.report=true
     elseif id==hash("capture_configure") then
+        self.shadow_cached_fits=nil
         self.capture=message
         self.exposure_valid=false
         temporal.reset(self.temporal,"capture")
     elseif id==hash("renderer_configure") then
+        self.shadow_cached_fits=nil
         local next_options=settings.configure(self.options,message)
         if next_options.lighting~=self.options.lighting or next_options.clouds~=self.options.clouds then
             self.environment_dirty=true

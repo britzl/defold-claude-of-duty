@@ -1,0 +1,7 @@
+name: "shadow_copy"
+tags: "fullscreen"
+vertex_program: "/render/composite.vp"
+fragment_program: "/render/shadow_copy.fp"
+vertex_space: VERTEX_SPACE_LOCAL
+samplers { name: "source_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }
+samplers { name: "source_depth" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }

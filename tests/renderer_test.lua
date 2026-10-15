@@ -19,7 +19,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*8+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*8+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -86,7 +86,7 @@ graphics.get_adapter_info=function() return {family="metal"} end
 sys={get_config_string=function(_,default) return default end}
 hash=function(s) return s end
 local matrix_mt={}
-local function value(...) return setmetatable({x=0,y=0,z=0,w=1,m00=1,m11=1,m02=0,m12=0,m22=1,m03=0,m13=0,m23=0,args={...}},matrix_mt) end
+local function value(...) return setmetatable({x=0,y=0,z=0,w=1,m00=1,m10=0,m20=0,m01=0,m21=0,m11=1,m02=0,m12=0,m22=1,m03=0,m13=0,m23=0,args={...}},matrix_mt) end
 matrix_mt.__add=function() return value() end
 matrix_mt.__mul=function() return value() end
 vmath={matrix4=value,matrix4_perspective=value,matrix4_orthographic=value,matrix4_look_at=value,normalize=value,
@@ -95,6 +95,7 @@ camera={get_view=value,get_projection=value}
 local w,h=960,640
 local targets,draws,bindings,messages={},{},{},{}
 local active,material,listener
+local depth_mask,depth_func
 local function noop() end
 render={RENDER_TARGET_DEFAULT="screen",CONTEXT_EVENT_CONTEXT_RESTORED="restored"}
 render.FRUSTUM_PLANES_ALL="all_planes"
@@ -102,6 +103,8 @@ for _,name in ipairs({"set_viewport","set_camera","set_view","set_projection","s
     "set_stencil_mask","disable_state","enable_state","set_depth_func","clear","draw_debug3d","set_blend_func"}) do
     render[name]=noop
 end
+render.set_depth_mask=function(value) depth_mask=value end
+render.set_depth_func=function(value) depth_func=value end
 render.get_window_width=function() return w end
 render.get_window_height=function() return h end
 render.predicate=function(tags) return tags[1] end
@@ -122,6 +125,11 @@ render.enable_texture=function(name,target) assert(not target.deleted);bindings[
 render.disable_texture=function(name) bindings[name]=nil end
 render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
+    if material=="shadow_copy" then
+        assert(bindings.source_texture and bindings.source_texture==bindings.source_depth,"Missing matching cached colour/depth")
+        assert(depth_mask and depth_func==graphics.COMPARE_FUNC_ALWAYS,"Cached depth must overwrite the destination")
+        assert(bindings.source_depth.params[graphics.BUFFER_TYPE_DEPTH_BIT].flags==render.TEXTURE_BIT)
+    end
     if options and options.frustum then
         assert(options.frustum_planes==render.FRUSTUM_PLANES_ALL,"3D draw omitted near/far culling")
     end
@@ -154,7 +162,7 @@ test("recipes, padded mip chains and filtered environment finish before the worl
         assert(self.lighting.surface_infos[i].args[2]==s.size)
         assert(self.lighting.surface_parameters[i].args[1]==s.parallax)
     end
-    assert(#targets==42)
+    assert(#targets==46)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -215,7 +223,7 @@ test("flash resolves in linear light without target feedback and retains weapon 
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==42 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==46 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -370,8 +378,32 @@ test("photographic metering pauses, captures lock time, diagnostics bypass lens 
     assert(self.targets.photo_dof~=old and self.bloom_draw_passes==9)
     on_message(self,"capture_configure",{active=false,laboratory=false})
 end)
+test("static shadow caching copies depth and redraws animated casters every frame",function()
+    on_message(self,"renderer_world_ready",{})
+    on_message(self,"renderer_configure",{shadows=true,shadow_cache=true})
+    draws={};update(self)
+    assert(self.shadow_static_draw_passes==4 and self.shadow_copy_draw_passes==4 and self.shadow_dynamic_draw_passes==4)
+    local count=self.shadow_cache_refreshes
+    draws={};update(self)
+    assert(self.shadow_static_draw_passes==0 and self.shadow_copy_draw_passes==4 and self.shadow_dynamic_draw_passes==4)
+    assert(self.shadow_cache_refreshes==count)
+    for _,draw in ipairs(draws) do if draw.material=="shadow_copy" then assert(draw.target==self.targets.shadow) end end
+    on_message(self,"renderer_reset_history",{reason="teleport"});update(self)
+    assert(self.shadow_static_draw_passes==4)
+    on_message(self,"capture_configure",{active=true,laboratory=true});update(self)
+    assert(self.shadow_static_draw_passes==4 and self.shadow_dynamic_draw_passes==0)
+    update(self);assert(self.shadow_static_draw_passes==0 and self.shadow_dynamic_draw_passes==0)
+    on_message(self,"renderer_configure",{shadow_cache=false});update(self)
+    assert(self.shadow_static_draw_passes==4 and self.shadow_copy_draw_passes==0)
+    on_message(self,"renderer_configure",{shadow_cache=true,shadows=false});update(self)
+    assert(self.shadow_draw_passes==0 and self.shadow_copy_draw_passes==0)
+    on_message(self,"renderer_configure",{shadows=true});update(self)
+    assert(self.shadow_static_draw_passes==4)
+    on_message(self,"capture_configure",{active=false,laboratory=false})
+end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)
+    assert(self.shadow_cached_fits==nil)
     while self.bake_step<atlas.job_count do update(self) end
     assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2)
     final(self)

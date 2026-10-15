@@ -66,8 +66,8 @@ def main():
         resize(1280,720)
         initial=cmd('renderer.snapshot')
         assert initial['shadow_cascades']==4 and initial['shadow_atlas_size']==2048
-        assert initial['target_count']==39 and initial['shadow_splits']==[8,22,52,120]
-        assert initial['shadow_draw_passes']==8
+        assert initial['target_count']==43 and initial['shadow_splits']==[8,22,52,120]
+        assert initial['shadow_dynamic_draw_passes']==4 and initial['shadow_copy_draw_passes']==4
         for name in ('street','interior','shadow_distance','shadow_cutout','shadow_remote'):
             shot(name);default=save(name)
             configure(shadows=False);disabled=save(name+'-disabled')
@@ -110,8 +110,8 @@ def main():
         resize(1280,720);shot('shadow_distance');configure(view='shadow',bloom=False)
         assert ImageChops.difference(atlas,save('atlas-resize-return')).getbbox() is None
         final=cmd('renderer.snapshot')
-        assert final['target_count']==39 and final['bake_draws']==initial['bake_draws']
-        assert final['shadow_draw_passes']==4
+        assert final['target_count']==43 and final['bake_draws']==initial['bake_draws']
+        assert final['shadow_draw_passes']==0 and final['shadow_copy_draw_passes']==4
         report['renderer']=final
         report['camera_return_exact']=True
         cmd('capture.end')

@@ -430,6 +430,10 @@ function update(self, dt)
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then return end
     runtime.update(self.ctx, dt)
+    if self.ctx.world.ready and self.shadow_world~=self.ctx.world then
+        self.shadow_world=self.ctx.world
+        msg.post("@render:","renderer_world_ready",{})
+    end
     if self.market_validation then require("tests.market_browser").update(self.market_validation,self,dt) end
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
@@ -631,7 +635,7 @@ end
 
 function on_message(self, message_id, message, sender)
     if message_id == hash("ui_action") then ui.action(self, message) end
-    if message_id == hash("renderer_stats") or message_id == hash("renderer_details") or message_id == hash("renderer_photographic") then
+    if message_id == hash("renderer_stats") or message_id == hash("renderer_details") or message_id == hash("renderer_photographic") or message_id == hash("renderer_configuration") then
         for k,v in pairs(message) do self.renderer_stats[k]=v end
     end
     if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end

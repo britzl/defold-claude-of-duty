@@ -36,7 +36,7 @@ def main():
     try:
         engine.wait_until(lambda:cmd('world.snapshot')['ready'] and stats()['ready'],timeout=70)
         resize(1280,720)
-        assert stats()['target_count']==39
+        assert stats()['target_count']==43
         for name in ('street','laboratory','shadow_cutout','weapon','ads'):
             shot(name);enabled=save(name)
             game.wait_frames(17);assert delta(enabled,save(name+'-held'))==0,'converged capture changed'
