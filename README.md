@@ -1,3 +1,12 @@
+# Disclaimer
+
+This project is a Defold take on the Call of Duty clone "Claude of Duty". This is an experiment to see how well Codex (GPT-6 Astra Extra High) can  convert the preexisting Kaigen3D and Three.js versions to Defold. Not a single line of code is written by a human.
+
+- Kaigen3D version: https://github.com/Kaigen-Technologies/kaigen-claude-of-duty
+- Three.js version: https://github.com/mshumer/Claude-of-Duty
+
+- Playable HTML5 version: https://britzl.github.io/ClaudeofDuty/
+
 # Defold Claude of Duty
 
 Runtime-generated port targeting Defold 1.14.0. See [PLAN.md](PLAN.md).
