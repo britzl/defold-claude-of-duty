@@ -4,6 +4,27 @@ local V = require "game.weapons.math"
 local T = require "game.ai.transform"
 local M = {}
 local axes = {"x","y","z"}
+-- Conservative rejection for the native ray's starting-inside fallback. The
+-- full slab test below still decides entries/exits and their normals. Include
+-- entries up to its 1e-7 threshold, including origins just outside a face.
+function M.contains_origin(shape, origin, direction)
+    local x,y,z=origin.x-shape.x,origin.y-shape.y,origin.z-shape.z
+    local dx,dy,dz=direction.x,direction.y,direction.z
+    if shape.transform then
+        local m=shape.transform
+        x=m[1]*origin.x+m[5]*origin.y+m[9]*origin.z-(m[1]*m[4]+m[5]*m[8]+m[9]*m[12])
+        y=m[2]*origin.x+m[6]*origin.y+m[10]*origin.z-(m[2]*m[4]+m[6]*m[8]+m[10]*m[12])
+        z=m[3]*origin.x+m[7]*origin.y+m[11]*origin.z-(m[3]*m[4]+m[7]*m[8]+m[11]*m[12])
+        dx,dy,dz=m[1]*dx+m[5]*dy+m[9]*dz,m[2]*dx+m[6]*dy+m[10]*dz,m[3]*dx+m[7]*dy+m[11]*dz
+    elseif shape.rotation_x and shape.rotation_x~=0 then
+        local c,s=math.cos(-shape.rotation_x),math.sin(-shape.rotation_x)
+        y,z=y*c-z*s,z*c+y*s
+        dy,dz=dy*c-dz*s,dz*c+dy*s
+    end
+    return math.abs(x)<=shape.w*.5+math.abs(dx)*1e-7+1e-9
+        and math.abs(y)<=shape.h*.5+math.abs(dy)*1e-7+1e-9
+        and math.abs(z)<=shape.d*.5+math.abs(dz)*1e-7+1e-9
+end
 function M.box(shape, origin, direction, length)
     local angle=shape.rotation_x or 0
     local p=V.rotate({x=origin.x-shape.x,y=origin.y-shape.y,z=origin.z-shape.z},-angle,0,0)

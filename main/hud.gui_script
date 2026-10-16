@@ -18,6 +18,7 @@ function init(self)
     self.menu=menu.new()
     self.map={}
     self.map_nodes={}
+    self.map_geometry={}
     self.damage={}
     -- Edge washes stretch with the window; gameplay HUD elements retain aspect.
     for _,r in ipairs({{480,635,960,10},{480,5,960,10},{5,320,10,640},{955,320,10,640}}) do
@@ -80,21 +81,32 @@ function update(self,dt)
 end
 
 local function update_hud(self,state)
-    for _,group in ipairs({TL,TR,BL,BR,TOP,BOTTOM}) do gui.set_enabled(group.root,not state.diagnostic) end
-    gui.set_text(self.health,string.format("HEALTH %d",math.ceil(state.health)))
-    gui.set_color(self.health,state.health<=30 and W.red or W.white)
-    gui.set_color(self.health_bar,state.health<=30 and W.red or W.accent)
-    gui.set_size(self.health_bar,vmath.vector3(math.max(.01,188*state.health/100),5,0))
-    gui.set_text(self.ammo,state.ammo)
-    gui.set_text(self.weapon_status,state.weapon_status)
-    gui.set_text(self.title,state.inspecting and state.title or "MARKET STREET")
-    gui.set_text(self.stance,state.inspecting and "INSPECTION" or state.title)
-    gui.set_text(self.feed,state.feed)
-    gui.set_enabled(self.loading,state.loading)
-    gui.set_text(self.death,(state.alive or state.diagnostic) and "" or "YOU WERE ELIMINATED")
-    gui.set_text(self.hint,not state.alive and "9  RESTART ENCOUNTER  /  ESC MENU"
-        or state.mouse_locked and "WASD  MOVE  /  SHIFT  SPRINT  /  ESC MENU"
-        or "CLICK TO CAPTURE MOUSE  /  ESC MENU")
+    local previous=self.hud_state or {}
+    if state.diagnostic~=previous.diagnostic then
+        for _,group in ipairs({TL,TR,BL,BR,TOP,BOTTOM}) do gui.set_enabled(group.root,not state.diagnostic) end
+    end
+    if state.health~=previous.health then
+        gui.set_text(self.health,string.format("HEALTH %d",math.ceil(state.health)))
+        gui.set_color(self.health,state.health<=30 and W.red or W.white)
+        gui.set_color(self.health_bar,state.health<=30 and W.red or W.accent)
+        gui.set_size(self.health_bar,vmath.vector3(math.max(.01,188*state.health/100),5,0))
+    end
+    if state.ammo~=previous.ammo then gui.set_text(self.ammo,state.ammo) end
+    if state.weapon_status~=previous.weapon_status then gui.set_text(self.weapon_status,state.weapon_status) end
+    if state.inspecting~=previous.inspecting or state.title~=previous.title then
+        gui.set_text(self.title,state.inspecting and state.title or "MARKET STREET")
+        gui.set_text(self.stance,state.inspecting and "INSPECTION" or state.title)
+    end
+    if state.feed~=previous.feed then gui.set_text(self.feed,state.feed) end
+    if state.loading~=previous.loading then gui.set_enabled(self.loading,state.loading) end
+    if state.alive~=previous.alive or state.diagnostic~=previous.diagnostic then
+        gui.set_text(self.death,(state.alive or state.diagnostic) and "" or "YOU WERE ELIMINATED")
+    end
+    if state.alive~=previous.alive or state.mouse_locked~=previous.mouse_locked then
+        gui.set_text(self.hint,not state.alive and "9  RESTART ENCOUNTER  /  ESC MENU"
+            or state.mouse_locked and "WASD  MOVE  /  SHIFT  SPRINT  /  ESC MENU"
+            or "CLICK TO CAPTURE MOUSE  /  ESC MENU")
+    end
     for _,node in ipairs(self.damage) do
         gui.set_alpha(node,state.diagnostic and 0 or math.max(state.damage*.48,state.health>0 and state.health<=30 and .15 or 0))
     end
@@ -109,35 +121,48 @@ local function update_hud(self,state)
     end
     gui.set_enabled(self.hit,state.hit and state.alive and not state.inspecting and not state.diagnostic)
     gui.set_color(self.hit,state.headshot and W.accent or W.white)
-    gui.set_text(self.bearing,string.format("%03d",math.floor(state.heading+.5)%360))
-    for i,node in ipairs(self.compass) do
-        local delta=((i-1)*45-state.heading+180)%360-180
-        gui.set_enabled(node,math.abs(delta)<=65)
-        W.position(node,480+delta*2,609,TOP)
+    if state.heading~=previous.heading then
+        gui.set_text(self.bearing,string.format("%03d",math.floor(state.heading+.5)%360))
+        for i,node in ipairs(self.compass) do
+            local delta=((i-1)*45-state.heading+180)%360-180
+            gui.set_enabled(node,math.abs(delta)<=65)
+            W.position(node,480+delta*2,609,TOP)
+        end
     end
-    gui.set_euler(self.map_player,vmath.vector3(0,0,math.deg(state.yaw)))
+    if state.yaw~=previous.yaw then gui.set_euler(self.map_player,vmath.vector3(0,0,math.deg(state.yaw))) end
+    self.hud_state=state
+    -- Anchored nodes already follow window resizes. Reclip the north-up map
+    -- only when its geometry or the player's exact position/floor changes.
+    if not self.map_dirty and state.x==previous.x and state.y==previous.y and state.z==previous.z then return end
+    self.map_dirty=false
     local visible=model.map_visible(self.map,state.x,state.y,state.z,SIZE)
     for i,rect in ipairs(visible) do
         local node=self.map_nodes[i]
+        local old=self.map_geometry[i]
         if not node then
             node=W.box("map_"..i,MX,MY,1,1,W.muted,"map",TL)
             self.map_nodes[i]=node
         end
-        gui.set_enabled(node,true)
-        W.position(node,MX+rect.x,MY+rect.y,TL)
-        gui.set_size(node,vmath.vector3(rect.w,rect.h,0))
-        gui.set_color(node,rect.floor and vmath.vector4(.15,.21,.23,1) or vmath.vector4(.48,.57,.57,1))
+        if not old or i>(self.map_count or 0) then gui.set_enabled(node,true) end
+        if not old or old.x~=rect.x or old.y~=rect.y then W.position(node,MX+rect.x,MY+rect.y,TL) end
+        if not old or old.w~=rect.w or old.h~=rect.h then gui.set_size(node,vmath.vector3(rect.w,rect.h,0)) end
         -- Keep pooled nodes in their anchored parent. Moving relative to nil
         -- reparents them to the root and loses the top-left coordinate frame.
-        gui.set_layer(node,rect.floor and "map_floor" or "map")
+        if not old or old.floor~=rect.floor then
+            gui.set_color(node,rect.floor and vmath.vector4(.15,.21,.23,1) or vmath.vector4(.48,.57,.57,1))
+            gui.set_layer(node,rect.floor and "map_floor" or "map")
+        end
+        self.map_geometry[i]=rect
     end
-    for i=#visible+1,#self.map_nodes do gui.set_enabled(self.map_nodes[i],false) end
+    for i=#visible+1,self.map_count or 0 do gui.set_enabled(self.map_nodes[i],false) end
+    self.map_count=#visible
 end
 
 function on_message(self,id,message,sender)
     if id==hash("hud_state") then update_hud(self,message)
     elseif id==hash("map_rect") then
         self.map[#self.map+1]=message
+        self.map_dirty=true
     elseif id==hash("menu_state") then menu.state(self.menu,message)
     elseif id==hash("menu_input") then menu.input(self.menu,message) end
 end

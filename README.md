@@ -27,6 +27,48 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Profiling and CPU optimization (2026-10-16)
+
+The projectile query's starting-inside fallback now cheaply rejects unrelated
+colliders before its full box intersection. Soldiers reuse separate simulation
+pose storage, and the HUD/minimap updates only changed properties. These changes
+preserve collision intervals, animation cadence, all geometry and render settings.
+
+Matched Defold profiler captures on an Apple M3 Pro (native debug Metal) collected
+8,103 baseline and 8,159 optimized complete `Main/Step` samples across eleven
+scenarios per version. Scope costs below are milliseconds per rendered frame;
+spawn figures combine two 600-frame runs.
+
+| Measurement | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| Projectile update, 720p firing | 0.827 ms | 0.104 ms | 87% |
+| Simulation skeleton pose, 720p spawn | 0.204 ms | 0.039 ms | 81% |
+| HUD update, 720p spawn | 0.294 ms | 0.159 ms | 46% |
+| Whole-frame p95, 720p firing | 10.397 ms | 9.101 ms | 12% |
+
+720p spawn/sprint remain near the 8.33 ms pacing floor. Retina 1920×1280 did
+**not** improve: paired mean frame time rose from 13.577 to 13.927 ms, with p95
+around 29.4–29.7 ms. The resolution-dependent rendering/presentation bottleneck
+remains; these elapsed scopes are not GPU timings. Both firing runs produced
+identical weapon results, including 61 shots, 63 impacts and one exit.
+
+Validation passed 96 affected Lua checks and native weapon, AI and HUD suites.
+Seven of fourteen image comparisons are exact; all fourteen fit an unchanged-code
+cross-launch control in changed-pixel count, peak error and mean error. The worst
+optimized view differs on 34 of 921,600 pixels, versus 46 in the control. Exact
+cross-launch assertions therefore failed in both builds; the full measurements
+are retained rather than hidden by an arbitrary tolerance. Renderer settings,
+world counts, target allocations and frozen draw counts match.
+
+`tests/performance_profile.py --output captures/performance/before` records the
+baseline; add `--compare captures/performance/before` with a new output directory
+for the optimized round. Run with `PYTHONPATH=automation-bridge-python:tests` and
+Pillow installed. `--visuals-only` isolates image captures; `--noise-control`
+optionally names a measured unchanged-code repeat. `tests/hud_update_smoke.py`
+checks minimap pool reuse, floor/heading/resize changes and combat HUD updates.
+The local [comparison report](captures/performance-optimization-2026-10-16/findings.txt)
+details the retained raw captures and validation evidence.
+
 ## Parity step 4: architecture, interiors and dressing
 
 The world now builds W1/W2/W4/W5 setbacks and terraces, balconies with rails and

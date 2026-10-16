@@ -37,6 +37,37 @@ local function launch(shapes,def)
     return ctx,p,hits
 end
 
+test("origin containment prefilter preserves rotated, animated and near-face slab hits",function()
+    local T=require "game.ai.transform"
+    local random=require("game.rng").new(1337,"origin-containment")
+    local accepted,rejected=0,0
+    for i=1,4000 do
+        local s={id="probe",x=(random()-.5)*200,y=(random()-.5)*20,z=(random()-.5)*200,
+            w=.1+random()*8,h=.1+random()*5,d=.1+random()*8}
+        local rotation=T.rotation((random()-.5)*6,(random()-.5)*6,(random()-.5)*6)
+        if i%3==0 then rotation[4],rotation[8],rotation[12]=s.x,s.y,s.z;s.transform=rotation
+        elseif i%3==1 then s.rotation_x=(random()-.5)*6;rotation=T.rotation(s.rotation_x,0,0)
+        else rotation=T.identity() end
+        rotation[4],rotation[8],rotation[12]=s.x,s.y,s.z
+        local local_origin={x=(random()-.5)*s.w*3,y=(random()-.5)*s.h*3,z=(random()-.5)*s.d*3}
+        local local_dir=V.normalize({x=random()-.5,y=random()-.5,z=random()-.5})
+        if i%4==0 then
+            -- Inside, exactly on the face, and just outside within the native
+            -- fallback's accepted entry epsilon; exercise both travel directions.
+            local_origin={x=s.w/2+((i%16)/4-1)*.25e-7,y=0,z=0}
+            local_dir={x=-1,y=0,z=0}
+        end
+        local origin,direction=T.point(rotation,local_origin),T.direction(rotation,local_dir)
+        local full=trace.box(s,origin,direction,10)
+        local candidate=trace.contains_origin(s,origin,direction)
+        if full and full.enter<=1e-7 then
+            assert(candidate,"Containment discarded a valid starting-inside interval: "..i)
+            accepted=accepted+1
+        elseif not candidate then rejected=rejected+1 end
+    end
+    assert(accepted>500 and rejected>2000)
+end)
+
 test("auto rate preserves fractional tick intervals and ammunition",function()
     for _,case in ipairs({{"rifle",14,31},{"smg",16,33}}) do
         local ctx=new(case[1]);button(ctx,"fire",true);ticks(ctx,120)

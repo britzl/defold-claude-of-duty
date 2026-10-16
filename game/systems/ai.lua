@@ -210,7 +210,9 @@ function M.fixed_update(ctx,dt)
                         intent.move_z=z/(tuning.stances.stand.speed*(z>0 and tuning.back_scale or 1))
                     end
                 end
+                if profiler then profiler.scope_begin("ai.movement") end
                 capsule.update(e.motion,intent,dt,query)
+                if profiler then profiler.scope_end() end
                 -- The mover expands only after a real headroom check. Skinning,
                 -- muzzle, perception and hit volumes all use this same blend.
                 local target_crouch=e.motion.stance=="crouch" and 1 or 0
@@ -227,11 +229,18 @@ function M.fixed_update(ctx,dt)
                 e.recoil=math.max(0,e.recoil-dt*8)
             end
             if profiler then profiler.scope_begin("ai.simulation_pose") end
-            e.palette=rig.pose(sample(e))
+            -- Simulation owns this scratch independently of interpolated
+            -- presentation. Hit volumes copy the transforms they retain.
+            e.simulation_pose=e.simulation_pose or {}
+            e.palette=rig.pose(sample(e),e.simulation_pose)
             if profiler then profiler.scope_end();profiler.scope_begin("ai.hitboxes") end
             if service and e.actor.alive then service.api.sync(service,e) end
             if profiler then profiler.scope_end() end
-            if ai.enabled and ctx.player.enabled and ctx.player.actor.alive and e.actor.alive then fire(ctx,e,query) end
+            if ai.enabled and ctx.player.enabled and ctx.player.actor.alive and e.actor.alive then
+                if profiler then profiler.scope_begin("ai.fire") end
+                fire(ctx,e,query)
+                if profiler then profiler.scope_end() end
+            end
         end
     end
     planner.step(ai.planner,ctx.time.frame,function(job)

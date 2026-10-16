@@ -155,7 +155,7 @@ function M.query(registries,options)
         -- only containing boxes, using the very same collider descriptions.
         for _,registry in ipairs(registries) do
             for id,shape in pairs(registry) do
-                if not seen[id] and not shape.disabled then
+                if not seen[id] and not shape.disabled and trace.contains_origin(shape,from,dir) then
                     local interval=trace.box(shape,from,dir,length)
                     if interval and interval.enter<=1e-7 then result[#result+1]=interval end
                 end

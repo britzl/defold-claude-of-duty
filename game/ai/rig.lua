@@ -43,8 +43,8 @@ M.count=#M.bones
 
 -- phase is distance-driven; aim/death/time are fixed-tick state interpolated
 -- only by the presenter. The same evaluator supplies authoritative hit volumes.
--- Optional scratch belongs to one presenter; simulation calls still return
--- independent poses. Never share it with hit volumes or another soldier.
+-- Optional scratch belongs to one evaluator (simulation or presentation).
+-- Never share it between those clocks, with hit volumes, or another soldier.
 function M.pose(state,scratch)
     local rotations=scratch and scratch.rotations or {}
     local function rotate(name,x,y,z)
