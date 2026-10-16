@@ -83,6 +83,8 @@ try {
     if(report.errors.length) throw new Error(report.errors.join('\n'));
   }
   if(!complete) throw new Error('Rendering browser fixture timed out');
+  if(args.release==='1' && report.result.runtime?.profiler!==false)
+    throw new Error('Release qualification requires an engine without the debug profiler API');
   await pending;
   if(args.resize==='1'){
     report.resizes=[];

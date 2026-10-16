@@ -3,6 +3,12 @@ local capture=require "game.render.capture_controller"
 local catalog=require "game.render.capture"
 local atlas=require "game.render.surface_atlas"
 local M={}
+local function report(message)
+    -- Release engines suppress print(), so qualification must use the browser
+    -- console directly. Keep this bridge inside the opt-in test fixture.
+    if html5 then html5.run("console.log("..json.encode(message)..")")
+    else print(message) end
+end
 function M.new()
     local steps={}
     for _,shot in ipairs(catalog.catalog().shots) do
@@ -147,7 +153,7 @@ function M.update(test,self,dt)
     if test.done then
         if not test.restored and self.renderer_stats.ready and self.renderer_stats.bake_draws==atlas.draw_count*2 then
             test.restored=true
-            print("RENDER_BROWSER RESTORED "..json.encode(self.renderer_stats))
+            report("RENDER_BROWSER RESTORED "..json.encode(self.renderer_stats))
         end
         return
     end
@@ -160,8 +166,12 @@ function M.update(test,self,dt)
             local stats=self.renderer_stats
             assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==43)
             assert(stats.surface_count==#atlas.surfaces-1 and self.ctx.time.tick==test.tick,"Capture changed simulation")
+            assert(self.ctx.audio.ready and self.map_sent and test.tick>0,"Gameplay startup did not finish")
             table.sort(test.intervals)
-            print("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,
+            report("RENDER_BROWSER PASS "..json.encode({renderer=stats,shots=#test.steps,
+                runtime={profiler=profiler~=nil,world_ready=self.ctx.world.ready,audio_ready=self.ctx.audio.ready,
+                    tick=test.tick,boxes=self.ctx.world.stats.boxes,batches=self.ctx.world.stats.batches,
+                    colliders=self.ctx.world.stats.colliders},
                 frame_interval_median_ms=test.intervals[math.ceil(#test.intervals*.5)],
                 frame_interval_p95_ms=test.intervals[math.ceil(#test.intervals*.95)]}))
             test.done=true;return
@@ -174,7 +184,7 @@ function M.update(test,self,dt)
     if test.frames>32 then test.intervals[#test.intervals+1]=dt*1000 end
     if test.frames==45 then
         local step=test.steps[test.index]
-        print("RENDER_BROWSER SHOT "..json.encode({id=step.id,page=step.page,view=step.view,
+        report("RENDER_BROWSER SHOT "..json.encode({id=step.id,page=step.page,view=step.view,
             camera=capture.snapshot(self).camera,renderer=self.renderer_stats}))
     end
     if test.frames>=100 then test.frames=0 end

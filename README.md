@@ -297,12 +297,19 @@ framebuffer completeness while resizing individual attachments, when WebGL can
 see mismatched dimensions and abort. Other targets retain their normal resize
 path; generated maps do not rebake.
 
-For a short HTML5 regression run, bundle debug with `--settings tests/html5_browser.project`
+Controller profiling is optional: release engines omit the `profiler` API.
+Unguarded calls abort startup before world generation, leaving the loading text
+visible with no console error because release logging is disabled.
+
+For a short HTML5 regression run, bundle **release** with `--settings tests/html5_browser.project`
 and run the command below. It checks street, sky and ADS views, then changes
-window size three times. WebGL errors fail both browser validation harnesses.
+window size three times. The fixture reports through the HTML5 console even in
+release and verifies world/audio readiness and gameplay ticks. `--release=1`
+rejects a debug engine, which would hide missing-profiler regressions.
+WebGL errors fail both browser validation harnesses.
 
 ```sh
-node tools/validate_rendering_browser.mjs --bundle=/path/to/bundle --resize=1
+node tools/validate_rendering_browser.mjs --bundle=/path/to/bundle --resize=1 --release=1
 ```
 
 Run the engine-independent regression suite from the repository root:
