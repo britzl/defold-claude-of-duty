@@ -135,6 +135,12 @@ function M.new()
         end
         steps[#steps+1]={name="material_foliage",id="material_foliage_return"}
     end
+    if sys.get_config_string("rendering_validation.suite","")=="html5" then
+        steps={}
+        for _,name in ipairs({"street","sky_daylight","rifle_ads"}) do
+            steps[#steps+1]={name=name,id=name}
+        end
+    end
     return {steps=steps,index=0,frames=0,intervals={}}
 end
 function M.update(test,self,dt)

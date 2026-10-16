@@ -29,7 +29,7 @@ try {
   // browser exposes disjoint GPU timers. Absence is reported, never guessed.
   await page.addInitScript(()=>{
     const original=HTMLCanvasElement.prototype.getContext;
-    window.__gpu={samples:[],info:null};
+    window.__gpu={samples:[],info:null,frames:0};
     HTMLCanvasElement.prototype.getContext=function(type,...args){
       const gl=original.call(this,type,...args);
       if(type==='webgl2' && gl && !window.__gpu.info){
@@ -54,6 +54,8 @@ try {
             };setTimeout(poll,50);
           });
         }
+        const countedRAF=window.requestAnimationFrame.bind(window);
+        window.requestAnimationFrame=callback=>countedRAF(time=>{callback(time);window.__gpu.frames++;});
       }
       return gl;
     };
@@ -62,7 +64,7 @@ try {
   page.on('pageerror',e=>report.errors.push(e.message));
   page.on('console',message=>{
     const text=message.text();
-    if(text.includes('ERROR:')) report.errors.push(text);
+    if(text.includes('ERROR:') || /GL_INVALID_|GL_OUT_OF_MEMORY|WebGL:.*error/i.test(text)) report.errors.push(text);
     const match=text.match(/RENDER_BROWSER (SHOT|PASS|RESTORED) (.*)/);
     if(!match) return;
     const data=JSON.parse(match[2]);
@@ -82,6 +84,19 @@ try {
   }
   if(!complete) throw new Error('Rendering browser fixture timed out');
   await pending;
+  if(args.resize==='1'){
+    report.resizes=[];
+    for(const size of [{width:1279,height:759},{width:961,height:681},{width:1024,height:1066}]){
+      const before=await page.evaluate(()=>({frames:window.__gpu.frames,width:window.__validationGL.drawingBufferWidth,height:window.__validationGL.drawingBufferHeight}));
+      await page.setViewportSize(size);
+      await page.waitForFunction(previous=>window.__gpu.frames>previous.frames+10 &&
+        (window.__validationGL.drawingBufferWidth!==previous.width || window.__validationGL.drawingBufferHeight!==previous.height),before,{timeout:15000});
+      const result=await page.evaluate(()=>({width:window.__validationGL.drawingBufferWidth,height:window.__validationGL.drawingBufferHeight,error:window.__validationGL.getError()}));
+      if(result.error || report.errors.length) throw new Error('WebGL resize failed: '+JSON.stringify(result)+'\n'+report.errors.join('\n'));
+      report.resizes.push(result);
+    }
+    await page.locator('canvas').screenshot({path:join(output,'resized.png')});
+  }
   if(args['context-loss']==='1'){
   await page.evaluate(()=>{
     const loss=window.__validationGL.getExtension('WEBGL_lose_context');

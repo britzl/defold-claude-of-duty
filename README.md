@@ -288,6 +288,21 @@ explicitly pending until reference UV/coverage and shadow fixtures are matched.
 
 Open `game.project` in Defold 1.14.0, fetch libraries, then build and run.
 The existing Automation Bridge dependency supports native smoke checks.
+
+HTML5 uses a matrix constant for lens sky reprojection. On OpenGL, resizing
+recreates the scene, weapon and depth/motion targets: Defold 1.14 checks
+framebuffer completeness while resizing individual attachments, when WebGL can
+see mismatched dimensions and abort. Other targets retain their normal resize
+path; generated maps do not rebake.
+
+For a short HTML5 regression run, bundle debug with `--settings tests/html5_browser.project`
+and run the command below. It checks street, sky and ADS views, then changes
+window size three times. WebGL errors fail both browser validation harnesses.
+
+```sh
+node tools/validate_rendering_browser.mjs --bundle=/path/to/bundle --resize=1
+```
+
 Run the engine-independent regression suite from the repository root:
 
 ```sh

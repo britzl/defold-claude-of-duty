@@ -410,4 +410,30 @@ test("context restoration regenerates textures and finalization frees every targ
     for _,target in ipairs(targets) do assert(target.deleted) end
     assert(next(self.targets)==nil and listener==nil)
 end)
+test("OpenGL resize replaces complete depth/MRT targets without rebaking maps",function()
+    graphics.get_adapter_info=function() return {family="opengl"} end
+    local web={}
+    init(web)
+    while web.bake_step<atlas.job_count do update(web) end
+    for _,size in ipairs({{961,641},{1279,719},{960,640}}) do
+        local previous={}
+        for name,target in pairs(web.targets) do previous[name]=target end
+        local resets=web.temporal.resets
+        w,h=size[1],size[2];update(web)
+        for _,name in ipairs({"scene","weapon","depth_normal","depth_previous"}) do
+            assert(previous[name].deleted and web.targets[name]~=previous[name])
+            for _,attachment in pairs(web.targets[name].params) do
+                assert(attachment.width==w and attachment.height==h)
+            end
+        end
+        assert(web.targets.weapon.params[graphics.BUFFER_TYPE_DEPTH_BIT].flags==render.TEXTURE_BIT)
+        for _,name in ipairs({"albedo","normal","material","sky","environment","shadow","shadow_static_1","photo_motion"}) do
+            assert(web.targets[name]==previous[name] and not previous[name].deleted)
+        end
+        assert(web.bake_draws==atlas.draw_count and web.temporal.resets==resets+1)
+        local allocations=#targets;update(web);assert(#targets==allocations)
+    end
+    final(web)
+    for _,target in ipairs(targets) do assert(target.deleted) end
+end)
 print(tests.." renderer tests passed")

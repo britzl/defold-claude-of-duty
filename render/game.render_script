@@ -51,6 +51,16 @@ local function resize(self)
         self.width,self.height=d.width,d.height
         self.bloom_width,self.bloom_height=d.bloom_width,d.bloom_height
         self.occlusion_width,self.occlusion_height=d.occlusion_width,d.occlusion_height
+        if self.pipeline.backend=="opengl" then
+            -- Defold 1.14 checks framebuffer completeness between attachment
+            -- resizes. WebGL rejects the temporary mix of old/new dimensions.
+            -- Recreate targets with depth/MRT attachments at their final size.
+            for _,name in ipairs({"scene","weapon","depth_normal","depth_previous"}) do
+                if self.targets[name] then
+                    render.delete_render_target(self.targets[name]);self.targets[name]=nil
+                end
+            end
+        end
         for _,name in ipairs({"scene","weapon","history_a","history_b","weapon_aa","reflected","glass","glass_scene","fog_scene","fog_raw"}) do
             local w,h=name=="fog_raw" and d.occlusion_width or d.width,name=="fog_raw" and d.occlusion_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)

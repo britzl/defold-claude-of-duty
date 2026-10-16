@@ -27,7 +27,7 @@ try {
   page.on('pageerror',e=>report.errors.push(e.message));
   page.on('console',message=>{
     const text=message.text();
-    if(text.includes('ERROR:')) report.errors.push(text);
+    if(text.includes('ERROR:') || /GL_INVALID_|GL_OUT_OF_MEMORY|WebGL:.*error/i.test(text)) report.errors.push(text);
     const match=text.match(/MARKET_BROWSER (PHYSICS|ROUTES|SHOT|PASS) (.*)/);
     if(!match) return;
     const data=JSON.parse(match[2]);
