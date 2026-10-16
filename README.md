@@ -27,6 +27,64 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Level-loading optimization (2026-10-16)
+
+Native Defold 1.14.0/Metal Remotery measurements at 1920×1280, medium materials,
+with VSync unchanged, improved from **7.51–8.79 seconds to 2.06–2.19 seconds**
+across three fresh processes per version. Median recorded loading fell from
+**8.56 to 2.07 seconds (76%)**.
+
+| Measurement | Before median | After median | Reduction |
+| --- | ---: | ---: | ---: |
+| World loading interval | 8,560 ms | 2,074 ms | 76% |
+| Geometry work | 882 ms | 536 ms | 39% |
+| Mesh construction | 594 ms | 326 ms | 45% |
+| Box construction | 434 ms | 217 ms | 50% |
+| Face-neighbour lookup | 89 ms | 38 ms | 57% |
+| Lua-to-buffer copies | 342 ms | 308 ms | 10% |
+| Largest mesh-upload update | 12.17 ms | 4.36 ms | 64% |
+| Collision installation interval | 2,213 ms | 127 ms | 94% |
+
+Loading now fills a 4 ms work budget, with guards of 4,096 geometry jobs or 128
+upload slices/colliders per update. Buffer copies yield every 512 vertices;
+meshes become visible only after their complete buffers are installed. Batch
+boundaries and order are unchanged. Shape transforms and invariant box attributes
+are calculated once, face neighbours use an 8-metre spatial grid in original
+recipe order, and sorted edge lookups skip irrelevant prefixes.
+
+The level remains **4,532 shapes, 86 batches, 413,568 vertices and 1,224 colliders**.
+A complete canonical generated-world export matches exactly, including navigation,
+collision, lighting and every mesh value. All **513 native buffer stream hashes**
+and batch bounds match the original. Material quality, render settings, atlas sizes,
+render-target allocations and bake jobs/draws also match. No shaders, materials,
+layout, recipes or tessellation were reduced.
+
+Validation passed 23 world, 8 face/edge and 4 upload tests, plus native support for
+all 196 navigation nodes, bidirectional capsule checks on all 201 edges, and 108
+actor route queries. Fourteen rendered views were compared: six are exact, and
+13 fit the maximum variation measured between three original-rendering launches.
+One daylight-sky capture differs at 14 of 921,600 pixels versus a nine-pixel control
+maximum (the same maximum channel error of 24); the strict image gate remains
+failed for that view, with raw evidence retained. Native geometry bytes and renderer
+settings are identical. This sparse capture variation is not used to weaken tests.
+
+The timing interval starts at the first captured world update and ends at readiness;
+startup and the first recipe frames are excluded. All mesh/clipping/upload/collision
+work is captured. These are CPU-thread elapsed scopes, not GPU timestamps; one
+original run includes a 1.01-second uninstrumented engine stall. Nested scopes in
+the table must not be added together. The remaining buffer-copy work is spread
+across more frames to avoid its old 10–16 ms upload spikes.
+
+Compile in the editor, then run
+`PYTHONPATH=automation-bridge-python python3 tests/loading_profile.py --output captures/loading-profile/new-run`.
+The harness owns its native engine and saves raw samples, phase spans, counters,
+source hashes and coverage. `--uncapped` is an optional VSync diagnostic.
+`lua tests/world_fingerprint.lua output.bin` exports canonical generated data;
+`world.mesh_fingerprints` pages native stream hashes for engine-side verification.
+See the local [optimization report](captures/loading-optimization-2026-10-16/findings.txt),
+[comparison data](captures/loading-optimization-2026-10-16/comparison.json), and
+[original investigation](captures/loading-profile-2026-10-16/findings.txt).
+
 ## Profiling and CPU optimization (2026-10-16)
 
 The projectile query's starting-inside fallback now cheaply rejects unrelated
@@ -100,8 +158,8 @@ The final map has **4,450 shapes, 85 batches, 1,224 colliders, 409,386 vertices 
 unchanged by batching. The extra two floats per opaque vertex cost 3.12 MiB;
 glass retains its original stream and separate sorted draws. Architecture uses
 16-metre cells and sparse terrain uses 64-metre cells, with a hard 12,288-vertex
-limit per upload. Geometry processing permits 48 jobs per update under the
-existing 2 ms deadline; uploads remain limited to eight batches.
+limit per buffer. Loading now uses the 4 ms budget and sliced uploads described
+in the loading-optimization section above.
 Individual jobs may exceed the deadline, and `world.snapshot` reports the peak.
 These are allocation/submission counts, not measured GPU or process residency.
 The measured native load accumulated 1,482.486 ms of work with a 15.823 ms largest
@@ -776,9 +834,8 @@ recipes described above. E2's additional interior, simplified collision and the
 outer terrain walls are retained Defold adaptations.
 
 Current mesh/collider counts and engine limits are listed in the step-4 resource
-account above. Loading uploads
-at most eight batches per update under the existing 2 ms work deadline. A single
-upload can exceed that deadline; the measured peak is reported by `world.snapshot`.
+account above. Loading copies buffers in 512-vertex slices under a soft 4 ms
+work deadline. The measured peak update is reported by `world.snapshot`.
 The minimap retains all collider rectangles and reuses at most 256 GUI nodes for
 visible geometry (145 at the measured grid peak). It no longer truncates the map
 at the first 256 shapes. `world.navigation` returns explicit 32-item pages with
@@ -850,10 +907,10 @@ is additional; the batch count is not a measured per-frame draw-call count).
 
 Loading advances through geometry, mesh uploads, collision creation and a
 settling frame before `ready`. Geometry collects recipes, clips faces and indexes shared edge endpoints, then
-meshes them, handling at most 48 jobs per update across these three stages;
-collision creation at most eight; uploads at most one bounded batch. A soft
-2 ms CPU deadline is checked between geometry/collision jobs. A single upload
-is indivisible. `world.snapshot` reports total CPU work and the peak loading
+meshes them, handling at most 4,096 jobs per update across these three stages.
+Collision creation and buffer uploads permit up to 128 jobs per update; each
+upload job copies at most 512 vertices. A soft 4 ms CPU deadline is checked
+between jobs, and a mesh is published only once every vertex has been copied. `world.snapshot` reports total CPU work and the peak loading
 update; it excludes shader compilation and other engine work outside these calls.
 Factory objects and generated buffer resource references are released on teardown.
 The physics component pool is explicitly set to 512 to accommodate the expanded

@@ -68,4 +68,38 @@ test("shared edge endpoints include both box boundaries and clipped window cuts"
     points=visible.edge_vertices(registry,{6.5,9.545,-12},{6.5,9.545,2})
     assert(#points==2 and points[1][3]==-5.975 and points[2][3]==-4.025)
 end)
+test("spatial lookup preserves clipping order at cell boundaries and epsilon contacts",function()
+    local bounds={}
+    for i=1,40 do
+        local x,z=(i%7-3)*8,(i%5-2)*8
+        bounds[i]={x-4,-1,z-4,x+4,3,z+4,unclipped=i%9==0}
+    end
+    bounds[#bounds+1]={-80,-2,-80,80,-1,80}
+    bounds[#bounds+1]={4+5e-8,0,-4,6,1,4}
+    bounds[#bounds+1]=bounds[2]
+    local grid=visible.index(bounds)
+    local function equal(a,b)
+        assert(type(a)==type(b))
+        if type(a)~="table" then assert(a==b);return end
+        assert(#a==#b)
+        for i,v in ipairs(a) do equal(v,b[i]) end
+    end
+    for i=1,#bounds do equal(visible.for_box(i,bounds),visible.for_box(i,bounds,grid)) end
+end)
+test("edge lookup preserves epsilon deduplication and reverse traversal",function()
+    local registry={}
+    local bounds={0,0,0,1,1,8}
+    visible.register_edges(registry,bounds,{{{0,0,1,8}},{},{},{},{},{}})
+    for _,z in ipairs({1,1+5e-8,2,7,7+5e-8}) do
+        visible.register_edges(registry,{0,0,z,1,1,z+1},{{{0,z,1,z+1}},{},{},{},{},{}})
+    end
+    local a,b={1,0,1},{1,0,7}
+    local forward,reverse=visible.edge_vertices(registry,a,b),visible.edge_vertices(registry,b,a)
+    assert(#forward==#reverse and #forward>0)
+    for i,p in ipairs(forward) do
+        assert(p[3]>1+1e-7 and p[3]<7-1e-7)
+        assert(p[3]==reverse[#reverse-i+1][3])
+        if i>1 then assert(p[3]-forward[i-1][3]>1e-7) end
+    end
+end)
 print(count.." visible-face tests passed")

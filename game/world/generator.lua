@@ -149,7 +149,9 @@ local function add(world, shape, faces)
     local material=materials[shape.material]
     local key = (terrain and "terrain/" or "world/") .. cx .. "/" .. cz
     local geometry=mesh.new(shape.id,shape.material,cx,cz)
+    if profiler then profiler.scope_begin("loading.mesh.shape") end
     mesh.shape(geometry,shape,0.94 + world.decoration_rng() * 0.12,faces,world.edge_points)
+    if profiler then profiler.scope_end() end
     local batch = world.batch_lookup[key]
     if geometry.vertex_count>0 then
         -- Bound uploads by actual vertex work, including curved primitives.
@@ -160,7 +162,9 @@ local function add(world, shape, faces)
             world.batches[#world.batches + 1] = batch
             world.batch_lookup[key] = batch
         end
+        if profiler then profiler.scope_begin("loading.mesh.append") end
         append(batch,geometry,material)
+        if profiler then profiler.scope_end() end
     end
     if shape.surface then
         world.colliders[#world.colliders + 1] = shape
@@ -187,23 +191,29 @@ function M.step(world, max_jobs, deadline, now)
     local done = 0
     while done < max_jobs and (not deadline or now() < deadline) do
         if world.job then
+            if profiler then profiler.scope_begin("loading.geometry.recipes") end
             local ok, shape = coroutine.resume(world.job)
             assert(ok, shape)
             if coroutine.status(world.job) == "dead" then
                 world.job=nil
                 world.face_index=1
                 world.shape_faces,world.edge_points={},{}
+                world.face_grid=visible_faces.index(world.shape_bounds)
             else
                 world.shapes[#world.shapes+1]=shape
                 world.shape_bounds=world.shape_bounds or {}
                 world.shape_bounds[#world.shapes]=visible_faces.bounds(shape)
             end
+            if profiler then profiler.scope_end() end
         elseif world.face_index then
             local i=world.face_index
             if i<=#world.shapes then
-                local faces=visible_faces.for_box(i,world.shape_bounds)
+                if profiler then profiler.scope_begin("loading.geometry.visible_faces") end
+                local faces=visible_faces.for_box(i,world.shape_bounds,world.face_grid)
                 world.shape_faces[i]=faces
+                if profiler then profiler.scope_end();profiler.scope_begin("loading.geometry.register_edges") end
                 if faces then visible_faces.register_edges(world.edge_points,world.shape_bounds[i],faces) end
+                if profiler then profiler.scope_end() end
                 world.face_index=i+1
             else world.face_index=nil;world.mesh_index=1 end
         elseif world.mesh_index<=#world.shapes then
@@ -211,8 +221,9 @@ function M.step(world, max_jobs, deadline, now)
             add(world,world.shapes[i],world.shape_faces[i])
             world.mesh_index=i+1
         else
+            if profiler then profiler.scope_begin("loading.geometry.finish") end
             world.batch_lookup,world.decoration_rng,world.shape_bounds=nil,nil,nil
-            world.shape_faces,world.edge_points=nil,nil
+            world.shape_faces,world.edge_points,world.face_grid=nil,nil,nil
             local visible={}
             for _,batch in ipairs(world.batches) do
                 if batch.vertex_count>0 then visible[#visible+1]=batch end
@@ -225,6 +236,7 @@ function M.step(world, max_jobs, deadline, now)
             end
             world.stats.batches=#world.batches
             world.phase="meshes"
+            if profiler then profiler.scope_end() end
             break
         end
         done = done + 1

@@ -82,6 +82,7 @@ function M.update(ctx,dt)
     local a=ctx.audio
     a.clock=a.clock+dt
     if a.ready then return end
+    if profiler then profiler.scope_begin("loading.audio") end
     local started=os.clock()
     local remaining=M.sample_budget
     repeat
@@ -92,13 +93,16 @@ function M.update(ctx,dt)
         local wav,info=synth.step(a.job,budget)
         remaining=remaining-budget
         if wav then
+            if profiler then profiler.scope_begin("loading.audio.upload") end
             info.handle=a.backend:load(recipe.key,wav)
+            if profiler then profiler.scope_end() end
             a.resources[recipe.key]=info;a.bytes=a.bytes+#wav;a.loaded=a.loaded+1
             a.job=nil;a.cursor=a.cursor+1
         end
     until remaining<=0 or os.clock()-started>=.002
     local elapsed=os.clock()-started
     a.work=a.work+elapsed;a.peak_job=math.max(a.peak_job,elapsed)
+    if profiler then profiler.scope_end() end
 end
 
 local function start(a,v,cue)

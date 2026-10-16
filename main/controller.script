@@ -124,13 +124,21 @@ function init(self)
         and sys.get_config_number("physics.scale") == 1
         and sys.get_config_boolean("physics.use_fixed_timestep"),
         "Gameplay requires metre-based 3D physics with a fixed timestep")
+    profiler.scope_begin("loading.init.runtime")
     self.ctx = runtime.new({ world = world_adapter.new("#world_mesh", "#world_collision"),
         audio = audio_adapter.new("#audio_voice","#audio_loop") })
+    profiler.scope_end()
     self.renderer_settings = renderer_settings.defaults()
     self.renderer_stats = { ready = false }
+    profiler.scope_begin("loading.init.combat_fx")
     self.combat_visuals=combat_fx.new(self.ctx)
+    profiler.scope_end()
+    profiler.scope_begin("loading.init.weapons")
     self.weapon_visuals = weapon_adapter.new(self.ctx, "#weapon_mesh", "#weapon_effect")
+    profiler.scope_end()
+    profiler.scope_begin("loading.init.soldiers")
     self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
+    profiler.scope_end()
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
     self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id},
@@ -300,6 +308,27 @@ function init(self)
             schema = { type = "object", properties = { ready = { type = "boolean" }, phase = { type = "string" } } },
         })
         automation_bridge.command("world.snapshot", function() return world_snapshot(self.ctx.world) end)
+        automation_bridge.command("world.mesh_fingerprints",function(data)
+            assert(self.ctx.world.ready,"World is still loading")
+            local offset,limit=data.offset or 0,data.limit or 16
+            assert(offset>=0 and offset==math.floor(offset),"Invalid mesh offset")
+            assert(limit>=1 and limit<=16 and limit==math.floor(limit),"Mesh page limit must be 1-16")
+            local batches=self.ctx.world.batches
+            local result={total=#batches,batches={}}
+            for i=offset+1,math.min(#batches,offset+limit) do
+                local batch=batches[i]
+                local data=resource.get_buffer(batch.resource)
+                local entry={key=batch.key,vertices=batch.vertex_count,bounds=batch.bounds,streams={}}
+                for _,name in ipairs({"position","normal","color","surface_edges","surface_masks","surface_data"}) do
+                    if name~="surface_data" or not batch.glass then
+                        local bytes=buffer.get_bytes(data,hash(name))
+                        entry.streams[name]={bytes=#bytes,hash=hash_to_hex(hash(bytes))}
+                    end
+                end
+                result.batches[#result.batches+1]=entry
+            end
+            return result
+        end)
         automation_bridge.command("world.navigation", function(data)
             -- A full-map graph exceeds the bridge's 32 KiB JSON limit. Return
             -- explicit pages with totals so inspection never silently truncates.
@@ -383,6 +412,7 @@ function init(self)
         end
         for name, description in pairs({
             ["world.snapshot"] = "Read generated world counts, loading phase and CPU loading time.",
+            ["world.mesh_fingerprints"] = "Read native mesh stream byte counts/hashes and bounds; paged with {offset=0,limit=16}. Debug verification after loading, not a frame-time measurement.",
             ["world.navigation"] = "Read graph pages with totals: {offset=0,limit=32}; increment offset until every counts entry is reached.",
             ["world.validate"] = "Compare installed collision and navigation support. Set {capsules=true} to sweep every edge in both directions using AI physics.",
             ["world.raycast"] = "Cast from/to {x,y,z} through generated collision; returns the hit surface identifier and position.",

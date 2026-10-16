@@ -27,17 +27,58 @@ local function subtract(rects, cut)
     end
     return result
 end
-function M.for_box(index, bounds)
+-- Conservative X/Z grid. Candidates are sorted back into recipe order so
+-- coincident-face ownership and rectangle subtraction are bit-for-bit stable.
+local cell_size=8
+local function cells(b)
+    return math.floor((b[1]-epsilon)/cell_size),math.floor((b[3]-epsilon)/cell_size),
+        math.floor((b[4]+epsilon)/cell_size),math.floor((b[6]+epsilon)/cell_size)
+end
+function M.index(bounds)
+    local grid={}
+    for i,b in ipairs(bounds) do
+        if not b.unclipped then
+            local x0,z0,x1,z1=cells(b)
+            for x=x0,x1 do
+                local column=grid[x] or {};grid[x]=column
+                for z=z0,z1 do
+                    local list=column[z] or {};column[z]=list;list[#list+1]=i
+                end
+            end
+        end
+    end
+    return grid
+end
+local function candidates(a,grid)
+    local result,seen={},{}
+    local x0,z0,x1,z1=cells(a)
+    for x=x0,x1 do
+        local column=grid[x]
+        if column then for z=z0,z1 do
+            for _,i in ipairs(column[z] or {}) do
+                if not seen[i] then seen[i]=true;result[#result+1]=i end
+            end
+        end end
+    end
+    table.sort(result)
+    return result
+end
+function M.for_box(index, bounds, grid)
     local a=bounds[index]
     if a.unclipped then return nil end
+    if profiler then profiler.scope_begin("loading.faces.neighbours") end
     local neighbours={}
-    for j,b in ipairs(bounds) do
+    local nearby=grid and candidates(a,grid)
+    for k=1,nearby and #nearby or #bounds do
+        local j=nearby and nearby[k] or k
+        local b=bounds[j]
         if j~=index and not b.unclipped and b[1]<=a[4]+epsilon and b[4]>=a[1]-epsilon
             and b[2]<=a[5]+epsilon and b[5]>=a[2]-epsilon
             and b[3]<=a[6]+epsilon and b[6]>=a[3]-epsilon then
             neighbours[#neighbours+1]=j
         end
     end
+    if profiler then profiler.scope_end();profiler.scope_begin("loading.faces.subtract") end
     local faces={}
     for face,axis in ipairs(axes) do
         local k,u,v=axis[1],axis[2],axis[3]
@@ -56,6 +97,7 @@ function M.for_box(index, bounds)
         end
         faces[face]=rects
     end
+    if profiler then profiler.scope_end() end
     return faces
 end
 -- Index the endpoints of all visible, collinear edges, including edges created
@@ -90,8 +132,16 @@ function M.edge_vertices(registry,a,b)
     if not line.sorted then table.sort(line);line.sorted=true end
     local lo,hi=math.min(a[axis],b[axis]),math.max(a[axis],b[axis])
     local result,last={},-math.huge
-    for _,value in ipairs(line) do
-        if value>lo+epsilon and value<hi-epsilon and value>last+epsilon then
+    -- Skip the sorted prefix rather than rescanning an entire collinear edge.
+    local first,finish=1,#line+1
+    while first<finish do
+        local middle=math.floor((first+finish)/2)
+        if line[middle]<=lo+epsilon then first=middle+1 else finish=middle end
+    end
+    for i=first,#line do
+        local value=line[i]
+        if value>=hi-epsilon then break end
+        if value>last+epsilon then
             local p={a[1],a[2],a[3]};p[axis]=value;result[#result+1]=p;last=value
         end
     end

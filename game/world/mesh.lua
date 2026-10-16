@@ -13,12 +13,22 @@ local faces = {
 }
 local indices = { 1, 2, 3, 1, 3, 4 }
 
-local function rotate(v,s,inverse)
-    local order=inverse and {"z","y","x"} or {"x","y","z"}
-    local p={v[1],v[2],v[3]}
-    for _,axis in ipairs(order) do
+-- Precompute trigonometry once per shape. Unrotated architecture needs no
+-- transform; rotated shapes retain the original X/Y/Z operation order.
+local function rotation(s,inverse)
+    if (s.rotation_x or 0)==0 and (s.rotation_y or 0)==0 and (s.rotation_z or 0)==0 then return nil end
+    local result={}
+    for _,axis in ipairs(inverse and {"z","y","x"} or {"x","y","z"}) do
         local a=(s["rotation_"..axis] or 0)*(inverse and -1 or 1)
-        local c,t=math.cos(a),math.sin(a)
+        result[#result+1]={axis,math.cos(a),math.sin(a)}
+    end
+    return result
+end
+local function rotate(v,transform)
+    if not transform then return v end
+    local p={v[1],v[2],v[3]}
+    for _,r in ipairs(transform) do
+        local axis,c,t=r[1],r[2],r[3]
         if axis=="x" then p[2],p[3]=p[2]*c-p[3]*t,p[2]*t+p[3]*c
         elseif axis=="y" then p[1],p[3]=p[1]*c+p[3]*t,-p[1]*t+p[3]*c
         else p[1],p[2]=p[1]*c-p[2]*t,p[1]*t+p[2]*c end
@@ -34,12 +44,20 @@ end
 
 function M.box(batch, box, shade, visible, edge_points)
     local p, n, c, bounds = batch.positions, batch.normals, batch.colors, batch.bounds
-    local color = materials[box.material].color
+    local material=materials[box.material]
+    local color = material.color
+    local forward,inverse=rotation(box),rotation(box,true)
+    local mask=box.weather_masks or {1,.35,.18,1}
+    local ground=box.id and (box.id:match("^road/") or box.id:match("^walk/") or box.id:match("^ground/"))
+    local red,green,blue=color[1]*shade,color[2]*shade,color[3]*shade
     local center, half = { box.x, box.y, box.z }, { box.w / 2, box.h / 2, box.d / 2 }
     local axis_pairs={{2,3},{2,3},{1,3},{1,3},{1,2},{1,2}}
     local vertices=0
     for face_index, face in ipairs(faces) do
         local u,v=axis_pairs[face_index][1],axis_pairs[face_index][2]
+        local normal=rotate(face.n,forward)
+        local horizontal,vertical=u,v
+        if u==2 then horizontal,vertical=v,u end
         local rectangles=visible and visible[face_index] or {{center[u]-half[u],center[v]-half[v],center[u]+half[u],center[v]+half[v]}}
         for _,rectangle in ipairs(rectangles) do
             local corners={}
@@ -48,7 +66,7 @@ function M.box(batch, box, shade, visible, edge_points)
                 local local_vertex={corner[1]*half[1],corner[2]*half[2],corner[3]*half[3]}
                 local_vertex[u]=rectangle[corner[u]<0 and 1 or 3]-center[u]
                 local_vertex[v]=rectangle[corner[v]<0 and 2 or 4]-center[v]
-                local v=rotate(local_vertex,box)
+                local v=rotate(local_vertex,forward)
                 corners[index]={center[1]+v[1],center[2]+v[2],center[3]+v[3]}
             end
             local boundary={}
@@ -73,32 +91,28 @@ function M.box(batch, box, shade, visible, edge_points)
                     triangles[#triangles+1]=boundary[i%#boundary+1]
                 end
             end
+            local top=u==2 and rectangle[3] or v==2 and rectangle[4] or center[2]+half[2]
+            local stain=ground and 0 or (mask[4]>0 and top or -1000)
             for _,vertex in ipairs(triangles) do
-                local normal = rotate(face.n,box)
                 for axis = 1, 3 do
                     p[#p + 1] = vertex[axis]
                     n[#n + 1] = normal[axis]
-                    c[#c + 1] = color[axis] * shade
                     bounds[axis] = math.min(bounds[axis], vertex[axis])
                     bounds[axis+3] = math.max(bounds[axis+3], vertex[axis])
                 end
-                c[#c + 1] = materials[box.material].coverage or 1
-                local local_position=rotate({vertex[1]-center[1],vertex[2]-center[2],vertex[3]-center[3]},box,true)
-                local horizontal,vertical=u,v
-                if u==2 then horizontal,vertical=v,u end
+                c[#c+1]=red;c[#c+1]=green;c[#c+1]=blue
+                c[#c + 1] = material.coverage or 1
+                local local_position=rotate({vertex[1]-center[1],vertex[2]-center[2],vertex[3]-center[3]},inverse)
                 local e=batch.edges
                 e[#e+1]=local_position[horizontal]+half[horizontal]
                 e[#e+1]=half[horizontal]-local_position[horizontal]
                 e[#e+1]=local_position[vertical]+half[vertical]
                 e[#e+1]=half[vertical]-local_position[vertical]
-                local mask=box.weather_masks or {1,.35,.18,1}
                 -- Ground chunk boundaries are bookkeeping, not worn edges.
-                local ground=box.id and (box.id:match("^road/") or box.id:match("^walk/") or box.id:match("^ground/"))
                 for j=1,3 do batch.masks[#batch.masks+1]=ground and 0 or mask[j] end
                 -- Visible rectangles under a sill/ledge carry its actual source
                 -- height; original box edges still define wear. No stain quads.
-                local top=u==2 and rectangle[3] or v==2 and rectangle[4] or center[2]+half[2]
-                batch.masks[#batch.masks+1]=ground and 0 or (mask[4]>0 and top or -1000)
+                batch.masks[#batch.masks+1]=stain
                 vertices=vertices+1
             end
         end
@@ -111,15 +125,16 @@ end
 -- the same five streams as clipped architecture; no per-prop render objects.
 function M.primitive(batch,s,shade)
     local material=materials[s.material]
+    local forward=rotation(s)
     local function triangle(a,b,c,back)
         local u,v={b[1]-a[1],b[2]-a[2],b[3]-a[3]},{c[1]-a[1],c[2]-a[2],c[3]-a[3]}
         local n={u[2]*v[3]-u[3]*v[2],u[3]*v[1]-u[1]*v[3],u[1]*v[2]-u[2]*v[1]}
         local length=math.sqrt(n[1]^2+n[2]^2+n[3]^2)
         if length<1e-10 then return end
         for k=1,3 do n[k]=n[k]/length end
-        n=rotate(n,s)
+        n=rotate(n,forward)
         for _,p in ipairs({a,b,c}) do
-            local r=rotate(p,s)
+            local r=rotate(p,forward)
             for k,offset in ipairs({s.x,s.y,s.z}) do
                 local value=r[k]+offset
                 batch.positions[#batch.positions+1]=value
@@ -221,9 +236,11 @@ function M.primitive(batch,s,shade)
 end
 
 function M.shape(batch,s,shade,visible,edge_points)
+    if profiler then profiler.scope_begin("loading.mesh." .. (s.kind or "box")) end
     if s.kind=="card" then M.card(batch,s,shade)
     elseif s.kind then M.primitive(batch,s,shade)
     else M.box(batch,s,shade,visible,visible and edge_points or nil) end
+    if profiler then profiler.scope_end() end
 end
 
 -- A zero-thickness, two-sided card. The opposite winding supplies each side's

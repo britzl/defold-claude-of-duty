@@ -338,7 +338,11 @@ function update(self,dt)
     self.frames=self.frames+1
     -- Previous frame's queued bake draws have now consumed these resources.
     if self.bake_step==atlas.job_count and self.targets.scratch_a then release_bake_scratch(self) end
-    bake_next(self)
+    if self.bake_step<atlas.job_count then
+        if profiler then profiler.scope_begin("loading.renderer.bake") end
+        bake_next(self)
+        if profiler then profiler.scope_end() end
+    end
     local t,o=self.targets,self.options
     if self.bake_step==atlas.job_count then
         if self.environment_dirty then bake_environment(self) end

@@ -12,7 +12,7 @@ function M.new(mesh_factory, collision_factory)
         objects = {}, buffers = {}, collisions = {}, by_id = {} }
 end
 
-function M.add_batch(adapter, batch)
+local function begin_batch(batch)
     if batch.glass then
         local c=batch.centre
         for i=1,#batch.positions,3 do
@@ -29,19 +29,40 @@ function M.add_batch(adapter, batch)
     }
     if not batch.glass then declarations[#declarations+1]={name=SURFACES,type=buffer.VALUE_TYPE_FLOAT32,count=2} end
     local data = buffer.create(batch.vertex_count, declarations)
-    local positions, normals, colors = buffer.get_stream(data, POSITION), buffer.get_stream(data, NORMAL), buffer.get_stream(data, COLOR)
-    for i = 1, #batch.positions do positions[i] = batch.positions[i]; normals[i] = batch.normals[i] end
-    for i = 1, #batch.colors do colors[i] = batch.colors[i] end
-    local edges,masks=buffer.get_stream(data,EDGES),buffer.get_stream(data,MASKS)
-    for i=1,batch.vertex_count*4 do edges[i]=batch.edges[i];masks[i]=batch.masks[i] end
-    if not batch.glass then
-        local surfaces=buffer.get_stream(data,SURFACES)
-        local material=materials[batch.material]
-        for i=1,batch.vertex_count do
-            surfaces[i*2-1]=batch.surfaces and batch.surfaces[i*2-1] or (batch.surface and batch.surface[1] or material.kind)
-            surfaces[i*2]=batch.surfaces and batch.surfaces[i*2] or material.weather or 1
+    return {batch=batch,data=data,cursor=0,
+        positions=buffer.get_stream(data,POSITION),normals=buffer.get_stream(data,NORMAL),
+        colors=buffer.get_stream(data,COLOR),edges=buffer.get_stream(data,EDGES),masks=buffer.get_stream(data,MASKS),
+        surfaces=not batch.glass and buffer.get_stream(data,SURFACES) or nil}
+end
+
+local function copy_vertices(upload,count)
+    if profiler then profiler.scope_begin("loading.upload.streams") end
+    local batch=upload.batch
+    local first,last=upload.cursor,math.min(upload.cursor+count,batch.vertex_count)
+    local positions,normals=upload.positions,upload.normals
+    local source_positions,source_normals=batch.positions,batch.normals
+    for i=first*3+1,last*3 do positions[i]=source_positions[i];normals[i]=source_normals[i] end
+    local colors,edges,masks=upload.colors,upload.edges,upload.masks
+    local source_colors,source_edges,source_masks=batch.colors,batch.edges,batch.masks
+    for i=first*4+1,last*4 do colors[i]=source_colors[i];edges[i]=source_edges[i];masks[i]=source_masks[i] end
+    local surfaces=upload.surfaces
+    if surfaces then
+        local source=batch.surfaces
+        if source then
+            for i=first*2+1,last*2 do surfaces[i]=source[i] end
+        else
+            local material=materials[batch.material]
+            local kind,weather=batch.surface and batch.surface[1] or material.kind,material.weather or 1
+            for i=first+1,last do surfaces[i*2-1]=kind;surfaces[i*2]=weather end
         end
     end
+    upload.cursor=last
+    if profiler then profiler.scope_end() end
+end
+
+local function finish_batch(adapter,upload)
+    if profiler then profiler.scope_begin("loading.upload.resource") end
+    local batch,data=upload.batch,upload.data
     buffer.set_metadata(data, "AABB", batch.bounds, buffer.VALUE_TYPE_FLOAT32)
     local factory_url=batch.glass and (adapter.mesh_factory=="#capture_mesh" and "#capture_glass" or "#glass_mesh") or adapter.mesh_factory
     local id = factory.create(factory_url,batch.glass and vmath.vector3(batch.centre.x,batch.centre.y,batch.centre.z) or nil)
@@ -58,10 +79,33 @@ function M.add_batch(adapter, batch)
     elseif batch.surface then
         go.set(url,"surface_override",vmath.vector4(surface[1],surface[2],surface[3],surface[4]))
     end
+    if profiler then profiler.scope_end() end
     batch.object, batch.resource = id, path
     -- The resource owns the buffer now. Keep only bounds/stats in Lua.
     batch.positions, batch.normals, batch.colors, batch.edges, batch.masks = nil, nil, nil, nil, nil
     batch.surfaces=nil
+end
+
+-- A partial buffer is never exposed to a mesh. Preserve batch boundaries and
+-- draw order, but allow the loader to check its deadline between vertex slices.
+function M.step_batch(adapter,batch,max_vertices)
+    assert(max_vertices>0,"Upload slice must contain vertices")
+    if profiler then profiler.scope_begin("loading.upload.batch") end
+    local upload=adapter.pending_batch
+    if not upload then upload=begin_batch(batch);adapter.pending_batch=upload end
+    assert(upload.batch==batch,"Finish the pending batch before starting another")
+    copy_vertices(upload,max_vertices)
+    local complete=upload.cursor==batch.vertex_count
+    if complete then
+        finish_batch(adapter,upload)
+        adapter.pending_batch=nil
+    end
+    if profiler then profiler.scope_end() end
+    return complete
+end
+
+function M.add_batch(adapter,batch)
+    M.step_batch(adapter,batch,batch.vertex_count)
 end
 
 function M.add_collision(adapter, shape)
@@ -111,6 +155,7 @@ function M.validate(adapter, world, query)
 end
 
 function M.final(adapter)
+    adapter.pending_batch=nil -- Unpublished buffer is Lua-owned and can be collected.
     for _, id in ipairs(adapter.objects) do go.delete(id) end
     -- Components retain their references until deferred GO deletion completes.
     for _, path in ipairs(adapter.buffers) do resource.release(path) end
