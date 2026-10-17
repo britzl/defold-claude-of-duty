@@ -7,6 +7,15 @@
 namespace worldmesh {
 static const double PI = 3.14159265358979323846;
 static const double EPSILON = 1e-7;
+static void DeleteEdgeLine(void*,const uint64_t*,dmArray<double>** line) { delete *line; }
+void ClearEdges(Edges& edges) {
+    edges.Iterate(DeleteEdgeLine,(void*)0);
+    Edges empty;edges.Swap(empty);
+}
+Builder::~Builder() {
+    ClearEdges(edges);
+    for (uint32_t i=0;i<batches.Size();++i) delete batches[i];
+}
 Geometry::Geometry() {
     for (int k=0;k<3;++k) { bounds[k]=std::numeric_limits<double>::infinity(); bounds[k+3]=-bounds[k]; }
 }
@@ -39,24 +48,24 @@ static void Emit(Geometry& out,const Vec& p,const Vec& n,const Vec& color,double
     v.values[9]=(float)alpha;
     for (int k=0;k<4;++k) { v.values[10+k]=(float)edges[k]; v.values[14+k]=(float)masks[k]; }
     v.values[18]=(float)material.kind; v.values[19]=(float)material.weather;
-    out.vertices.push_back(v);
+    Push(out.vertices,v);
 }
-static void EdgeVertices(std::vector<Vec>& boundary,const Edges& registry,const Vec& a,const Vec& b) {
+static void EdgeVertices(dmArray<Vec>& boundary,const Edges& registry,const Vec& a,const Vec& b) {
     int axis=a[0]!=b[0]?0:a[1]!=b[1]?1:2;
     int u=(axis+1)%3,v=(axis+2)%3;
     char key[128]; std::snprintf(key,sizeof(key),"%d/%.7f/%.7f",axis+1,a[u],a[v]);
-    Edges::const_iterator found=registry.find(key);
-    if (found==registry.end()) return;
-    const std::vector<double>& line=found->second;
+    dmArray<double>* const* found=registry.Get(dmHashString64(key));
+    if (!found || (*found)->Empty()) return;
+    const dmArray<double>& line=**found;
     double lo=std::min(a[axis],b[axis]),hi=std::max(a[axis],b[axis]);
     double last=-std::numeric_limits<double>::infinity();
-    size_t start=boundary.size();
-    for (std::vector<double>::const_iterator it=std::upper_bound(line.begin(),line.end(),lo+EPSILON);it!=line.end();++it) {
+    size_t start=boundary.Size();
+    for (const double* it=std::upper_bound(line.Begin(),line.End(),lo+EPSILON);it!=line.End();++it) {
         double value=*it;
         if (value>=hi-EPSILON) break;
-        if (value>last+EPSILON) { Vec p=a;p[axis]=value;boundary.push_back(p);last=value; }
+        if (value>last+EPSILON) { Vec p=a;p[axis]=value;Push(boundary,p);last=value; }
     }
-    if (a[axis]>b[axis]) std::reverse(boundary.begin()+start,boundary.end());
+    if (a[axis]>b[axis]) std::reverse(boundary.Begin()+start,boundary.End());
 }
 static const Vec NORMALS[6]={{{1,0,0}},{{-1,0,0}},{{0,1,0}},{{0,-1,0}},{{0,0,1}},{{0,0,-1}}};
 static const int CORNERS[6][4][3]={
@@ -77,10 +86,10 @@ static void Box(Geometry& out,const Shape& s,const Material& m,double shade,cons
         int u=pairs[face][0],v=pairs[face][1],horizontal=u,vertical=v;
         if (u==1) { horizontal=v;vertical=u; }
         Vec normal=forward.apply(NORMALS[face]);
-        std::vector<Rect> fallback;
-        if (!s.clipped) fallback.push_back(Rect{{s.center[u]-half[u],s.center[v]-half[v],s.center[u]+half[u],s.center[v]+half[v]}});
-        const std::vector<Rect>& rectangles=s.clipped?s.faces[face]:fallback;
-        for (size_t ri=0;ri<rectangles.size();++ri) {
+        dmArray<Rect> fallback;
+        if (!s.clipped) Push(fallback,Rect{{s.center[u]-half[u],s.center[v]-half[v],s.center[u]+half[u],s.center[v]+half[v]}});
+        const dmArray<Rect>& rectangles=s.clipped?s.faces[face]:fallback;
+        for (size_t ri=0;ri<rectangles.Size();++ri) {
             const Rect& r=rectangles[ri]; Vec corners[4];
             for (int i=0;i<4;++i) {
                 Vec p={{CORNERS[face][i][0]*half[0],CORNERS[face][i][1]*half[1],CORNERS[face][i][2]*half[2]}};
@@ -89,21 +98,21 @@ static void Box(Geometry& out,const Shape& s,const Material& m,double shade,cons
                 p=forward.apply(p);
                 for (int k=0;k<3;++k) corners[i][k]=s.center[k]+p[k];
             }
-            std::vector<Vec> boundary,triangles;
+            dmArray<Vec> boundary,triangles;
             for (int i=0;i<4;++i) {
-                boundary.push_back(corners[i]);
+                Push(boundary,corners[i]);
                 if (edge_points) EdgeVertices(boundary,*edge_points,corners[i],corners[(i+1)%4]);
             }
-            if (boundary.size()==4) for (int i=0;i<6;++i) triangles.push_back(corners[indices[i]]);
+            if (boundary.Size()==4) for (int i=0;i<6;++i) Push(triangles,corners[indices[i]]);
             else {
                 Vec middle;for (int k=0;k<3;++k) middle[k]=(corners[0][k]+corners[2][k])*.5;
-                for (size_t i=0;i<boundary.size();++i) {
-                    triangles.push_back(middle);triangles.push_back(boundary[i]);triangles.push_back(boundary[(i+1)%boundary.size()]);
+                for (size_t i=0;i<boundary.Size();++i) {
+                    Push(triangles,middle);Push(triangles,boundary[i]);Push(triangles,boundary[(i+1)%boundary.Size()]);
                 }
             }
             double top=u==1?r[2]:v==1?r[3]:s.center[1]+half[1];
             Rect masks={{ground?0:s.masks[0],ground?0:s.masks[1],ground?0:s.masks[2],ground?0:s.masks[3]>0?top:-1000}};
-            for (size_t i=0;i<triangles.size();++i) {
+            for (size_t i=0;i<triangles.Size();++i) {
                 const Vec& vertex=triangles[i];Vec local=inverse.apply(Sub(vertex,s.center));
                 Rect edges={{local[horizontal]+half[horizontal],half[horizontal]-local[horizontal],
                     local[vertical]+half[vertical],half[vertical]-local[vertical]}};
@@ -137,13 +146,13 @@ struct Primitive {
     void build() {
         double w=s.size[0]/2,h=s.size[1]/2,d=s.size[2]/2;
         if (s.kind=="prism") {
-            const std::vector<std::array<double,2> >& p=s.profile;
-            for (size_t i=1;i+1<p.size();++i) {
+            const dmArray<ProfilePoint>& p=s.profile;
+            for (size_t i=1;i+1<p.Size();++i) {
                 triangle(Vec{{p[0][0],p[0][1],d}},Vec{{p[i][0],p[i][1],d}},Vec{{p[i+1][0],p[i+1][1],d}});
                 triangle(Vec{{p[0][0],p[0][1],-d}},Vec{{p[i+1][0],p[i+1][1],-d}},Vec{{p[i][0],p[i][1],-d}});
             }
-            for (size_t i=0;i<p.size();++i) {
-                const std::array<double,2>& a=p[i];const std::array<double,2>& b=p[(i+1)%p.size()];
+            for (size_t i=0;i<p.Size();++i) {
+                const ProfilePoint& a=p[i];const ProfilePoint& b=p[(i+1)%p.Size()];
                 quad(Vec{{a[0],a[1],-d}},Vec{{b[0],b[1],-d}},Vec{{b[0],b[1],d}},Vec{{a[0],a[1],d}});
             }
         } else if (s.kind=="torus") {
@@ -163,59 +172,62 @@ struct Primitive {
                     quad(Vec{{0,y,z}},Vec{{side*length*.55,y-.025,z-.055}},Vec{{side*length,y-h*.17,z+d*.16}},Vec{{side*length*.4,y-.04,z+.075}},true);
             }
         } else {
-            std::vector<std::vector<Vec> > rings;
+            dmArray<Vec> rings[4];
+            uint32_t ring_count=s.kind=="bevel"?4:2;
             if (s.kind=="bevel") {
                 double r=std::min(std::min(s.bevel,w*.45),std::min(h*.45,d*.45));
                 double spec[4][2]={{-h,r},{-h+r,0},{h-r,0},{h,r}};
                 for (int j=0;j<4;++j) {
                     double x=w-spec[j][1],z=d-spec[j][1],y=spec[j][0];
                     Vec points[8]={{{-x+r,y,-z}},{{x-r,y,-z}},{{x,y,-z+r}},{{x,y,z-r}},{{x-r,y,z}},{{-x+r,y,z}},{{-x,y,z-r}},{{-x,y,-z+r}}};
-                    rings.push_back(std::vector<Vec>(points,points+8));
-                    std::reverse(rings.back().begin(),rings.back().end());
+                    rings[j].SetCapacity(8);rings[j].PushArray(points,8);
+                    std::reverse(rings[j].Begin(),rings[j].End());
                 }
             } else {
                 for (int j=0;j<2;++j) {
-                    double y=j==0?-h:h,taper=y==h?s.taper:1;std::vector<Vec> ring;
-                    for (int i=0;i<12;++i) { double a=-(double)i*PI/6;ring.push_back(Vec{{w*std::cos(a)*taper,y,d*std::sin(a)*taper}}); }
-                    rings.push_back(ring);
+                    double y=j==0?-h:h,taper=y==h?s.taper:1;
+                    rings[j].SetCapacity(12);
+                    for (int i=0;i<12;++i) { double a=-(double)i*PI/6;rings[j].Push(Vec{{w*std::cos(a)*taper,y,d*std::sin(a)*taper}}); }
                 }
             }
-            for (size_t j=0;j+1<rings.size();++j) for (size_t i=0;i<rings[j].size();++i) {
-                size_t next=(i+1)%rings[j].size();quad(rings[j][i],rings[j][next],rings[j+1][next],rings[j+1][i]);
+            for (size_t j=0;j+1<ring_count;++j) for (size_t i=0;i<rings[j].Size();++i) {
+                size_t next=(i+1)%rings[j].Size();quad(rings[j][i],rings[j][next],rings[j+1][next],rings[j+1][i]);
             }
-            for (size_t i=1;i+1<rings[0].size();++i) {
+            for (size_t i=1;i+1<rings[0].Size();++i) {
                 triangle(rings[0][0],rings[0][i+1],rings[0][i]);
-                const std::vector<Vec>& r=rings.back();triangle(r[0],r[i],r[i+1]);
+                const dmArray<Vec>& r=rings[ring_count-1];triangle(r[0],r[i],r[i+1]);
             }
         }
     }
 };
 void Generate(Geometry& out,const Shape& s,const Material& m,double shade,const Edges& edges) {
     if (s.kind=="card") {
-        Shape card=s;card.size[2]=0;card.clipped=true;
+        // Copy only the box attributes; owning dmArrays cannot be copied.
+        Shape card;card.id=s.id;card.center=s.center;card.size=s.size;
+        card.rotation=s.rotation;card.masks=s.masks;card.size[2]=0;card.clipped=true;
         Rect face={{s.center[0]-s.size[0]/2,s.center[1]-s.size[1]/2,s.center[0]+s.size[0]/2,s.center[1]+s.size[1]/2}};
-        for (int i=0;i<6;++i) card.faces[i].clear();
-        card.faces[4].push_back(face);card.faces[5].push_back(face);Box(out,card,m,shade,0);
+        Push(card.faces[4],face);Push(card.faces[5],face);Box(out,card,m,shade,0);
     } else if (s.kind.empty()) Box(out,s,m,shade,s.clipped?&edges:0);
     else Primitive(out,s,m,shade).build();
 }
 bool Append(Builder& b,const Shape& s,const Material& m,double shade,size_t& vertices) {
-    Geometry geometry;Generate(geometry,s,m,shade,b.edges);vertices=geometry.vertices.size();
+    Geometry geometry;Generate(geometry,s,m,shade,b.edges);vertices=geometry.vertices.Size();
     if (vertices>b.max_vertices) return false;
     if (vertices==0) return true;
     bool terrain=s.id.compare(0,8,"terrain/")==0;
     double chunk=b.chunk_size*(terrain?4:1);
     int cx=(int)std::floor(s.center[0]/chunk),cz=(int)std::floor(s.center[2]/chunk);
     char key[96];std::snprintf(key,sizeof(key),"%s/%d/%d",terrain?"terrain":"world",cx,cz);
-    std::map<std::string,size_t>::iterator found=b.lookup.find(key);
-    size_t index=found==b.lookup.end()?b.batches.size():found->second;
-    if (index==b.batches.size() || b.batches[index].vertices.size()+vertices>b.max_vertices) {
-        Batch batch;batch.material=s.material;batch.chunk_x=cx;batch.chunk_z=cz;
-        char full_key[128];std::snprintf(full_key,sizeof(full_key),"%s/%u",key,(unsigned)b.batches.size()+1);batch.key=full_key;
-        index=b.batches.size();b.batches.push_back(batch);b.lookup[key]=index;
-        b.batches[index].vertices.reserve(b.max_vertices);
+    uint64_t hash=dmHashString64(key);
+    const uint32_t* found=b.lookup.Get(hash);
+    uint32_t index=found?*found:b.batches.Size();
+    if (index==b.batches.Size() || b.batches[index]->vertices.Size()+vertices>b.max_vertices) {
+        Batch* batch=new Batch;batch->material=s.material;batch->chunk_x=cx;batch->chunk_z=cz;
+        char full_key[128];std::snprintf(full_key,sizeof(full_key),"%s/%u",key,(unsigned)b.batches.Size()+1);batch->key=full_key;
+        index=b.batches.Size();Push(b.batches,batch);Put(b.lookup,hash,index);
+        batch->vertices.SetCapacity((uint32_t)b.max_vertices);
     }
-    Batch& batch=b.batches[index];batch.vertices.insert(batch.vertices.end(),geometry.vertices.begin(),geometry.vertices.end());
+    Batch& batch=*b.batches[index];batch.vertices.PushArray(geometry.vertices.Begin(),geometry.vertices.Size());
     for (int k=0;k<3;++k) { batch.bounds[k]=std::min(batch.bounds[k],geometry.bounds[k]);batch.bounds[k+3]=std::max(batch.bounds[k+3],geometry.bounds[k+3]); }
     ++batch.boxes;return true;
 }

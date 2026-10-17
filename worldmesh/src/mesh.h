@@ -1,31 +1,57 @@
 #ifndef WORLD_MESH_H
 #define WORLD_MESH_H
 
-#include <array>
-#include <map>
+#include <dmsdk/dlib/array.h>
+#include <dmsdk/dlib/hashtable.h>
 #include <string>
-#include <vector>
 
 namespace worldmesh {
-typedef std::array<double, 3> Vec;
-typedef std::array<double, 4> Rect;
-typedef std::map<std::string, std::vector<double> > Edges;
+// Fixed-size values stay inline and retain double precision. Dynamic storage
+// uses dmArray; its elements must have memcpy semantics.
+struct Vec {
+    double values[3];
+    double& operator[](uint32_t i) { return values[i]; }
+    const double& operator[](uint32_t i) const { return values[i]; }
+};
+struct Rect {
+    double values[4];
+    double& operator[](uint32_t i) { return values[i]; }
+    const double& operator[](uint32_t i) const { return values[i]; }
+};
+struct ProfilePoint {
+    double values[2];
+    double& operator[](uint32_t i) { return values[i]; }
+    const double& operator[](uint32_t i) const { return values[i]; }
+};
+template <typename T> inline void Push(dmArray<T>& array,const T& value) {
+    if (array.Full()) array.SetCapacity(array.Capacity()?array.Capacity()*2:16);
+    array.Push(value);
+}
+template <typename T> inline void Put(dmHashTable64<T>& table,uint64_t key,const T& value) {
+    if (table.Full()) {
+        uint32_t capacity=table.Capacity()?table.Capacity()*2:16;
+        table.SetCapacity(capacity*2/3,capacity);
+    }
+    table.Put(key,value);
+}
+typedef dmHashTable64<dmArray<double>*> Edges;
+void ClearEdges(Edges& edges);
 struct Shape {
     std::string id, kind, material;
     Vec center, size, rotation;
-    std::array<double, 4> masks;
-    std::vector<std::array<double, 2> > profile;
+    Rect masks;
+    dmArray<ProfilePoint> profile;
     double bevel, taper;
     bool clipped;
-    std::array<std::vector<Rect>, 6> faces;
+    dmArray<Rect> faces[6];
 };
 struct Material { Vec color; double coverage, kind, weather; };
 // Retain Lua's double arithmetic until the final stream conversion. No fast
 // math or fused multiply-add: stream bytes are a compatibility contract.
 struct Vertex { float values[20]; };
 struct Geometry {
-    std::vector<Vertex> vertices;
-    std::array<double, 6> bounds;
+    dmArray<Vertex> vertices;
+    double bounds[6];
     Geometry();
 };
 struct Batch : Geometry {
@@ -36,12 +62,15 @@ struct Batch : Geometry {
 };
 struct Builder {
     Edges edges;
-    std::vector<Batch> batches;
-    std::map<std::string, size_t> lookup;
+    // Containers hold pointers to owning objects, never raw copies of their
+    // dmArrays or strings. Builder destroys both batches and edge lines.
+    dmArray<Batch*> batches;
+    dmHashTable64<uint32_t> lookup;
     double chunk_size;
     size_t max_vertices;
     bool finished;
     Builder(double chunk, size_t limit) : chunk_size(chunk), max_vertices(limit), finished(false) {}
+    ~Builder();
 };
 void Generate(Geometry& out, const Shape& shape, const Material& material, double shade, const Edges& edges);
 bool Append(Builder& builder, const Shape& shape, const Material& material, double shade, size_t& vertices);

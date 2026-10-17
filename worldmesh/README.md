@@ -19,6 +19,12 @@ multiply-add are disabled. Vertex order, batch order, bounds, tessellation,
 material attributes and shared-edge subdivision are preserved. Glass retains
 its small Lua geometry generator and uses the native buffer packer.
 
+Variable-length geometry uses Defold's `dmArray`; shared-edge and batch lookup
+use `dmHashTable64`. Coordinates, rectangles and bounds are inline double
+values. Because Defold containers use memcpy semantics, batches and edge lines
+are stored as owned pointers and explicitly destroyed by the builder. No STL
+array, vector or map containers are used.
+
 ## Configuration
 
 The game defaults to `world_mesh.backend=native`. For comparisons, launch the

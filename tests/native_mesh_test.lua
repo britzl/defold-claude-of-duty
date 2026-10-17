@@ -47,6 +47,24 @@ function M.run()
     local abandoned=worldmesh.begin({},16,12288)
     worldmesh.append(abandoned,shapes[3],materials.concrete,1)
     worldmesh.close(abandoned);worldmesh.close(abandoned)
+    -- Exercise table/array growth and teardown with untaken batches and edge
+    -- lines. Defold containers do not construct or destroy owning elements.
+    local many_edges={}
+    for i=1,80 do many_edges["1/0.0000000/"..string.format("%.7f",i)]={3,1,2} end
+    local growing=worldmesh.begin(many_edges,16,36)
+    for i=1,80 do
+        local s={id="growth/"..i,material="concrete",x=i*20,y=0,z=0,w=1,h=1,d=1}
+        assert(worldmesh.append(growing,s,materials.concrete,1)==36)
+    end
+    local grown=worldmesh.finish(growing)
+    assert(#grown==80 and grown[80].boxes==1,"Container growth lost batches")
+    local retained=worldmesh.take_buffer(growing,40)
+    worldmesh.close(growing)
+    assert(#buffer.get_stream(retained,hash("position"))==108)
+    local cancelled=worldmesh.begin(many_edges,16,36)
+    worldmesh.close(cancelled);worldmesh.close(cancelled)
+    assert(not pcall(worldmesh.begin,{invalid={1,"bad"}},16,36))
+    collectgarbage("collect") -- Includes the failed begin's owned edge line.
     local pane=glass.pane("test",42,1.4,-.5,2.5,2.6,"z")
     local native=worldmesh.pack(pane)
     local names={"position","normal","color","surface_edges","surface_masks"}
@@ -60,7 +78,7 @@ function M.run()
         for k,v in ipairs(arrays[i]) do stream[k]=i==1 and v-center[(k-1)%3+1] or v end
     end
     equal_buffer(native,reference,names)
-    print("NATIVE_MESH_TEST PASS "..#shapes.." primitives, glass, ownership and cancellation")
+    print("NATIVE_MESH_TEST PASS "..#shapes.." primitives, glass, ownership, container growth and cancellation")
     return #shapes
 end
 return M

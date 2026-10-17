@@ -37,7 +37,7 @@ static std::string String(lua_State* L,int table,const char* key,bool& valid,boo
     lua_pop(L,1);return result;
 }
 // Parsing reports errors after C++ temporaries are destroyed. luaL_error uses
-// longjmp in the engine and must not bypass vector/string destructors.
+// longjmp in the engine and must not bypass array/string destructors.
 static bool ReadShape(lua_State* L,Shape& s,Material& m,double& shade) {
     if (!lua_istable(L,2) || !lua_istable(L,3) || !lua_isnumber(L,4)) return false;
     bool valid=true;
@@ -60,7 +60,7 @@ static bool ReadShape(lua_State* L,Shape& s,Material& m,double& shade) {
         else for (size_t i=1;i<=lua_objlen(L,-1);++i) {
             lua_rawgeti(L,-1,(int)i);
             if (!lua_istable(L,-1)) valid=false;
-            else s.profile.push_back(std::array<double,2>{{Element(L,lua_gettop(L),1,valid),Element(L,lua_gettop(L),2,valid)}});
+            else Push(s.profile,ProfilePoint{{Element(L,lua_gettop(L),1,valid),Element(L,lua_gettop(L),2,valid)}});
             lua_pop(L,1);
         }
         lua_pop(L,1);
@@ -73,7 +73,7 @@ static bool ReadShape(lua_State* L,Shape& s,Material& m,double& shade) {
         else for (size_t i=1;i<=lua_objlen(L,-1);++i) {
             lua_rawgeti(L,-1,(int)i);
             if (!lua_istable(L,-1)) valid=false;
-            else { Rect r;for (int k=0;k<4;++k) r[k]=Element(L,lua_gettop(L),k+1,valid);s.faces[f].push_back(r); }
+            else { Rect r;for (int k=0;k<4;++k) r[k]=Element(L,lua_gettop(L),k+1,valid);Push(s.faces[f],r); }
             lua_pop(L,1);
         }
         lua_pop(L,1);
@@ -100,9 +100,15 @@ static int Begin(lua_State* L) {
     while (lua_next(L,1)) {
         if (lua_type(L,-2)!=LUA_TSTRING || !lua_istable(L,-1)) valid=false;
         else {
-            std::vector<double>& line=(*owner)->edges[lua_tostring(L,-2)];
-            for (size_t i=1;i<=lua_objlen(L,-1);++i) line.push_back(Element(L,lua_gettop(L),(int)i,valid));
-            std::sort(line.begin(),line.end());
+            dmArray<double>* line=new dmArray<double>;
+            uint64_t key=dmHashString64(lua_tostring(L,-2));
+            // Keep ownership in the userdata even if a later entry is invalid.
+            dmArray<double>** previous=(*owner)->edges.Get(key);
+            if (previous) delete *previous;
+            Put((*owner)->edges,key,line);
+            line->SetCapacity((uint32_t)lua_objlen(L,-1));
+            for (size_t i=1;i<=lua_objlen(L,-1);++i) line->Push(Element(L,lua_gettop(L),(int)i,valid));
+            if (line->Size()>1) std::sort(line->Begin(),line->End());
         }
         lua_pop(L,1);
     }
@@ -121,13 +127,13 @@ static int Add(lua_State* L) {
 static void SetNumber(lua_State* L,const char* key,double value) { lua_pushnumber(L,value);lua_setfield(L,-2,key); }
 static void SetString(lua_State* L,const char* key,const std::string& value) { lua_pushlstring(L,value.data(),value.size());lua_setfield(L,-2,key); }
 static int Finish(lua_State* L) {
-    Builder* b=Check(L);b->finished=true;Edges().swap(b->edges);b->lookup.clear();
-    lua_createtable(L,(int)b->batches.size(),0);
-    for (size_t i=0;i<b->batches.size();++i) {
-        const Batch& batch=b->batches[i];lua_createtable(L,0,9);
+    Builder* b=Check(L);b->finished=true;ClearEdges(b->edges);b->lookup.Clear();
+    lua_createtable(L,(int)b->batches.Size(),0);
+    for (size_t i=0;i<b->batches.Size();++i) {
+        const Batch& batch=*b->batches[i];lua_createtable(L,0,9);
         SetString(L,"key",batch.key);SetString(L,"material",batch.material);
         SetNumber(L,"chunk_x",batch.chunk_x);SetNumber(L,"chunk_z",batch.chunk_z);
-        SetNumber(L,"vertex_count",(double)batch.vertices.size());SetNumber(L,"boxes",batch.boxes);
+        SetNumber(L,"vertex_count",(double)batch.vertices.Size());SetNumber(L,"boxes",batch.boxes);
         SetNumber(L,"native_index",(double)i+1);
         lua_pushvalue(L,1);lua_setfield(L,-2,"native_builder");
         lua_createtable(L,6,0);for (int k=0;k<6;++k) { lua_pushnumber(L,batch.bounds[k]);lua_rawseti(L,-2,k+1); }
@@ -135,17 +141,17 @@ static int Finish(lua_State* L) {
     }
     return 1;
 }
-static dmBuffer::Result CreateBuffer(const std::vector<Vertex>& vertices,bool glass,const float* bounds,dmBuffer::HBuffer& data) {
+static dmBuffer::Result CreateBuffer(const dmArray<Vertex>& vertices,bool glass,const float* bounds,dmBuffer::HBuffer& data) {
     dmBuffer::StreamDeclaration declarations[6]={};int streams=glass?5:6;
     for (int k=0;k<streams;++k) { declarations[k].m_Name=dmHashString64(STREAMS[k]);declarations[k].m_Type=dmBuffer::VALUE_TYPE_FLOAT32;declarations[k].m_Count=COUNTS[k]; }
-    dmBuffer::Result result=dmBuffer::Create((uint32_t)vertices.size(),declarations,(uint8_t)streams,&data);
+    dmBuffer::Result result=dmBuffer::Create(vertices.Size(),declarations,(uint8_t)streams,&data);
     if (result!=dmBuffer::RESULT_OK) return result;
     for (int k=0;k<streams;++k) {
         void* pointer=0;uint32_t count=0,components=0,stride=0;
         result=dmBuffer::GetStream(data,dmHashString64(STREAMS[k]),&pointer,&count,&components,&stride);
         if (result!=dmBuffer::RESULT_OK) break;
         float* dest=(float*)pointer;
-        for (size_t i=0;i<vertices.size();++i) std::memcpy(dest+i*stride,vertices[i].values+OFFSETS[k],COUNTS[k]*sizeof(float));
+        for (size_t i=0;i<vertices.Size();++i) std::memcpy(dest+i*stride,vertices[i].values+OFFSETS[k],COUNTS[k]*sizeof(float));
     }
     if (result==dmBuffer::RESULT_OK) result=dmBuffer::SetMetaData(data,dmHashString64("AABB"),bounds,6,dmBuffer::VALUE_TYPE_FLOAT32);
     if (result==dmBuffer::RESULT_OK) result=dmBuffer::UpdateContentVersion(data);
@@ -155,12 +161,12 @@ static dmBuffer::Result CreateBuffer(const std::vector<Vertex>& vertices,bool gl
 static int Take(lua_State* L) {
     Builder* b=Check(L);int index=luaL_checkint(L,2);
     luaL_argcheck(L,b->finished,1,"finish builder before taking buffers");
-    luaL_argcheck(L,index>=1 && (size_t)index<=b->batches.size(),2,"invalid batch index");
-    Batch& batch=b->batches[index-1];luaL_argcheck(L,!batch.taken,2,"batch already taken");
+    luaL_argcheck(L,index>=1 && (size_t)index<=b->batches.Size(),2,"invalid batch index");
+    Batch& batch=*b->batches[index-1];luaL_argcheck(L,!batch.taken,2,"batch already taken");
     float bounds[6];for (int k=0;k<6;++k) bounds[k]=(float)batch.bounds[k];
     dmBuffer::HBuffer data=0;dmBuffer::Result result=CreateBuffer(batch.vertices,false,bounds,data);
     if (result!=dmBuffer::RESULT_OK) return luaL_error(L,"buffer creation failed: %d",(int)result);
-    batch.taken=true;std::vector<Vertex>().swap(batch.vertices);
+    batch.taken=true;batch.vertices.SetSize(0);batch.vertices.SetCapacity(0);
     dmScript::PushBuffer(L,dmScript::LuaHBuffer(data,dmScript::OWNER_LUA));return 1;
 }
 // Small existing Lua batches (glass and capture fixtures) share the native
@@ -176,7 +182,7 @@ static bool PackInput(lua_State* L,dmBuffer::HBuffer& data) {
         else { int t=lua_gettop(L);center[0]=Number(L,t,"x",0,valid,true);center[1]=Number(L,t,"y",0,valid,true);center[2]=Number(L,t,"z",0,valid,true); }
         lua_pop(L,1);
     }
-    std::vector<Vertex> vertices(count);
+    dmArray<Vertex> vertices;vertices.SetCapacity(count);vertices.SetSize(count);
     for (int k=0;k<(glass?5:6);++k) {
         lua_getfield(L,1,ARRAYS[k]);
         if (!lua_istable(L,-1) || lua_objlen(L,-1)!=(size_t)count*COUNTS[k]) valid=false;
@@ -203,10 +209,10 @@ static bool VerifyInput(lua_State* L,const Builder& b,char* error,size_t capacit
     if (!ReadShape(L,s,m,shade) || !lua_istable(L,6)) { std::snprintf(error,capacity,"invalid verification inputs");return false; }
     Geometry g;Generate(g,s,m,shade,b.edges);bool valid=true;
     double expected_count=Number(L,6,"vertex_count",0,valid,true);
-    if (!valid || expected_count!=g.vertices.size()) { std::snprintf(error,capacity,"%s vertex count: native %u, Lua %.0f",s.id.c_str(),(unsigned)g.vertices.size(),expected_count);return false; }
+    if (!valid || expected_count!=g.vertices.Size()) { std::snprintf(error,capacity,"%s vertex count: native %u, Lua %.0f",s.id.c_str(),(unsigned)g.vertices.Size(),expected_count);return false; }
     for (int k=0;k<5;++k) {
         lua_getfield(L,6,ARRAYS[k]);if (!lua_istable(L,-1)) { lua_pop(L,1);return false; }
-        for (size_t i=0;i<g.vertices.size();++i) for (int j=0;j<COUNTS[k];++j) {
+        for (size_t i=0;i<g.vertices.Size();++i) for (int j=0;j<COUNTS[k];++j) {
             float expected=(float)Element(L,lua_gettop(L),(int)i*COUNTS[k]+j+1,valid);
             float actual=g.vertices[i].values[OFFSETS[k]+j];
             if (!valid || std::memcmp(&expected,&actual,sizeof(float))) {
@@ -216,7 +222,7 @@ static bool VerifyInput(lua_State* L,const Builder& b,char* error,size_t capacit
         lua_pop(L,1);
     }
     // Empty shapes have infinite bounds; their bounds never reach a batch.
-    if (!g.vertices.empty()) {
+    if (!g.vertices.Empty()) {
         lua_getfield(L,6,"bounds");if (!lua_istable(L,-1)) { lua_pop(L,1);return false; }
         for (int k=0;k<6;++k) if (g.bounds[k]!=Element(L,lua_gettop(L),k+1,valid)) {
             std::snprintf(error,capacity,"%s bounds[%d] differ",s.id.c_str(),k+1);lua_pop(L,1);return false;
