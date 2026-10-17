@@ -76,6 +76,8 @@ end
 
 local function world_snapshot(world)
     return { ready = world.ready, phase = world.phase, seed = world.seed,
+        mesh_backend=world.mesh_backend, mesh_verified=world.verify_mesh or false,
+        timings=world.timings,
         boxes = world.stats.boxes, vertices = world.stats.vertices, mesh_bytes = world.stats.mesh_bytes,
         batches = world.stats.batches, colliders = world.stats.colliders,
         navigation_nodes = #world.navigation.nodes, navigation_edges = #world.navigation.edges,
@@ -140,6 +142,8 @@ function init(self)
     if profiler then profiler.scope_begin("loading.init.soldiers") end
     self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
     if profiler then profiler.scope_end() end
+    if sys.get_config_int("world_mesh.verify",0)==1 then require("tests.native_mesh_test").run() end
+    if sys.get_config_int("mesh_validation.enabled",0)==1 then self.mesh_validation=require("tests.mesh_browser").new() end
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
     self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id},
@@ -451,6 +455,7 @@ function fixed_update(self, dt)
     end
     if self.weapon_drive then weapon_driver.before(self.ctx, self.weapon_drive) end
     runtime.fixed_update(self.ctx, dt)
+    if self.ctx.world.ready then require("game.world.generator").mark(self.ctx.world,"gameplay") end
     if self.weapon_drive then weapon_driver.after(self.ctx, self.weapon_drive) end
     -- Keep the GO and kinematic Bullet transform at the authoritative feet.
     local p = self.ctx.player.position
@@ -462,6 +467,10 @@ function update(self, dt)
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then return end
     runtime.update(self.ctx, dt)
+    if self.ctx.world.ready and self.renderer_stats.ready then
+        require("game.world.generator").mark(self.ctx.world,"playable")
+    end
+    if self.mesh_validation then require("tests.mesh_browser").update(self.mesh_validation,self) end
     if self.ctx.world.ready and self.shadow_world~=self.ctx.world then
         self.shadow_world=self.ctx.world
         msg.post("@render:","renderer_world_ready",{})

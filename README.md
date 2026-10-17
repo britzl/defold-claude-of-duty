@@ -38,6 +38,49 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Native world meshes (2026-10-17)
+
+Loading steps 5 and 6 now use the in-repository [WorldMesh extension](worldmesh/README.md):
+C++ builds and batches triangles and fills Defold buffers. Lua retains recipes,
+face clipping, metadata and mesh resource/component installation. The native
+backend is the default; `--config=world_mesh.backend=lua` selects the original
+implementation, and `--config=world_mesh.verify=1` checks every native shape
+against it. Rebuild the custom engine after changing C++.
+
+Three alternating Lua/native fresh-process pairs on an Apple M3 Pro produced
+these median elapsed times, with the existing 4 ms loading budget:
+
+| Stage | macOS Lua → native | HTML5 Lua → native |
+| --- | ---: | ---: |
+| 5: Construct and batch meshes | 806 → 135 ms | 3,285 → 267 ms |
+| 6: Fill/install buffers | 877 → 32 ms | 1,178 → 43 ms |
+| Steps 5–6 combined | 1,635 → 166 ms (90% less) | 4,459 → 309 ms (93% less) |
+| World/audio and renderer ready | 2,165 → 1,745 ms (19% less) | 5,573 → 3,401 ms (39% less) |
+
+Times start at world initialization and exclude engine/browser startup. Each
+row is the median of its own per-run measurement. These are frame-spanning
+intervals, including scheduling and concurrent loading work. On macOS, the
+corresponding CPU scope medians fell from 372 to 54 ms for mesh construction
+and from 323 to 13 ms for upload. Audio synthesis and renderer baking now
+limit the overall improvement. Verification is disabled in timing runs.
+
+Both platforms used Defold 1.14.0 debug engines and medium materials; native
+Metal used a 1920×1280 drawable, while Chromium 149/WebGL 2 used a 960×598
+canvas. Comparisons are within each platform with identical settings. HTML5
+uses a test fixture that unpauses the game and freezes AI.
+
+All 4,532 shapes matched their Lua references, including float32 bits and bounds,
+on **both macOS and Wasm**. All **513 installed stream hashes across 86 batches**
+and all batch bounds matched the Lua backend in every run. The level remains
+413,568 vertices and 1,224 colliders. Native primitive, glass, ownership and
+cancellation checks passed on both platforms. Each also passed real Bullet
+checks for 196 nodes/201 edges, 108 actor route queries and eight inspection
+captures. The 45 affected standalone Lua checks passed.
+
+See [extension usage and repeatable tests](worldmesh/README.md), the local
+[measurement report](captures/native-worldmesh-2026-10-17/findings.txt), and
+[per-run comparison data](captures/native-worldmesh-2026-10-17/comparison.json).
+
 ## Level-loading optimization (2026-10-16)
 
 Native Defold 1.14.0/Metal Remotery measurements at 1920×1280, medium materials,

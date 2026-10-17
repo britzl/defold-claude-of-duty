@@ -91,6 +91,22 @@ end
 function M.step_batch(adapter,batch,max_vertices)
     assert(max_vertices>0,"Upload slice must contain vertices")
     if profiler then profiler.scope_begin("loading.upload.batch") end
+    if batch.native_builder or batch.native_upload then
+        local data
+        if batch.native_builder then data=worldmesh.take_buffer(batch.native_builder,batch.native_index)
+        else
+            data=worldmesh.pack(batch)
+            if batch.glass then
+                for i,v in ipairs({batch.centre.x,batch.centre.y,batch.centre.z}) do
+                    batch.bounds[i]=batch.bounds[i]-v;batch.bounds[i+3]=batch.bounds[i+3]-v
+                end
+            end
+        end
+        finish_batch(adapter,{batch=batch,data=data})
+        batch.native_builder,batch.native_index,batch.native_upload=nil,nil,nil
+        if profiler then profiler.scope_end() end
+        return true
+    end
     local upload=adapter.pending_batch
     if not upload then upload=begin_batch(batch);adapter.pending_batch=upload end
     assert(upload.batch==batch,"Finish the pending batch before starting another")

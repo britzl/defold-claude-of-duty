@@ -53,17 +53,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--uncapped', action='store_true', help='Diagnostic: launch with display.swap_interval=0')
+    parser.add_argument('--backend', choices=('lua','native'), default='native')
+    parser.add_argument('--verify', action='store_true', help='Compare every native shape with the Lua reference; not a performance run')
     args = parser.parse_args()
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False)
     with socket.socket() as reserved:
         reserved.bind(('127.0.0.1', 0)); profiler_port = reserved.getsockname()[1]
     command = [str(ROOT/'build/arm64-osx/dmengine'), str(ROOT/'build/default/game.projectc'),
-        f'--config=profiler.remotery_port={profiler_port}']
+        f'--config=profiler.remotery_port={profiler_port}', f'--config=world_mesh.backend={args.backend}',
+        f'--config=world_mesh.verify={int(args.verify)}']
     if args.uncapped: command.append('--config=display.swap_interval=0')
     report = dict(created_utc=datetime.now(timezone.utc).isoformat(), command=command,
         method='Defold native debug Metal / Remotery Main thread elapsed scopes; not GPU timestamps. Fresh process, normal loading budgets.',
         sources={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest()
-                 for directory in ('game','main','render') for p in sorted((ROOT/directory).rglob('*')) if p.is_file()},
+                 for directory in ('game','main','render','worldmesh') for p in sorted((ROOT/directory).rglob('*')) if p.is_file()},
         markers=[])
     report['sources']['game.project'] = hashlib.sha256((ROOT/'game.project').read_bytes()).hexdigest()
     game = recording = None
@@ -84,6 +87,8 @@ def main():
             game = engine.connect(port, profiler_url=url, timeout=30)
             previous = None
             while time.monotonic()-started < 120:
+                assert process.poll() is None, (out/'engine.log').read_text()
+                assert 'ERROR:' not in (out/'engine.log').read_text(), (out/'engine.log').read_text()
                 marker = {key:game.command(key+'.snapshot', {})['result'] for key in ('world','audio','renderer','gameplay')}
                 marker['wall_seconds'] = time.monotonic()-started
                 marker['recorded_frames'] = recording.frame_count
@@ -92,7 +97,7 @@ def main():
                 if state != previous:
                     print('PHASE', round(marker['wall_seconds'],3),state,'frame',marker['gameplay']['frame'], flush=True)
                     previous = state
-                if all(state[1:]) and marker['world']['ready']: break
+                if all(state[1:]) and marker['world']['ready'] and marker['world'].get('timings',{}).get('playable'): break
                 time.sleep(.2)
             assert all(report['markers'][-1][key]['ready'] for key in ('world','audio','renderer')), 'Loading timed out'
             game.wait_frames(3)
@@ -105,7 +110,11 @@ def main():
                 recipes_expected=report['markers'][-1]['world']['boxes']+1,
                 shapes_captured=report['loading'].get('loading.mesh.shape',{}).get('calls',0),
                 shapes_expected=report['markers'][-1]['world']['boxes'])
-            assert report['coverage']['shapes_captured'] == report['coverage']['shapes_expected'], 'Missed mesh generation'
+            # Faster native generation may complete before attachment. Record
+            # coverage honestly; application timings cover the entire load.
+            report['mesh_fingerprints'] = []
+            for offset in range(0,report['markers'][-1]['world']['batches'],16):
+                report['mesh_fingerprints'].extend(game.command('world.mesh_fingerprints', {'offset':offset,'limit':16})['result']['batches'])
             report['health'] = game.health()
             report['complete'] = True
         finally:

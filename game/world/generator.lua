@@ -7,6 +7,13 @@ local daylight = require "game.render.daylight"
 local materials=require "game.world.materials"
 local M = { max_batch_vertices = 12288 }
 
+-- These monotonic timestamps include frames missed by an attaching profiler.
+function M.mark(world,stage)
+    if world.timings and not world.timings[stage] then
+        world.timings[stage]=(worldmesh.clock()-world.load_started)*1000
+    end
+end
+
 local function append(batch, shape, material)
     for _,name in ipairs({"positions","normals","colors","edges","masks"}) do
         local target,source=batch[name],shape[name]
@@ -110,8 +117,14 @@ local function metadata(layout)
 end
 
 function M.new(layout, options)
+    local started=worldmesh and worldmesh.clock()
     options = options or {}
+    local backend=options.backend or (worldmesh and "native" or "lua")
+    assert(backend=="native" or backend=="lua","Invalid world mesh backend")
+    assert(backend~="native" or worldmesh,"WorldMesh native extension is required")
     local world = {
+        load_started=started,timings=started and {} or nil,
+        mesh_backend=backend, verify_mesh=options.verify_mesh,
         spawn = layout.spawn, spawn_points = { { id = "player", position = layout.spawn } },
         views = layout.views, layout = layout, seed = options.seed or layout.seed,
         spawn_anchors = layout.spawn_anchors or {},
@@ -148,12 +161,23 @@ local function add(world, shape, faces)
     local cx, cz = math.floor(shape.x / chunk), math.floor(shape.z / chunk)
     local material=materials[shape.material]
     local key = (terrain and "terrain/" or "world/") .. cx .. "/" .. cz
-    local geometry=mesh.new(shape.id,shape.material,cx,cz)
+    local geometry
+    local shade=0.94 + world.decoration_rng() * 0.12
     if profiler then profiler.scope_begin("loading.mesh.shape") end
-    mesh.shape(geometry,shape,0.94 + world.decoration_rng() * 0.12,faces,world.edge_points)
+    if world.native_builder then
+        if world.verify_mesh then
+            local reference=mesh.new(shape.id,shape.material,cx,cz)
+            mesh.shape(reference,shape,shade,faces,world.edge_points)
+            worldmesh.verify(world.native_builder,shape,material,shade,faces,reference)
+        end
+        geometry={vertex_count=worldmesh.append(world.native_builder,shape,material,shade,faces)}
+    else
+        geometry=mesh.new(shape.id,shape.material,cx,cz)
+        mesh.shape(geometry,shape,shade,faces,world.edge_points)
+    end
     if profiler then profiler.scope_end() end
     local batch = world.batch_lookup[key]
-    if geometry.vertex_count>0 then
+    if geometry.vertex_count>0 and not world.native_builder then
         -- Bound uploads by actual vertex work, including curved primitives.
         assert(geometry.vertex_count<=M.max_batch_vertices,"World primitive exceeds mesh upload budget")
         if not batch or batch.vertex_count+geometry.vertex_count>M.max_batch_vertices then
@@ -188,6 +212,7 @@ end
 -- No frame-dependent randomness: yielding never changes generated output.
 function M.step(world, max_jobs, deadline, now)
     if world.phase ~= "geometry" then return 0 end
+    M.mark(world,"recipes")
     local done = 0
     while done < max_jobs and (not deadline or now() < deadline) do
         if world.job then
@@ -199,6 +224,7 @@ function M.step(world, max_jobs, deadline, now)
                 world.face_index=1
                 world.shape_faces,world.edge_points={},{}
                 world.face_grid=visible_faces.index(world.shape_bounds)
+                M.mark(world,"faces")
             else
                 world.shapes[#world.shapes+1]=shape
                 world.shape_bounds=world.shape_bounds or {}
@@ -215,13 +241,20 @@ function M.step(world, max_jobs, deadline, now)
                 if faces then visible_faces.register_edges(world.edge_points,world.shape_bounds[i],faces) end
                 if profiler then profiler.scope_end() end
                 world.face_index=i+1
-            else world.face_index=nil;world.mesh_index=1 end
+            else
+                world.face_index=nil;world.mesh_index=1
+                M.mark(world,"construction")
+                if world.mesh_backend=="native" then
+                    world.native_builder=worldmesh.begin(world.edge_points,world.layout.chunk_size,M.max_batch_vertices)
+                end
+            end
         elseif world.mesh_index<=#world.shapes then
             local i=world.mesh_index
             add(world,world.shapes[i],world.shape_faces[i])
             world.mesh_index=i+1
         else
             if profiler then profiler.scope_begin("loading.geometry.finish") end
+            if world.native_builder then world.batches=worldmesh.finish(world.native_builder) end
             world.batch_lookup,world.decoration_rng,world.shape_bounds=nil,nil,nil
             world.shape_faces,world.edge_points,world.face_grid=nil,nil,nil
             local visible={}
@@ -230,12 +263,14 @@ function M.step(world, max_jobs, deadline, now)
             end
             world.batches=visible
             for _,batch in ipairs(require("game.render.glass").world(world.layout)) do
+                batch.native_upload=world.mesh_backend=="native"
                 world.batches[#world.batches+1]=batch
                 world.stats.vertices=world.stats.vertices+batch.vertex_count
                 world.stats.mesh_bytes=world.stats.mesh_bytes+batch.vertex_count*18*4
             end
             world.stats.batches=#world.batches
             world.phase="meshes"
+            M.mark(world,"upload")
             if profiler then profiler.scope_end() end
             break
         end

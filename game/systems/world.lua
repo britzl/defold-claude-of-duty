@@ -3,7 +3,10 @@ local layout = require "game.world.layout"
 local M = {}
 
 function M.init(ctx)
-    ctx.world = generator.new(layout)
+    ctx.world = generator.new(layout,{
+        backend=ctx.services.world and sys and sys.get_config_string("world_mesh.backend","native") or "lua",
+        verify_mesh=ctx.services.world and sys and sys.get_config_int("world_mesh.verify",0)==1,
+    })
     ctx.world.adapter = ctx.services.world
     ctx.world.cursor = 1
     ctx.world.work_seconds = 0
@@ -25,7 +28,11 @@ function M.update(ctx, dt)
         for _ = 1, 128 do
             if os.clock() >= deadline then break end
             local batch = world.batches[world.cursor]
-            if not batch then world.phase, world.cursor = "collision", 1; break end
+            if not batch then
+                if world.native_builder then worldmesh.close(world.native_builder);world.native_builder=nil end
+                generator.mark(world,"collision")
+                world.phase, world.cursor = "collision", 1; break
+            end
             local complete=true
             if adapter then
                 if adapter.api.step_batch then complete=adapter.api.step_batch(adapter,batch,512)
@@ -37,13 +44,16 @@ function M.update(ctx, dt)
         for _ = 1, 128 do
             if os.clock() >= deadline then break end
             local shape = world.colliders[world.cursor]
-            if not shape then world.phase = "settle"; break end
+            if not shape then world.phase = "settle";generator.mark(world,"settle"); break end
             if adapter then adapter.api.add_collision(adapter, shape) end
             world.cursor = world.cursor + 1
         end
     elseif world.phase == "settle" then
         -- Factory-created collision objects have entered the physics world.
-        if not ctx.audio or ctx.audio.ready then world.phase, world.ready = "ready", true end
+        if not ctx.audio or ctx.audio.ready then
+            world.phase, world.ready = "ready", true
+            generator.mark(world,"ready")
+        end
     end
     if profiler then profiler.scope_end() end
     local elapsed = os.clock() - started
@@ -52,6 +62,7 @@ function M.update(ctx, dt)
 end
 
 function M.final(ctx)
+    if ctx.world.native_builder then worldmesh.close(ctx.world.native_builder);ctx.world.native_builder=nil end
     if ctx.world.adapter then ctx.world.adapter.api.final(ctx.world.adapter) end
     ctx.world = nil
 end
