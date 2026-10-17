@@ -1,8 +1,9 @@
 local events = require "game.events"
 local rng = require "game.rng"
 local synth = require "game.audio.synth"
+local generator = require "game.audio.generator"
 local spatial = require "game.audio.spatial"
-local M = { voice_limit=24, queue_limit=64, sample_budget=8192 }
+local M = { voice_limit=24, queue_limit=64, sample_budget=8192, native_sample_budget=131072 }
 local surface_names={}
 for _,name in ipairs(synth.surfaces) do surface_names[name]=true end
 local function surface(name) return surface_names[name] and name or "concrete" end
@@ -25,7 +26,12 @@ local function cancel_reload(a)
     for _,v in ipairs(a.voices) do if v.tag=="reload" then stop(a,v) end end
 end
 function M.init(ctx)
+    local backend=ctx.services.audio and sys and sys.get_config_string("audio_synthesis.backend","native") or "lua"
+    assert(backend=="lua" or backend=="native","Invalid audio synthesis backend")
+    assert(backend~="native" or audiosynth,"AudioSynth native extension is required; rebuild the custom engine")
     local a={backend=ctx.services.audio,ready=not ctx.services.audio,resources={},voices={},pending={},
+        synthesis_backend=backend,verify=sys and sys.get_config_int("audio_synthesis.verify",0)==1 or false,verified=0,
+        fingerprints=sys and sys.get_config_int("audio_synthesis.fingerprints",0)==1 and {} or nil,
         recipes=synth.catalog(),cursor=1,clock=0,random=rng.new(ctx.world.seed,"audio/playback"),round={},
         settings={master=.8,weapons=1,foley=.8,ambience=.6,muted=false},
         played=0,completed=0,dropped=0,peak_voices=0,bytes=0,work=0,peak_job=0,loaded=0,
@@ -84,15 +90,24 @@ function M.update(ctx,dt)
     if a.ready then return end
     if profiler then profiler.scope_begin("loading.audio") end
     local started=os.clock()
-    local remaining=M.sample_budget
+    -- Native chunks retain a 2 ms deadline, with a larger safety cap so the
+    -- old eight-chunk limit does not force 107 loading updates after the port.
+    local remaining=a.synthesis_backend=="native" and M.native_sample_budget or M.sample_budget
     repeat
         local recipe=a.recipes[a.cursor]
-        if not recipe then a.ready=true;break end
-        a.job=a.job or synth.new(recipe,ctx.world.seed)
+        if not recipe then
+            a.ready=true
+            require("game.world.generator").mark(ctx.world,"audio_ready")
+            break
+        end
+        a.job=a.job or generator.new(recipe,ctx.world.seed,a.synthesis_backend,a.verify)
         local budget=math.min(1024,remaining)
-        local wav,info=synth.step(a.job,budget)
+        local wav,info=generator.step(a.job,budget)
         remaining=remaining-budget
         if wav then
+            if a.verify then a.verified=a.verified+1 end
+            if a.fingerprints then a.fingerprints[#a.fingerprints+1]={key=recipe.key,
+                hash=audiosynth.fingerprint(wav),bytes=#wav,frames=info.frames,duration=info.duration,peak=info.peak,rms=info.rms} end
             if profiler then profiler.scope_begin("loading.audio.upload") end
             info.handle=a.backend:load(recipe.key,wav)
             if profiler then profiler.scope_end() end
@@ -238,6 +253,7 @@ function M.snapshot(ctx)
         end
     end
     return {ready=a.ready,loaded=a.loaded,total=#a.recipes,bytes=a.bytes,sample_rate=synth.rate,
+        synthesis_backend=a.synthesis_backend,verified=a.verified,fingerprints=a.fingerprints,
         active=active,voice_limit=M.voice_limit,peak_voices=a.peak_voices,pending=#a.pending,
         played=a.played,completed=a.completed,dropped=a.dropped,by_kind=a.by_kind,last=a.last,
         settings=a.settings,suspended=a.suspended,indoor=a.indoor or false,voices=voices,
@@ -246,6 +262,7 @@ function M.snapshot(ctx)
 end
 function M.final(ctx)
     local a=ctx.audio
+    if a.job then generator.close(a.job) end
     events.off_owner(ctx.events,a)
     if a.backend then
         M.reset(ctx)

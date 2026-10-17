@@ -8,9 +8,19 @@ from automation_bridge import editor, engine
 
 def main():
     project = editor.open_project(Path(__file__).resolve().parents[1], start_if_needed=False)
-    game = project.build_and_run(timeout=180)
+    game = project.build_and_run(timeout=180, focus=False)
+    focus_restores = 0
 
     def command(name, data=None):
+        nonlocal focus_restores
+        # Desktop focus changes legitimately pause gameplay and stop voices.
+        # This integration test runs an active encounter, even in background.
+        if not name.startswith("ui."):
+            ui = game.command("ui.snapshot", {})["result"]
+            if ui["paused"] or not ui["focused"]:
+                game.command("ui.focus", dict(focused=True))
+                game.command("ui.pause", dict(paused=False))
+                focus_restores += 1
         return game.command(name, data or {})["result"]
 
     def state():
@@ -26,17 +36,31 @@ def main():
         return command(kind + ".result")["result"]
 
     def preview(**data):
-        settle()
-        command("audio.preview", data)
-        # The sound mixer runs on its own thread; a render-frame count is not
-        # proof that the next audio buffer has reached the output device.
-        engine.wait_until(lambda: max(state()["meter"].values()) > .0001, timeout=2)
-        return state()
+        for attempt in range(3):
+            settle()
+            played = state()["played"]
+            restores = focus_restores
+            command("audio.preview", data)
+            # Return the snapshot that actually observed the mixer transient.
+            def audible():
+                snapshot = state()
+                return snapshot if snapshot["played"] > played and max(snapshot["meter"].values()) > .0001 else None
+            try:
+                return engine.wait_until(audible, timeout=2, interval=.01)
+            except engine.WaitTimeoutError:
+                # Retry only a cue interrupted by a real focus/pause event.
+                if focus_restores > restores and attempt < 2:
+                    continue
+                print("PREVIEW FAILURE", data, state(), command("gameplay.snapshot"), flush=True)
+                raise
 
     try:
         engine.wait_until(lambda: game.state("world").value["ready"], timeout=25)
+        command("ui.focus", dict(focused=True))
+        command("ui.pause", dict(paused=False))
         command("ai.configure", dict(enabled=False))
         assert state()["ready"] and state()["loaded"] == 76
+        assert state()["synthesis_backend"] == "native"
         assert state()["bytes"] == 1627520 and state()["voice_limit"] == 24
         engine.wait_until(lambda: max(state()["meter"].values()) > .0001, timeout=4)
         print("PASS runtime bank and audible ambience", state()["work_ms"], state()["peak_job_ms"], flush=True)
@@ -116,6 +140,7 @@ def main():
         errors = [line for line in project.console.read().lines if "ERROR:" in line or "WARNING:SOUND" in line]
         assert not errors, errors
     finally:
+        game.close_engine()
         game.close()
     errors = [line for line in project.console.read().lines if "ERROR:" in line or "WARNING:SOUND" in line]
     assert not errors, errors

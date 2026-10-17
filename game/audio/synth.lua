@@ -55,6 +55,14 @@ function M.catalog()
     return out
 end
 
+-- The native generator consumes the same tuning tables as the Lua reference.
+function M.parameters(recipe)
+    if recipe.kind=="shot" then return assert(guns[recipe.name]) end
+    if recipe.kind=="impact" or recipe.kind=="step" then return assert(surfaces[recipe.name]) end
+    if recipe.kind=="mechanic" or recipe.kind=="shell" then return {mechanics[recipe.name] or 3900} end
+    return {}
+end
+
 function M.new(recipe,seed)
     return {recipe=recipe,frames=math.floor(recipe.duration*M.rate),cursor=0,chunks={},
         random=rng.new(seed,recipe.kind.."/"..recipe.name.."/"..recipe.variant),
@@ -125,6 +133,7 @@ end
 
 -- At most `budget` samples per call; packing has the same bound.
 function M.step(job,budget)
+    if profiler then profiler.scope_begin("loading.audio.synthesize."..job.recipe.kind) end
     local bytes={}
     local count=math.min(budget,job.frames-job.cursor)
     for i=1,count do
@@ -134,9 +143,13 @@ function M.step(job,budget)
         job.cursor=job.cursor+1
     end
     job.chunks[#job.chunks+1]=table.concat(bytes)
+    if profiler then profiler.scope_end() end
     if job.cursor==job.frames then
-        return M.header(job.frames)..table.concat(job.chunks),
-            {duration=job.frames/M.rate,frames=job.frames,peak=job.peak,rms=math.sqrt(job.square/job.frames)}
+        if profiler then profiler.scope_begin("loading.audio.wav_finalize") end
+        local wav=M.header(job.frames)..table.concat(job.chunks)
+        local info={duration=job.frames/M.rate,frames=job.frames,peak=job.peak,rms=math.sqrt(job.square/job.frames)}
+        if profiler then profiler.scope_end() end
+        return wav,info
     end
 end
 return M

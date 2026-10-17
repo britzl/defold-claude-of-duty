@@ -1,0 +1,6 @@
+name: "AudioSynth"
+
+platforms:
+    common:
+        context:
+            flags: ["-fno-fast-math", "-ffp-contract=off"]

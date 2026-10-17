@@ -143,7 +143,9 @@ function init(self)
     self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
     if profiler then profiler.scope_end() end
     if sys.get_config_int("world_mesh.verify",0)==1 then require("tests.native_mesh_test").run() end
+    if sys.get_config_int("audio_synthesis.verify",0)==1 then require("tests.native_audio_test").run() end
     if sys.get_config_int("mesh_validation.enabled",0)==1 then self.mesh_validation=require("tests.mesh_browser").new() end
+    if sys.get_config_int("audio_validation.enabled",0)==1 then self.audio_validation={} end
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
     self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id},
@@ -467,10 +469,12 @@ function update(self, dt)
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then return end
     runtime.update(self.ctx, dt)
+    if self.renderer_stats.ready then require("game.world.generator").mark(self.ctx.world,"renderer_ready") end
     if self.ctx.world.ready and self.renderer_stats.ready then
         require("game.world.generator").mark(self.ctx.world,"playable")
     end
     if self.mesh_validation then require("tests.mesh_browser").update(self.mesh_validation,self) end
+    if self.audio_validation then require("tests.audio_browser").update(self.audio_validation,self) end
     if self.ctx.world.ready and self.shadow_world~=self.ctx.world then
         self.shadow_world=self.ctx.world
         msg.post("@render:","renderer_world_ready",{})

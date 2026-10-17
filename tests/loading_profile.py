@@ -55,18 +55,25 @@ def main():
     parser.add_argument('--uncapped', action='store_true', help='Diagnostic: launch with display.swap_interval=0')
     parser.add_argument('--backend', choices=('lua','native'), default='native')
     parser.add_argument('--verify', action='store_true', help='Compare every native shape with the Lua reference; not a performance run')
+    parser.add_argument('--audio-backend', choices=('lua','native'), default='native')
+    parser.add_argument('--verify-audio', action='store_true', help='Verify native audio and job ownership; not a performance run')
+    parser.add_argument('--audio-fingerprints', action='store_true', help='Hash each generated WAV for backend comparisons')
     args = parser.parse_args()
+    if args.verify_audio and args.audio_backend!='native': parser.error('--verify-audio requires --audio-backend native')
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False)
     with socket.socket() as reserved:
         reserved.bind(('127.0.0.1', 0)); profiler_port = reserved.getsockname()[1]
     command = [str(ROOT/'build/arm64-osx/dmengine'), str(ROOT/'build/default/game.projectc'),
         f'--config=profiler.remotery_port={profiler_port}', f'--config=world_mesh.backend={args.backend}',
-        f'--config=world_mesh.verify={int(args.verify)}']
+        f'--config=world_mesh.verify={int(args.verify)}',
+        f'--config=audio_synthesis.backend={args.audio_backend}',
+        f'--config=audio_synthesis.verify={int(args.verify_audio)}',
+        f'--config=audio_synthesis.fingerprints={int(args.audio_fingerprints)}']
     if args.uncapped: command.append('--config=display.swap_interval=0')
     report = dict(created_utc=datetime.now(timezone.utc).isoformat(), command=command,
         method='Defold native debug Metal / Remotery Main thread elapsed scopes; not GPU timestamps. Fresh process, normal loading budgets.',
         sources={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest()
-                 for directory in ('game','main','render','worldmesh') for p in sorted((ROOT/directory).rglob('*')) if p.is_file()},
+                 for directory in ('game','main','render','worldmesh','audiosynth') for p in sorted((ROOT/directory).rglob('*')) if p.is_file()},
         markers=[])
     report['sources']['game.project'] = hashlib.sha256((ROOT/'game.project').read_bytes()).hexdigest()
     game = recording = None
@@ -100,16 +107,24 @@ def main():
                 if all(state[1:]) and marker['world']['ready'] and marker['world'].get('timings',{}).get('playable'): break
                 time.sleep(.2)
             assert all(report['markers'][-1][key]['ready'] for key in ('world','audio','renderer')), 'Loading timed out'
+            audio = report['markers'][-1]['audio']
+            assert audio['synthesis_backend']==args.audio_backend
+            assert audio['loaded']==76 and audio['bytes']==1627520
+            if args.verify_audio:
+                assert audio['verified']==76
+                assert 'NATIVE_AUDIO_TEST PASS' in (out/'engine.log').read_text()
             game.wait_frames(3)
             capture = recording.stop(); recording = None
             with gzip.open(out/'raw.json.gz','wt') as stream: json.dump(asdict(capture),stream)
             report.update(summarize(capture))
             report['coverage'] = dict(
-                note='Profiler attachment can miss initialization and the first recipe frames; reported spans start at the first captured world update.',
+                note='Profiler attachment can miss initialization, early recipes and audio chunks; application timings cover the full load.',
                 recipes_captured=report['loading'].get('loading.geometry.recipes',{}).get('calls',0),
                 recipes_expected=report['markers'][-1]['world']['boxes']+1,
                 shapes_captured=report['loading'].get('loading.mesh.shape',{}).get('calls',0),
-                shapes_expected=report['markers'][-1]['world']['boxes'])
+                shapes_expected=report['markers'][-1]['world']['boxes'],
+                audio_uploads_captured=report['loading'].get('loading.audio.upload',{}).get('calls',0),
+                audio_uploads_expected=audio['loaded'])
             # Faster native generation may complete before attachment. Record
             # coverage honestly; application timings cover the entire load.
             report['mesh_fingerprints'] = []

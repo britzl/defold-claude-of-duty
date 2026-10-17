@@ -38,6 +38,37 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Native procedural audio (2026-10-17)
+
+The [AudioSynth extension](audiosynth/README.md) now generates the 76-sound bank
+in C++: waveform math, seeded noise, filters/echoes, fades, statistics and PCM16
+packing. Lua keeps the existing sound definitions, mixer and Defold resource
+ownership. Native synthesis is the default; `audio_synthesis.backend=lua` selects
+the reference, and `audio_synthesis.verify=1` compares every generated WAV.
+Rebuild the custom engine after changing C++.
+
+Three alternating fresh Lua/native pairs on macOS/Metal reduced median audio
+loading work from **375 to 25 ms (93%)** and bank readiness from **1,521 to 178 ms**
+after world initialization. Full readiness stayed around **1.7 seconds**, with
+renderer baking finishing last. Both backends use 1,024-sample chunks and the same
+soft 2 ms deadline; the native safety cap is raised to 131,072 samples per update
+so the old eight-chunk limit no longer forces at least 107 updates.
+
+Three matched Chrome 155/Wasm pairs reduced median audio loading work from
+**1,005 to 45 ms (96%)**, bank readiness from **6,351 to 397 ms**, and full
+world/audio + renderer readiness from **6.37 to 3.29 seconds (48%)**. Measurements
+use debug Defold 1.14.0, medium materials and unchanged VSync; macOS uses a
+1920×1280 drawable, HTML5 a 960×598 canvas. Verification is off in timing runs;
+optional full-WAV fingerprinting is on for both backends. Comparisons are within
+each platform, and readiness excludes engine/browser launch time.
+
+All 76 WAVs match Lua byte-for-byte on macOS and Wasm, including frame counts and
+durations; peak/RMS metadata matches within 1e-12. Tests also cover changed seeds,
+chunk sizes, single-sample sounds, invalid inputs, returned-string ownership and
+cancellation. See [configuration and repeatable validation](audiosynth/README.md).
+Local evidence: [findings](captures/native-audio-2026-10-17/findings.txt) and
+[per-run measurements](captures/native-audio-2026-10-17/comparison.json).
+
 ## Native world meshes (2026-10-17)
 
 Loading steps 5 and 6 now use the in-repository [WorldMesh extension](worldmesh/README.md):
@@ -1902,12 +1933,14 @@ match every RGB pixel across three successful independent launches**.
 
 ## Generated audio
 
-`game/audio/synth.lua` generates 76 mono PCM16 WAV samples at 22,050 Hz during
-loading. The bank occupies 1,627,520 bytes (about 1.55 MiB), excluding engine
+The AudioSynth native extension generates 76 mono PCM16 WAV samples at 22,050 Hz
+during loading, using the catalog and tuning from `game/audio/synth.lua`. That Lua
+module remains the fallback and verification reference. The bank occupies
+1,627,520 bytes (about 1.55 MiB), excluding engine
 resource overhead and temporary synthesis buffers. The only bundled WAV is a
 32-frame silent placeholder required by Defold sound components. Audible samples
 are created with [`resource.create_sound_data`](https://defold.com/ref/resource/#resource.create_sound_data)
-and released on teardown; no native audio extension or imported recording is used.
+and released on teardown. No imported recording is used.
 
 The rifle, SMG and pistol combine a pressure transient, swept low body, noisy crack,
 tail and delayed mechanical tick, with source-derived profile tuning. Each has
@@ -1918,12 +1951,13 @@ dry triggers, casing ejection, landing, stance/slide/mantle cloth and player dam
 also have cues. Player shots stay centred; enemy shots and impacts use world
 positions. Casing audio accompanies ejection, since casings have no physics.
 
-Synthesis advances in 1,024-sample chunks, at most 8,192 samples per frame, with a
-soft 2 ms deadline checked between chunks. Final WAV concatenation and resource
-upload are indivisible. Gameplay waits at the world's final loading phase until
-the bank is ready. `audio.snapshot` reports measured total/peak CPU loading work;
-the native validation run took roughly 375 ms total, spread over frames, with a
-3.2 ms peak job. Loading rate and sound variation never affect world generation,
+Synthesis advances in 1,024-sample chunks with a soft 2 ms deadline checked between
+chunks. Native generation has a 131,072-sample safety cap per update; Lua retains
+its 8,192 cap. Final WAV string copying and resource upload are indivisible.
+Gameplay waits at the world's final loading phase until the bank is ready.
+`audio.snapshot` reports the synthesis backend and measured total/peak loading
+work. The matched macOS native runs took 25 ms median total, with a 2.1 ms peak
+update. Loading rate and sound variation never affect world generation,
 weapon spread or enemy random streams. There is no synthesis during combat.
 
 Twenty-two one-shot slots and two dedicated ambience loops bound playback to 24
