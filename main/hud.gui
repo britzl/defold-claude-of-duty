@@ -19,6 +19,9 @@ layers {
   name: "markers"
 }
 layers {
+  name: "touch"
+}
+layers {
   name: "overlay"
 }
 layers {

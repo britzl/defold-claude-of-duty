@@ -1,3 +1,7 @@
+touch_trigger {
+  input: TOUCH_MULTI
+  action: "touch_multi"
+}
 mouse_trigger {
   input: MOUSE_BUTTON_1
   action: "fire"

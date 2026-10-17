@@ -64,7 +64,8 @@ local function box(state,id,x,y,w,h,colour)
     return add(state,W.box(id,x,y,w,h,colour,"menu"))
 end
 local function button(state,id,x,y,w,label)
-    local item={id=id,node=box(state,id,x,y,w,36,W.row)}
+    local height=state.settings.touch_controls and ((id=="resume" or id=="restart") and 72 or 52) or 36
+    local item={id=id,node=box(state,id,x,y,w,height,W.row)}
     item.label=text(state,id.."_label",x,y,label,1,W.white)
     state.items[#state.items+1]=item
     return item
@@ -116,7 +117,7 @@ local function rebuild(state)
         local y=435-(i-1)*((state.tab=="display" or state.tab=="photo") and 25 or 42)
         local item={id="setting_"..spec.key,spec=spec,y=y,
             node=box(state,"setting_"..spec.key,480,y,678,(state.tab=="display" or state.tab=="photo") and 25 or 36,W.row)}
-        text(state,nil,157,y,spec.label,.92,W.white,gui.PIVOT_W)
+        text(state,nil,157,y,spec.kind=="input" and state.settings.touch_controls and "LOOK SENSITIVITY" or spec.label,.92,W.white,gui.PIVOT_W)
         item.value=text(state,"value_"..spec.key,802,y,"",.9,W.accent,gui.PIVOT_E)
         if spec.min then
             item.track=box(state,"slider_"..spec.key,615,y,240,30,vmath.vector4(0,0,0,0))
@@ -128,7 +129,13 @@ local function rebuild(state)
         state.items[#state.items+1]=item
     end
     if state.tab=="controls" then
-        local lines={"W A S D   MOVE     |     SHIFT   SPRINT / DOUBLE-TAP TACTICAL",
+        local lines=state.settings.touch_controls and {
+            "LEFT STICK   MOVE   /   PUSH FULLY FORWARD TO SPRINT",
+            "RIGHT SIDE   DRAG TO LOOK   /   FIRE   HOLD AND DRAG",
+            "AIM / CROUCH / PRONE   TAP TO TOGGLE",
+            "JUMP   HOLD TO MANTLE   /   CROUCH WHILE SPRINTING   SLIDE",
+            "RELOAD / WEAPON / MODE / INSPECT   TAP   /   LEAN   HOLD",
+            "MENU   PAUSE   /   RESUME OR RESTART BELOW"} or {"W A S D   MOVE     |     SHIFT   SPRINT / DOUBLE-TAP TACTICAL",
             "CTRL   CROUCH / SLIDE     |     Z   PRONE     |     Q / E   LEAN",
             "SPACE   JUMP / MANTLE     |     RIGHT MOUSE   AIM",
             "LEFT MOUSE   FIRE     |     R   RELOAD     |     F   INSPECT",
@@ -136,7 +143,8 @@ local function rebuild(state)
             "0   PLAY     |     1-3   VIEWS     |     4 / 5   PRACTICE     |     9   RESTART"}
         for i,line in ipairs(lines) do text(state,nil,157,385-(i-1)*36,line,.79,W.muted,gui.PIVOT_W) end
     end
-    text(state,"menu_help",480,49,"TAB / UP / DOWN   SELECT     LEFT / RIGHT   ADJUST     ENTER   ACTIVATE     ESC   RESUME",.7,W.muted)
+    text(state,"menu_help",480,49,state.settings.touch_controls and "TAP TO SELECT   /   DRAG SLIDERS TO ADJUST   /   TAP RESUME TO PLAY"
+        or "TAB / UP / DOWN   SELECT     LEFT / RIGHT   ADJUST     ENTER   ACTIVATE     ESC   RESUME",.7,W.muted)
     state.focus=math.min(state.focus or 1,#state.items)
     for _,node in ipairs(state.nodes) do gui.set_enabled(node,state.open) end
     refresh(state)
@@ -146,8 +154,9 @@ function M.new()
 end
 function M.state(state,settings)
     local changed=state.open~=settings.paused
+    local changed_controls=state.settings and state.settings.touch_controls~=settings.touch_controls
     state.settings,state.open=settings,settings.paused
-    if #state.nodes==0 then rebuild(state) end
+    if #state.nodes==0 or changed_controls then rebuild(state) end
     if changed then
         state.focus,state.drag,state.hover=1,nil,nil
         for _,node in ipairs(state.nodes) do gui.set_enabled(node,state.open) end

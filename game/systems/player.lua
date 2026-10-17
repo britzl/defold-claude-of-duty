@@ -41,8 +41,8 @@ function M.fixed_update(ctx, dt)
     local buttons, intent = ctx.input.buttons, player.intent
     local alive = player.actor.alive and player.enabled
     intent.enabled = alive
-    intent.move_x = alive and ((buttons.right.held and 1 or 0) - (buttons.left.held and 1 or 0)) or 0
-    intent.move_z = alive and ((buttons.back.held and 1 or 0) - (buttons.forward.held and 1 or 0)) or 0
+    intent.move_x = alive and (ctx.input.move_x + (buttons.right.held and 1 or 0) - (buttons.left.held and 1 or 0)) or 0
+    intent.move_z = alive and (ctx.input.move_z + (buttons.back.held and 1 or 0) - (buttons.forward.held and 1 or 0)) or 0
     local length = math.sqrt(intent.move_x * intent.move_x + intent.move_z * intent.move_z)
     if length > 1 then
         intent.move_x, intent.move_z = intent.move_x / length, intent.move_z / length

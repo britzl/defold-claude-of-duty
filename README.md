@@ -390,6 +390,37 @@ explicitly pending until reference UV/coverage and shadow fixtures are matched.
 Open `game.project` in Defold 1.14.0, fetch libraries, then build and run.
 The existing Automation Bridge dependency supports native smoke checks.
 
+### Mobile touch controls
+
+Android and iOS show touch controls automatically. HTML5 also enables them on
+touch-capable browsers, or when the first multi-touch event arrives. Desktop
+keyboard/mouse controls remain available. The overlay is designed for landscape
+play, adapts to window size, and keeps its controls inside the platform safe area.
+
+- Drag the left stick to walk; push fully forward to sprint. Back off and push
+  forward again quickly for tactical sprint.
+- Drag the right side to look. Hold **FIRE** to shoot; dragging that finger also
+  looks, so two thumbs can move, aim and fire together.
+- Tap **AIM**, **CROUCH**, or **PRONE** to toggle. Crouching during a sprint slides.
+  Hold **JUMP** while moving into a reachable ledge to mantle.
+- Tap **RELOAD**, **WEAPON**, **MODE**, or **INSPECT**; hold either **LEAN** button.
+- **MENU** opens touch-accessible settings, resume and restart, including after
+  death. Look sensitivity is shared with the mouse setting.
+
+Pause, focus loss, death, inspection and resizing clear touch holds and toggles;
+lift and touch again to start a fresh gesture. Touch-generated mouse events are
+ignored to avoid duplicate clicks, accidental shots or pointer-lock requests.
+The implementation uses Defold's separate
+[multi-touch binding](https://defold.com/manuals/input-mouse-and-touch/).
+
+For a desktop layout preview, launch with `--config=touch_controls.enabled=1`;
+`--config=touch_controls.enabled=0` disables touch controls, and the default `-1`
+detects them automatically. Run `lua tests/touch_test.lua` for gesture/input
+regressions and `PYTHONPATH=automation-bridge-python python3 tests/touch_smoke.py`
+for native GUI/gameplay checks. The latter uses an opt-in action fixture because
+macOS cannot inject touch hardware, and saves phone/tablet captures in
+`build/touch-validation`. Physical Android/iOS device validation is still needed.
+
 HTML5 uses a matrix constant for lens sky reprojection. On OpenGL, resizing
 recreates the scene, weapon and depth/motion targets: Defold 1.14 checks
 framebuffer completeness while resizing individual attachments, when WebGL can
@@ -435,6 +466,7 @@ lua tests/weathering_test.lua
 lua tests/render_capture_test.lua
 lua tests/audio_test.lua
 lua tests/ui_test.lua
+lua tests/touch_test.lua
 ```
 
 With the project open in Defold, the native smoke test builds the game, checks

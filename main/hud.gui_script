@@ -1,6 +1,7 @@
 local W = require "game.ui.widgets"
 local model = require "game.ui.hud"
 local menu = require "game.ui.menu"
+local touch = require "game.ui.touch"
 local TL = {gui.ANCHOR_LEFT,gui.ANCHOR_TOP}
 local TR = {gui.ANCHOR_RIGHT,gui.ANCHOR_TOP}
 local BL = {gui.ANCHOR_LEFT,gui.ANCHOR_BOTTOM}
@@ -16,6 +17,7 @@ function init(self)
     W.group(BL,0,0);W.group(BR,960,0)
     W.group(TOP,480,640);W.group(BOTTOM,480,0)
     self.menu=menu.new()
+    self.touch=touch.new()
     self.map={}
     self.map_nodes={}
     self.map_geometry={}
@@ -58,7 +60,7 @@ function init(self)
     self.stance=W.text("stance",24,102,"STAND",.75,W.muted,gui.PIVOT_W,"hud",BL)
     W.box(nil,754,55,388,62,W.panel,"hud",BR)
     self.ammo=W.text("ammo",936,64,"",1,W.white,gui.PIVOT_E,"hud",BR)
-    W.text(nil,936,40,"R  RELOAD   /   6  7  8  WEAPONS",.72,W.muted,gui.PIVOT_E,"hud",BR)
+    self.ammo_hint=W.text(nil,936,40,"R  RELOAD   /   6  7  8  WEAPONS",.72,W.muted,gui.PIVOT_E,"hud",BR)
     self.weapon_status=W.text("weapon_status",480,132,"",.9,W.accent,nil,"hud",BOTTOM)
     self.hint=W.text("input_hint",480,17,"CLICK TO CAPTURE MOUSE  /  ESC MENU",.73,W.white,nil,"hud",BOTTOM)
     self.crosshair={}
@@ -102,8 +104,11 @@ local function update_hud(self,state)
     if state.alive~=previous.alive or state.diagnostic~=previous.diagnostic then
         gui.set_text(self.death,(state.alive or state.diagnostic) and "" or "YOU WERE ELIMINATED")
     end
-    if state.alive~=previous.alive or state.mouse_locked~=previous.mouse_locked then
-        gui.set_text(self.hint,not state.alive and "9  RESTART ENCOUNTER  /  ESC MENU"
+    if state.alive~=previous.alive or state.mouse_locked~=previous.mouse_locked or state.touch_controls~=previous.touch_controls then
+        gui.set_enabled(self.stance,not state.touch_controls)
+        gui.set_text(self.ammo_hint,state.touch_controls and "TAP AIM / STANCE TO TOGGLE" or "R  RELOAD   /   6  7  8  WEAPONS")
+        gui.set_text(self.hint,state.touch_controls and (state.alive and "DRAG RIGHT SIDE TO LOOK  /  DRAG FIRE TO SHOOT AND LOOK" or "TAP MENU TO RESTART ENCOUNTER")
+            or not state.alive and "9  RESTART ENCOUNTER  /  ESC MENU"
             or state.mouse_locked and "WASD  MOVE  /  SHIFT  SPRINT  /  ESC MENU"
             or "CLICK TO CAPTURE MOUSE  /  ESC MENU")
     end
@@ -160,6 +165,7 @@ end
 
 function on_message(self,id,message,sender)
     if id==hash("hud_state") then update_hud(self,message)
+    elseif id==hash("touch_state") then touch.update(self.touch,message)
     elseif id==hash("map_rect") then
         self.map[#self.map+1]=message
         self.map_dirty=true

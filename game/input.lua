@@ -7,24 +7,26 @@ M.actions = {
 }
 
 function M.new()
-    local input = { buttons = {}, look_x = 0, look_y = 0 }
+    local input = { buttons = {}, look_x = 0, look_y = 0, move_x = 0, move_z = 0 }
     for _, name in ipairs(M.actions) do
-        input.buttons[name] = { held = false, pressed = false, released = false }
+        input.buttons[name] = { held = false, pressed = false, released = false, sources = {} }
     end
     return input
 end
 
-function M.button(input, name, action)
+function M.button(input, name, action, source)
     local button = input.buttons[name]
     if not button then return false end
-    if action.pressed then
-        if not button.held then button.pressed = true end
-        button.held = true
+    source = source or "desktop"
+    local function set(held)
+        button.sources[source] = held or nil
+        local active = next(button.sources) ~= nil
+        if active and not button.held then button.pressed = true end
+        if not active and button.held then button.released = true end
+        button.held = active
     end
-    if action.released then
-        button.held = false
-        button.released = true
-    end
+    if action.pressed then set(true) end
+    if action.released then set(false) end
     return true
 end
 
@@ -43,7 +45,8 @@ end
 
 function M.reset(input)
     M.end_tick(input)
-    for _, button in pairs(input.buttons) do button.held = false end
+    input.move_x, input.move_z = 0, 0
+    for _, button in pairs(input.buttons) do button.held, button.sources = false, {} end
 end
 
 return M

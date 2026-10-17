@@ -32,6 +32,11 @@ def main():
         shot = game.screenshot(resolution_multiplier=1)
         shutil.copyfile(shot.path, output / (name + ".png"))
 
+    def map_nodes():
+        page = game.elements_page(type="gui_node_box", name="map_", visible=True, limit=500)
+        assert not page.truncated and page.next_cursor is None
+        return [node for node in page.elements if node.name.removeprefix("map_").isdigit()]
+
     def pause(value):
         cmd("ui.pause", {"paused": value})
         game.wait_frames(3)
@@ -51,9 +56,10 @@ def main():
         assert abs(ui()["hud"]["heading"] - 90) < .01
         assert game.element(name_exact="heading", visible=True).text == "090"
         capture("hud_room_east")
-        # Confirm all generated map rectangles were installed, including E2.
+        # The minimap pools nodes for visible rectangles, rather than allocating
+        # one GUI node per collider. Its source geometry still includes E2.
         count = ui()["map_rectangles"]
-        assert game.element(name_exact=f"map_{count}")
+        assert 0 < len(map_nodes()) <= count
         cmd("movement.reset", {"x": 10, "y": 6.55, "z": -7, "yaw": 0})
         game.wait_frames(5)
         capture("hud_e2_top")
@@ -133,13 +139,11 @@ def main():
             assert abs(ui()["audio"]["master"] - .5) <= .02, (width, height, ui())
             # Every map rectangle must stay inside the map after anchoring.
             border = game.element(name_exact="map_background").bounds
-            for index in range(1, ui()["map_rectangles"] + 1):
-                node = game.maybe_element(name_exact=f"map_{index}", visible=True)
-                if node:
-                    b = node.bounds
-                    assert b.x >= border.x - 1 and b.y >= border.y - 1, (width, height, index, b, border)
-                    assert b.x + b.w <= border.x + border.w + 1
-                    assert b.y + b.h <= border.y + border.h + 1
+            for node in map_nodes():
+                b = node.bounds
+                assert b.x >= border.x - 1 and b.y >= border.y - 1, (width, height, node.name, b, border)
+                assert b.x + b.w <= border.x + border.w + 1
+                assert b.y + b.h <= border.y + border.h + 1
             capture(f"pause_{width}x{height}")
         game.resize(960, 640)
         game.wait_frames(5)
