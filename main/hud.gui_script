@@ -107,7 +107,7 @@ local function update_hud(self,state)
     if state.alive~=previous.alive or state.mouse_locked~=previous.mouse_locked or state.touch_controls~=previous.touch_controls then
         gui.set_enabled(self.stance,not state.touch_controls)
         gui.set_text(self.ammo_hint,state.touch_controls and "TAP AIM / STANCE TO TOGGLE" or "R  RELOAD   /   6  7  8  WEAPONS")
-        gui.set_text(self.hint,state.touch_controls and (state.alive and "DRAG RIGHT SIDE TO LOOK  /  DRAG FIRE TO SHOOT AND LOOK" or "TAP MENU TO RESTART ENCOUNTER")
+        gui.set_text(self.hint,state.touch_controls and (state.alive and "DRAG LOOK TO TURN  /  DRAG FIRE TO SHOOT AND LOOK" or "TAP MENU TO RESTART ENCOUNTER")
             or not state.alive and "9  RESTART ENCOUNTER  /  ESC MENU"
             or state.mouse_locked and "WASD  MOVE  /  SHIFT  SPRINT  /  ESC MENU"
             or "CLICK TO CAPTURE MOUSE  /  ESC MENU")

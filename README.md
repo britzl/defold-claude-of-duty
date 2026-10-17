@@ -399,7 +399,7 @@ play, adapts to window size, and keeps its controls inside the platform safe are
 
 - Drag the left stick to walk; push fully forward to sprint. Back off and push
   forward again quickly for tactical sprint.
-- Drag the right side to look. Hold **FIRE** to shoot; dragging that finger also
+- Drag the **LOOK** pad to turn. Hold **FIRE** to shoot; dragging that finger also
   looks, so two thumbs can move, aim and fire together.
 - Tap **AIM**, **CROUCH**, or **PRONE** to toggle. Crouching during a sprint slides.
   Hold **JUMP** while moving into a reachable ledge to mantle.
@@ -407,6 +407,9 @@ play, adapts to window size, and keeps its controls inside the platform safe are
 - **MENU** opens touch-accessible settings, resume and restart, including after
   death. Look sensitivity is shared with the mouse setting.
 
+Gestures must start inside a visible control. Touches starting elsewhere stay
+ignored until released, even if they move across a control. A drag that starts
+on a control keeps working when the finger leaves its bounds.
 Pause, focus loss, death, inspection and resizing clear touch holds and toggles;
 lift and touch again to start a fresh gesture. Touch-generated mouse events are
 ignored to avoid duplicate clicks, accidental shots or pointer-lock requests.

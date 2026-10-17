@@ -131,7 +131,7 @@ local function rebuild(state)
     if state.tab=="controls" then
         local lines=state.settings.touch_controls and {
             "LEFT STICK   MOVE   /   PUSH FULLY FORWARD TO SPRINT",
-            "RIGHT SIDE   DRAG TO LOOK   /   FIRE   HOLD AND DRAG",
+            "LOOK   DRAG TO TURN   /   FIRE   HOLD AND DRAG",
             "AIM / CROUCH / PRONE   TAP TO TOGGLE",
             "JUMP   HOLD TO MANTLE   /   CROUCH WHILE SPRINTING   SLIDE",
             "RELOAD / WEAPON / MODE / INSPECT   TAP   /   LEAN   HOLD",

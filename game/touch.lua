@@ -23,6 +23,7 @@ function M.layout(width, height, safe)
         layout.buttons[#layout.buttons+1]={id=id,label=label,x=x,y=y,w=w or 82,h=h or 60}
     end
     button("pause","MENU",r-66,t-106,92,52)
+    button("look","LOOK",r-222,b+390,92,76)
     button("fire","FIRE",r-90,b+298,112,100)
     button("aim","AIM",r-222,b+298,92,76)
     button("jump","JUMP",r-64,b+192)
@@ -59,8 +60,7 @@ local function target(layout,x,y,active)
     end
     if not active then return "ignored" end
     local stick=layout.stick
-    if (x-stick.x)^2+(y-stick.y)^2 <= (stick.r+24)^2 then return "move" end
-    if x >= (layout.left+layout.right)/2 then return "look" end
+    if (x-stick.x)^2+(y-stick.y)^2 <= stick.r^2 then return "move" end
     return "ignored"
 end
 

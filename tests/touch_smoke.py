@@ -37,6 +37,9 @@ def main():
                 return game.element(name_exact=name, visible=True)
 
             def tap(name):
+                # Native windows can lose OS focus while this background test
+                # runs. Model an active app for taps; test focus loss below.
+                cmd("ui.focus", {"focused": True})
                 center = element(name).bounds.center
                 point(1, center["x"], center["y"], "down")
                 point(1, center["x"], center["y"], "up")
@@ -66,6 +69,31 @@ def main():
             capture("controls_960x640")
             print("PASS first touch enables controls without mouse lock or accidental fire", flush=True)
 
+            game.wait_frames(30)
+            before = cmd("gameplay.snapshot")
+            fire = element("touch_fire").bounds.center
+            look = element("touch_look").bounds.center
+            stick = element("touch_move").bounds
+            # Start in empty space and just outside the visible stick, then
+            # drag across each control. These gestures must never be captured.
+            for x, y in ((576, 320), (stick.center["x"]+stick.w/2+2, stick.center["y"])):
+                point(1, x, y, "down")
+                point(1, x+20, y+10)
+                point(1, look["x"], look["y"])
+                point(1, fire["x"], fire["y"])
+                point(1, stick.center["x"], stick.center["y"]-stick.h*.48)
+                after = cmd("gameplay.snapshot")
+                for field in ("x", "z", "yaw", "pitch", "move_x", "move_z"):
+                    assert abs(after[field]-before[field]) < 1e-6, (field, before, after)
+                assert not cmd("weapons.snapshot")["fired"]
+                point(1, x, y, "up")
+            point(1, look["x"], look["y"], "down")
+            point(1, look["x"]-120, look["y"]-20)
+            point(1, look["x"]-120, look["y"]-20, "up")
+            assert abs(cmd("gameplay.snapshot")["yaw"]-before["yaw"]) > .01
+            assert not cmd("weapons.snapshot")["fired"]
+            print("PASS outside touches stay inert; LOOK pad turns without firing", flush=True)
+
             tap("touch_aim")
             game.wait_frames(30)
             assert cmd("weapons.snapshot")["ads"] > .9
@@ -91,15 +119,18 @@ def main():
             assert abs(cmd("gameplay.snapshot")["yaw"]) > .01
             tap("touch_reload")
             assert cmd("weapons.snapshot")["clip"] in ("reloadTac", "reloadEmpty")
-            game.wait_frames(200)
+            engine.wait_until(lambda: cmd("weapons.snapshot")["clip"] == "idle", timeout=20)
             tap("touch_next_weapon")
-            game.wait_frames(100)
+            engine.wait_until(lambda: cmd("weapons.snapshot")["clip"] == "idle", timeout=20)
             assert cmd("weapons.snapshot")["weapon"] != before["weapon"]
             print("PASS touch aim/stances, fire-drag, reload and weapon switch", flush=True)
 
             for width, height in ((844, 390), (390, 844), (1024, 768)):
                 game.resize(width, height)
                 game.wait_frames(8)
+                cmd("ui.focus", {"focused": True})
+                cmd("ui.pause", {"paused": False})
+                game.wait_frames(4)
                 capture(f"controls_{width}x{height}")
                 tap("touch_pause")
                 assert cmd("ui.snapshot")["paused"]

@@ -46,12 +46,43 @@ end)
 
 test("stable finger IDs survive reordering while moving looking and firing",function()
     local s,i,l,p,b,send=fixture()
-    send(p(41,l.stick.x,l.stick.y,"down"),p(9,l.width*.6,l.height*.65,"down"),b(72,"fire","down"))
+    local look=b(9,"look","down")
+    local x,y=look.x*l.width/960,look.y*l.height/640
+    send(p(41,l.stick.x,l.stick.y,"down"),look,b(72,"fire","down"))
     assert(i.buttons.fire.held)
-    send(b(72,"fire"),p(9,l.width*.6+20,l.height*.65+10),p(41,l.stick.x+30,l.stick.y+45))
+    send(b(72,"fire"),p(9,x+20,y+10),p(41,l.stick.x+30,l.stick.y+45))
     near(i.look_x,20);near(i.look_y,10);assert(i.move_z<0 and i.move_x>0)
     send(b(72,"fire","up"))
     assert(not i.buttons.fire.held and s.move_id==41 and s.look_id==9)
+end)
+
+test("touches outside visible controls stay ignored even when dragged onto controls",function()
+    for _,size in ipairs({{960,640},{844,390},{390,844},{2400,1080}}) do
+        local s,i,l,p,b,send=fixture(size[1],size[2],{inset_left=30,inset_right=30,inset_bottom=20})
+        local starts={{l.width*.6,l.height*.5},{l.left+320,l.bottom+202},
+            {l.stick.x+l.stick.r+1,l.stick.y},{l.stick.x,l.stick.y+l.stick.r+1}}
+        for _,pos in ipairs(starts) do
+            send(p(1,pos[1],pos[2],"down"))
+            send(p(1,pos[1]+15,pos[2]+10))
+            send(b(1,"look"),b(1,"fire"),p(1,l.stick.x,l.stick.y+l.stick.r))
+            near(i.move_x,0);near(i.move_z,0);near(i.look_x,0);near(i.look_y,0)
+            assert(not i.buttons.fire.held and not i.buttons.fire.pressed)
+            assert(not s.move_id and not s.look_id)
+            send(p(1,pos[1],pos[2],"up"))
+        end
+    end
+end)
+
+test("LOOK pad turns without firing and keeps its gesture outside the pad",function()
+    local s,i,l,p,b,send=fixture()
+    local down=b(1,"look","down")
+    local x,y=down.x*l.width/960,down.y*l.height/640
+    send(down);near(i.look_x,0);near(i.look_y,0)
+    send(p(1,x-200,y-100));near(i.look_x,-200);near(i.look_y,-100)
+    assert(not i.buttons.fire.held and not i.buttons.fire.pressed)
+    send(p(1,x-200,y-100,"up"));input.end_tick(i)
+    send(p(1,x-220,y-120));near(i.look_x,0);near(i.look_y,0)
+    assert(not s.look_id)
 end)
 
 test("fire finger can aim without becoming another button when dragged",function()
