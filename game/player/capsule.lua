@@ -9,6 +9,11 @@ local EPS = 0.000001
 
 local function copy(out, p) out.x, out.y, out.z = p.x, p.y, p.z end
 local function length(x, y, z) return math.sqrt(x*x + y*y + z*z) end
+local function update_eye(m, dt)
+    local target = T.stances[m.stance].eye-(m.sliding and 0.1 or 0)
+    local tau = (m.stance == "prone" or m.eye < 0.75) and 0.16 or target > m.eye and 0.072 or 0.062
+    m.eye = m.eye+(target-m.eye)*(1-math.exp(-dt/tau))
+end
 
 function M.new(position)
     local m = { position = position, velocity = { x = 0, y = 0, z = 0 },
@@ -20,6 +25,7 @@ function M.new(position)
         impact_speed = 0, travel = 0, recovery_failed = false, lean = 0,
         mantle = false, mantle_cooldown = 0, mantle_probe = 0,
         mantle_started = false, mantle_completed = false, mantle_aborted = false }
+    m.vault_started, m.vault_completed, m.vault_aborted = false, false, false
     moves.init(m)
     return m
 end
@@ -195,12 +201,13 @@ function M.update(m, input, dt, query)
     m.pitch = math.max(-T.pitch_limit, math.min(T.pitch_limit, m.pitch+(input.look_y or 0)*T.mouse_sensitivity))
     m.step_offset = m.step_offset * math.exp(-dt/0.08)
     m.mantle_started, m.mantle_completed, m.mantle_aborted = false, false, false
+    m.vault_started, m.vault_completed, m.vault_aborted = false, false, false
     m.mantle_cooldown = math.max(0, m.mantle_cooldown-dt)
     m.mantle_probe = math.max(0, m.mantle_probe-dt)
     moves.tick(m, input, dt)
     if m.mantle then
         mantle.update(m, input, dt, query)
-        m.eye = m.eye+(T.stances[m.stance].eye-m.eye)*(1-math.exp(-dt/0.072))
+        update_eye(m, dt)
         lean.update(m, input, dt, query)
         query:sync(m.position, m.height)
         return
@@ -222,7 +229,7 @@ function M.update(m, input, dt, query)
     if requested ~= m.stance and (target.height < m.height or query:fits(m.position, target.height)) then
         m.stance, m.height = requested, target.height
     end
-    m.eye = m.eye + (T.stances[m.stance].eye-m.eye)*(1-math.exp(-dt/0.072))
+    update_eye(m, dt)
     if mantle.try_begin(m, input, query) then
         moves.cancel(m)
         lean.update(m, input, dt, query)

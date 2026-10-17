@@ -4,7 +4,14 @@ local tuning = require "game.player.tuning"
 local events = require "game.events"
 local driver = require "game.player.driver"
 local lean = require "game.player.lean"
+local camera = require "game.player.camera"
 local M = {}
+
+function M.camera_impulse(ctx, kind, strength, direction)
+    if ctx.paused or not ctx.world.ready or not ctx.player.enabled or not ctx.player.actor.alive then return false end
+    camera.impulse(ctx.player.camera, kind, strength, direction, ctx.player.motion.yaw)
+    return true
+end
 
 function M.init(ctx)
     local spawn = ctx.world.spawn
@@ -18,6 +25,16 @@ function M.init(ctx)
         previous_lean = 0,
     }
     ctx.player.motion = capsule.new(ctx.player.position)
+    ctx.player.camera = camera.new()
+    events.on(ctx.events, events.CAMERA_IMPULSE, ctx.player, function(_, cue)
+        M.camera_impulse(ctx, cue.kind, cue.strength, cue.direction)
+    end)
+    events.on(ctx.events, events.DAMAGE_TAKEN, ctx.player, function(_, hit)
+        local source = ctx.ai and ctx.ai.actors[hit.source]
+        local p, at = ctx.player.position, source and source.position
+        M.camera_impulse(ctx, "damage", math.min(1, hit.amount/35),
+            at and {x=at.x-p.x, y=at.y-p.y, z=at.z-p.z} or nil)
+    end)
 end
 
 function M.reset(ctx, point, yaw)
@@ -28,6 +45,11 @@ function M.reset(ctx, point, yaw)
     player.previous_eye = player.motion.eye
     player.previous_lean = 0
     player.footstep_distance = 0
+    camera.reset(player.camera)
+    player.camera_disabled = false
+    -- Reset must also place the displayed eye when a paused frame skips update.
+    camera.compose(ctx, 1, ctx.presentation)
+    ctx.presentation.health = player.actor.health
     if ctx.services.capsule then ctx.services.capsule:sync(player.position, player.motion.height) end
 end
 
@@ -40,6 +62,8 @@ function M.fixed_update(ctx, dt)
     player.previous_eye, player.previous_lean = lean.eye(motion), motion.lean
     local buttons, intent = ctx.input.buttons, player.intent
     local alive = player.actor.alive and player.enabled
+    if not alive and not player.camera_disabled then camera.reset(player.camera) end
+    player.camera_disabled = not alive
     intent.enabled = alive
     intent.move_x = alive and (ctx.input.move_x + (buttons.right.held and 1 or 0) - (buttons.left.held and 1 or 0)) or 0
     intent.move_z = alive and (ctx.input.move_z + (buttons.back.held and 1 or 0) - (buttons.forward.held and 1 or 0)) or 0
@@ -62,32 +86,41 @@ function M.fixed_update(ctx, dt)
     if not ctx.world.ready or not ctx.services.capsule then return end
     capsule.update(motion, intent, dt, ctx.services.capsule)
     if drive and not drive.complete then driver.record(drive, motion) end
+    if player.gait_stance ~= motion.stance then
+        player.footstep_distance, player.camera.phase, player.gait_stance = 0, 0, motion.stance
+    end
     if motion.landed then
+        if alive then camera.land(player.camera, motion.impact_speed) end
         events.emit(ctx.events, events.PLAYER_LAND, { velocity = motion.impact_speed, surface = motion.surface })
         player.footstep_distance = 0
+        player.camera.phase = 0
     end
     if motion.grounded and not motion.sliding and not motion.mantle and not motion.mantle_completed then
         player.footstep_distance = player.footstep_distance + motion.travel
         if player.footstep_distance >= tuning.stances[motion.stance].stride then
             player.footstep_distance = player.footstep_distance % tuning.stances[motion.stance].stride
+            if alive then camera.footstep(player.camera, motion.sprinting, motion.stance) end
             events.emit(ctx.events, events.PLAYER_FOOTSTEP, { position = position, surface = motion.surface, running = motion.sprinting })
         end
     end
     if motion.slide_started or motion.slide_ended or motion.mantle_started or motion.mantle_completed or motion.mantle_aborted then
         player.footstep_distance = 0
+        player.camera.phase = 0
     end
     if player.last_stance ~= motion.stance or player.last_sprint ~= motion.sprinting or player.last_aim ~= intent.aim
         or player.last_slide ~= motion.sliding or player.last_tactical ~= motion.tactical or player.last_mantle ~= (motion.mantle ~= false) then
         player.last_stance, player.last_sprint, player.last_aim = motion.stance, motion.sprinting, intent.aim
         player.last_slide, player.last_tactical, player.last_mantle = motion.sliding, motion.tactical, motion.mantle ~= false
         events.emit(ctx.events, events.PLAYER_STATE, { stance = motion.stance, sprinting = motion.sprinting,
-            sliding = motion.sliding, tactical = motion.tactical, mantling = motion.mantle ~= false, ads = intent.aim })
+            sliding = motion.sliding, tactical = motion.tactical, mantling = motion.mantle ~= false,
+            vaulting = motion.mantle and motion.mantle.kind == "vault" or false, ads = intent.aim })
     end
     -- The excerpt has open map edges. Recover a fall without changing health.
     if position.y < -12 and player.actor.alive then M.reset(ctx, ctx.world.spawn, 0) end
 end
 
 function M.final(ctx)
+    events.off_owner(ctx.events, ctx.player)
     combat.remove(ctx.combat, "player")
     ctx.player = nil
 end

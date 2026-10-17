@@ -195,7 +195,8 @@ function M.fixed_update(ctx,dt)
                     e.yaw=e.yaw+V.clamp(wrap(desired-e.yaw),-dt*4,dt*4)
                 end
                 e.motion.yaw=e.yaw
-                local intent={enabled=true,move_x=0,move_z=0,crouch=e.duck}
+                -- AI vault decisions and animation belong to the later tactics increment.
+                local intent={enabled=true,move_x=0,move_z=0,crouch=e.duck,auto_vault=false}
                 if waypoint then
                     local dx,dz=waypoint.x-e.position.x,waypoint.z-e.position.z
                     local distance=math.sqrt(dx*dx+dz*dz)

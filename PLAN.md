@@ -1,6 +1,6 @@
 # Defold port implementation plan
 
-Created: 2026-10-13. Updated: 2026-10-15. Target engine: Defold 1.14.0.
+Created: 2026-10-13. Updated: 2026-10-17. Target engine: Defold 1.14.0.
 
 Implement a runtime-generated Defold port of Claude of Duty, with Lua gameplay systems and a custom render pipeline. Introduce a portable native extension only where measured geometry, animation or audio requirements justify it. The current acceptance platforms are Mac native and desktop browser, targeting 60 FPS (user decision, 2026-10-15). Keep input and graphics adaptable; physical mobile qualification is deferred outside the current gate.
 
@@ -8,7 +8,7 @@ The target is feature and presentation parity with the local Three.js and Kaigen
 
 ## Current status and scope
 
-The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
+The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
 
 **Status convention:** `[x]` means the stated implementation is complete in the current port; `[ ]` means work remains. Implementation completion does not imply full source fidelity, all-platform qualification or an agreed performance budget. The ordered backlog below is the current execution plan; the historical record at the end preserves earlier design and validation details.
 
@@ -16,7 +16,7 @@ The 2026-10-15 source audit used Defold revision `8146e12` and the two local ref
 
 - [x] Gameplay framework: six subsystem modules, 120 Hz fixed simulation, buffered input, independent random streams, gameplay events, centralized damage and interpolated presentation.
 - [x] Generated full market layout: 104-metre road, all 20 reference footprints, five flank routes, far cross street, ruin yard and gate passage; connected W2/E1/E2 floors, ground-only E3, shared collision/navigation/cover/room metadata and a full-map minimap. Step 4 adds source-derived architecture, furnished rooms and street dressing.
-- [x] Core traversal: swept capsule, walking/sprinting/tactical sprint, jump buffering/coyote time, crouch/prone, steps/slopes, sliding, clearance-checked mantling and collision-limited leaning.
+- [x] Core traversal: swept capsule, walking/sprinting/tactical sprint, jump buffering/coyote time, crouch/prone, steps/slopes, sliding, clearance-checked mantling/vaulting, collision-limited leaning and a fixed-tick camera rig.
 - [x] Core weapons: M4A1/MPX-9/P-19, fire modes, magazine/chamber state, reload/inspection/switching timelines, ADS, recoil, spread, projectile travel/drop and material penetration; generated simplified viewmodels in an independent render pass.
 - [x] Core soldiers/combat: generated 25-bone soldier, animated hit volumes, patrol/detection/pursuit/fire/death, two squads of three, shared alerts, cover claims, low-cover peeking, suppression, friendly firing-lane checks and a west-loop flank.
 - [x] Core audio: 76 generated samples, budgeted loading, bounded spatial mixer, player/weapon/surface cues, ambience, initial occlusion and room variants, volume controls and lifecycle cleanup.
@@ -56,7 +56,7 @@ Start with reference setup, then build the shared content and simulation depende
 - [x] Fix Three.js per-shot weapon/time/clear-sky state, record actual exposure/camera/GPU settings, import production laboratory triangles and validate repeat pixels from fresh pages. Pending/failed/omitted evidence is kept distinct.
 - [x] Verify the published Kaigen demo renders and record its build ID separately from the local source archive; mark controlled capture and performance evidence unavailable.
 - [x] Set Mac native and desktop browser to 60 FPS. Record proposed 1280×720 loading, resident-memory, CPU/GPU and p95/p99 frame budgets plus a sustained release-run protocol; these are targets, not measured passes. Mobile qualification is outside the current gate.
-- [x] Record nine adaptation decisions, including eye-origin firing, map layout, damage scales, controls, coordinates, exposure and audio. Open decisions remain assigned to their acceptance scenarios.
+- [x] Record eleven adaptation decisions, including eye-origin firing, map layout, damage scales, controls, coordinates, exposure and audio. Open decisions remain assigned to their acceptance scenarios.
 - [ ] Add controlled Kaigen captures and its equivalent laboratory once a matching runnable build/engine and capture control are available.
 - [ ] Complete Three.js cutout/local-light/glass and foliage fixture qualification, transient firing/FX timelines and reference motion sweeps. Twelve catalogue stills (six original and six new foliage views) are explicitly pending rather than represented by unrelated source shots.
 
@@ -109,14 +109,18 @@ The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json
 
 **Resource account:** 4,450 shapes, 478 batches, 1,224 colliders, 409,386 vertices and 29,475,792 vertex-stream bytes (28.1 MiB). The final native load accumulated 1,430.944 ms of work with a 13.489 ms peak update. Frozen street/interior/courtyard/detail views submitted 3,379 / 3,264 / 2,762 / 2,370 draws across all passes (16–17 profiler samples per request). Full records are in the README and `build/world-detail-native-validation/manifest.json`. Physics and traversal receipts are in `build/full-market-validation`, `build/full-market-quick-validation` and `build/world-detail-browser-final`; matched reference images are in `build/world-detail-threejs-validation`. No render targets or atlas tiers were added. The implementation keeps the 2 ms work deadline, permits 48 geometry jobs and at most eight uploads per update, and reserves 640 meshes / 1,280 collision objects / 2,048 collection instances. Individual jobs can exceed that deadline; measured peaks are retained.
 
-### 5. Complete traversal and camera feel — PARTIAL
+### 5. Complete traversal and camera feel — IMPLEMENTED
 
 - [x] Core movement, tactical sprint, slide, mantle and lean.
-- [ ] Add proactive vaulting over thin obstacles with verified landing clearance, distinct from climbing onto deep ledges.
-- [ ] Add stride/footfall camera motion, landing dip/pitch/roll, strafe/turn banking, breathing and reference slide/mantle camera offsets.
-- [ ] Match sprint/ADS FOV transitions and provide camera impulse channels for damage, suppression and explosions.
+- [x] Add proactive vaulting over thin obstacles with verified landing clearance, distinct from climbing onto deep ledges.
+- [x] Add stride/footfall camera motion, landing dip/pitch/roll, strafe/turn banking, breathing and reference slide/mantle camera offsets.
+- [x] Match sprint/ADS FOV transitions and provide camera impulse channels for damage, suppression and explosions.
 
-**Completion check:** The traversal course covers vault/mantle selection, blocked landings and interruption; deterministic movement and camera behavior hold at different presentation frame rates and through pause/reset.
+**Implementation check:** Thin obstacles and deep ledges have distinct endpoints; all paths and landing clearance are checked before committing and rechecked during traversal. Camera bob follows actual footfall distance; landing, banking, breathing, slide/mantle/vault motion and FOV use reference tuning. The composed eye/aim is shared with firing and collision-limited after interpolation. Damage hooks and bounded suppression/explosion camera channels are present; detection/gameplay for the latter remain in steps 6 and 12.
+
+**Adaptations:** Preserve per-tick swept up/across/down traversal rather than the references' unchecked rooted curve; require Jump for deep ledges. Springs use analytic integration, shake uses deterministic sine components, and the mantle pitch settles before completion. Controlled cross-engine motion review and sustained performance remain steps 18–19.
+
+**2026-10-17 validation:** All 244 standalone checks across 27 suites passed, including vault rejection/interruption, camera pose equivalence at 30/60/144 presentation FPS, bounded impulses, firing alignment and pause/death/reset handling. The shared 13-scenario fixture passed on Mac Metal and Chrome WebGL2 / ANGLE Metal (release engine), including real Bullet vault/mantle paths, dynamic obstruction, pause/resume and applied camera FOV. Native and Wasm fixed-input traversal counters match, with endpoint differences below 0.03 mm. The existing native movement and feature suites also passed. Full-market regression passed all 16 player routes in both directions, 108 six-actor route queries, both E1 AI stair flights, the eastern AI circuit and eight inspection captures, with clean shutdown. The fixtures are implementation evidence, not controlled reference motion or sustained-performance qualification. Reports are in `build/traversal-unit-validation`, `build/traversal-native-validation` and `build/traversal-browser-validation`.
 
 ### 6. Complete player health and suppression — PARTIAL
 

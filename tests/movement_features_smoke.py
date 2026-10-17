@@ -70,12 +70,21 @@ def main():
         assert abs(crouch["y"]-1.2) < 0.015, crouch
         print("PASS low/high mantles and a crouch-only landing")
 
-        for x, z in ((70, -12.9), (78, -12.9), (94, -13.325), (102, -12.9)):
+        for x, z in ((70, -12.9), (78, -12.9), (102, -12.9)):
             result = run([dict(ticks=140, move_z=-1, jump=True)], x=x, z=z)
             assert result["mantles"] == 0 and result["y"] < 0.02, result
         stairs = run([dict(ticks=140, move_z=-1)], x=56, z=0)
         assert stairs["mantles"] == 0 and stairs["y"] > 0.59, stairs
-        print("PASS tall/roofed/narrow ledges and an obstructed approach reject mantling; stairs remain steps")
+        print("PASS tall/roofed ledges and an obstructed approach reject mantling; stairs remain steps")
+
+        low = run([dict(ticks=110, move_z=-1, sprint=True)], x=46, z=-11)
+        high = run([dict(ticks=100, move_z=-1, jump=True)], x=94, z=-13.325)
+        for result in (low, high):
+            assert result["vaults"] == result["vault_completions"] == 1 and result["vault_aborts"] == 0, result
+            assert result["grounded"] and result["z"] < -14.7 and abs(result["y"]) < 0.015, result
+        blocked = run([dict(ticks=120, move_z=-1, sprint=True)], x=110, z=-11)
+        assert blocked["vaults"] == 0 and blocked["z"] > -14, blocked
+        print("PASS automatic low vault, explicit high vault and blocked far-side landing")
 
         left = run([dict(ticks=90, lean=-1)], z=0)
         right = run([dict(ticks=90, lean=1)], z=0)

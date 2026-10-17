@@ -17,7 +17,8 @@ function M.new(segments)
     return { segments = segments, index = 1, tick = 0, complete = false, ticks = 0,
         jumps = 0, landings = 0, grounded_ticks = 0, max_y = -math.huge, min_y = math.huge,
         slides = 0, slide_ticks = 0, tactical_ticks = 0, mantles = 0, mantle_completions = 0,
-        mantle_aborts = 0, max_speed = 0, max_lean = 0, slide_jump_speed = 0 }
+        mantle_aborts = 0, vaults = 0, vault_completions = 0, vault_aborts = 0,
+        max_speed = 0, max_lean = 0, slide_jump_speed = 0 }
 end
 
 function M.input(drive, intent)
@@ -49,6 +50,9 @@ function M.record(drive, motion)
     if motion.mantle_started then drive.mantles = drive.mantles+1 end
     if motion.mantle_completed then drive.mantle_completions = drive.mantle_completions+1 end
     if motion.mantle_aborted then drive.mantle_aborts = drive.mantle_aborts+1 end
+    if motion.vault_started then drive.vaults = drive.vaults+1 end
+    if motion.vault_completed then drive.vault_completions = drive.vault_completions+1 end
+    if motion.vault_aborted then drive.vault_aborts = drive.vault_aborts+1 end
     drive.max_speed = math.max(drive.max_speed, math.sqrt(motion.velocity.x^2+motion.velocity.z^2))
     if motion.jumped and motion.slide_jump then
         drive.slide_jump_speed = math.sqrt(motion.velocity.x^2+motion.velocity.z^2)
@@ -65,6 +69,7 @@ function M.record(drive, motion)
                 landings = drive.landings, grounded_ticks = drive.grounded_ticks, ticks = drive.ticks }
             local r = drive.result
             for _, key in ipairs({ "slides", "slide_ticks", "tactical_ticks", "mantles", "mantle_completions", "mantle_aborts", "max_speed", "max_lean", "slide_jump_speed" }) do r[key] = drive[key] end
+            for _, key in ipairs({ "vaults", "vault_completions", "vault_aborts" }) do r[key] = drive[key] end
             r.sliding, r.tactical, r.mantling, r.lean = motion.sliding, motion.tactical, motion.mantle ~= false, motion.lean
         end
     end

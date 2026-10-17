@@ -107,7 +107,7 @@ test("killfeed emits once per death, bounds floods, freezes during pause and cle
     runtime.set_paused(ctx,false)
     runtime.update(ctx,hud.feed_seconds+.01)
     assert(hud.snapshot(ctx).feed_count==0)
-    events.emit(ctx.events,events.DAMAGE_TAKEN,{source="enemy_1"})
+    events.emit(ctx.events,events.DAMAGE_TAKEN,{source="enemy_1",amount=10})
     hud.reset(ctx)
     assert(hud.snapshot(ctx).damage==0 and not hud.snapshot(ctx).headshot)
     runtime.final(ctx)
@@ -119,13 +119,13 @@ test("damage direction follows camera yaw and copies the source position at impa
     local enemy=ctx.ai.actors.enemy_1
     for _,v in ipairs({{0,-10,"front"},{10,0,"right"},{0,10,"back"},{-10,0,"left"}}) do
         enemy.position.x,enemy.position.z=v[1],v[2]
-        events.emit(ctx.events,events.DAMAGE_TAKEN,{source="enemy_1"})
+        events.emit(ctx.events,events.DAMAGE_TAKEN,{source="enemy_1",amount=10})
         enemy.position.x,enemy.position.z=100,100
         assert(hud.snapshot(ctx).damage_direction==v[3])
     end
     ctx.presentation.yaw=math.pi/2
     assert(hud.snapshot(ctx).damage_direction=="front")
-    events.emit(ctx.events,events.DAMAGE_TAKEN,{})
+    events.emit(ctx.events,events.DAMAGE_TAKEN,{amount=10})
     assert(hud.snapshot(ctx).damage_direction=="" and hud.snapshot(ctx).damage==1)
     runtime.final(ctx)
 end)

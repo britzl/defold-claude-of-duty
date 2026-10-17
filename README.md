@@ -451,6 +451,8 @@ Run the engine-independent regression suite from the repository root:
 lua tests/runtime_test.lua
 lua tests/world_test.lua
 lua tests/movement_test.lua
+lua tests/vault_test.lua
+lua tests/camera_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
 lua tests/navigation_test.lua
@@ -834,29 +836,83 @@ all displacement still passes through the same swept capsule controller.
 Stopping tactical sprint also starts recovery, so releasing/repressing Shift
 cannot evade the time limit.
 
-`mantle.lua` probes only on a forward jump request (held requests may retry at
-20 Hz). Ledges must be higher than the current step limit and no more than
-1.85 m above the current feet. An airborne catch therefore has additional jump
-reach. A downward probe confirms enough landing depth; the full up/forward/
-settle path is checked with the standing capsule, then crouched if necessary.
-The 0.34–0.82-second climb is swept again every fixed tick. New obstructions,
-death or inspection cancel it at the current position, never at an unchecked
-destination. Thin railings without a supported landing are rejected; automatic
-vaulting is not part of this implementation.
+`mantle.lua` distinguishes a thin obstacle from a supported deep ledge. A forward
+approach at 2.4 m/s or faster automatically vaults thin obstacles up to 0.72 m
+high; speed-scaled probe intervals/lookahead catch the lip before step-up begins.
+Deep ledges and taller thin obstacles require Jump, with a maximum rise of
+1.85 m above the current feet. Rises within the ordinary
+step allowance remain steps. Both moves require a walkable landing, capsule
+clearance and a clear up/across/down path. Vaults require standing clearance on
+the far side; mantles can finish crouched. The landing drop must be under 2.4 m.
+
+Vaults last 0.34 seconds (0.493 seconds for a tall explicit vault), retain 88%
+of approach speed with a 2.6 m/s minimum, and finish beyond the obstacle. Mantles
+retain the existing 0.34–0.82-second climb onto the ledge. Every segment is swept
+again each fixed tick, and support is checked again before completion. New
+obstructions, death or inspection cancel at the last clear position. Pause
+freezes progress; reset clears the move. The port deliberately keeps this swept
+path instead of the references' unchecked rooted curve, and requires an explicit
+Jump to climb deep ledges even when they are low.
 
 `lean.lua` smooths a 0.34 m camera offset and 13° roll without moving the capsule.
 A 0.17 m sphere sweep limits the offset, both in fixed updates and after camera
 interpolation. New obstructions retract it immediately. Stance eye interpolation
 is capped by the current capsule height when entering low headroom.
 
-The Lua movement tests cover jump timing, clearance, look, loading and equivalent
-simulation at 30/60/144 presentation FPS. The native movement test builds an
-optional course and drives input through actual Defold fixed ticks to check
-speed, corners, thin-wall sweeps, stairs, slopes, ceilings, door widths and
-entry into W2. The feature suite covers tactical sprint, slide duration and
-jump exits, valid/invalid mantle routes, crouch-only landings, lean clearance
-and cancellation on death. Native validation currently targets macOS/Metal;
-full browser/mobile traversal-suite validation remains a later milestone.
+`camera.lua` owns fixed-tick camera state: distance/footfall-locked figure-eight
+bob, landing and footstep springs, strafe/turn/air banking, breathing, slide and
+mantle/vault offsets, and sprint/tactical/slide/ADS FOV transitions. Amplitudes,
+frequencies, damping and transition times for locomotion come from both reference camera
+implementations. Angular kicks combine a fast spring with a slow residual;
+analytic integration replaces reference numerical substeps. Small deterministic
+sine shake replaces the reference noise without consuming gameplay RNG. The
+mantle's last pitch offset settles before releasing the move to avoid a snap.
+
+Camera composition interpolates fixed samples and sphere-sweeps additive eye
+motion after leaning, including headroom limits. Firing samples the same eye and
+aim at the simulation tick; weapon recoil stays in its existing independent
+channel. The world camera uses the resulting FOV, while capture/inspection
+cameras and the separate viewmodel projection retain their own lenses. No new
+render targets, meshes or production collision bodies are allocated.
+
+`player.camera_impulse(ctx, kind, strength, direction)` and the `CAMERA_IMPULSE`
+event accept `damage`, `suppression` or `explosion`, a nonnegative strength
+clamped to 0..1, and an optional world-space direction toward the source. Existing
+damage events drive the damage channel. Near-miss detection and explosion
+gameplay will connect to the other channels in steps 6 and 12. The channels do
+not change health. Pause/loading/death/inspection reject new impulses; pause
+freezes the rig, while death, inspection and reset clear it.
+
+Run the focused regressions with:
+
+```sh
+lua tests/movement_test.lua
+lua tests/vault_test.lua
+lua tests/camera_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/movement_features_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/traversal_smoke.py
+```
+
+For WebGL, build a `wasm-web` bundle with
+`--settings tests/traversal_browser.project`, then run:
+
+```sh
+node tools/validate_traversal_browser.mjs --bundle="/path/to/bundle/Claude of Duty"
+```
+
+The 2026-10-17 native Metal and Chrome WebGL2 / ANGLE Metal release runs passed
+the same 13 scenarios using production
+fixed ticks and Bullet: walking/sprinting vaults, explicit high vaults, thick
+ledge mantles, stairs, blocked landings, pause/resume, rendered sprint/ADS FOV,
+landing springs, impulse channels, dynamic obstruction and death. Reports are
+written to `build/traversal-native-validation` and
+`build/traversal-browser-validation`. These are implementation checks; matched
+reference motion review, physical mobile devices and sustained performance
+remain separate parity gates. The 244 standalone checks across 27 suites also
+passed, including camera pose equivalence at 30/60/144 presentation FPS. The
+existing native movement suites and full-market traversal/patrol regression
+also passed: 16 player routes in both directions, 108 six-actor route queries,
+E1 stair/eastern AI patrols and eight inspection captures, with clean shutdown.
 
 ## Weapons and viewmodel rendering
 

@@ -150,7 +150,7 @@ test("inspection is interruptible; loading, sprint, mantle, inspection cameras a
         local c=new()
         if gate=="loading" then c.world.ready=false
         elseif gate=="sprint" then c.player.motion.sprinting=true
-        elseif gate=="mantle" then c.player.motion.mantle={}
+        elseif gate=="mantle" then c.player.motion.mantle={time=0,duration=0.62,kind="mantle",side=1}
         elseif gate=="camera" then c.player.enabled=false
         else combat.request(c.combat,{target="player",amount=100}) end
         button(c,"fire",true);ticks(c,60);assert(snapshot(c).fired==0,gate)

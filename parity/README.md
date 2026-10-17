@@ -2,7 +2,7 @@
 
 [contract.json](contract.json) is the acceptance matrix: 24 feature scenarios with
 reference source paths, expected behavior, a verification procedure, existing
-coverage, and nine recorded adaptation decisions. `implemented-core` describes
+coverage, and eleven recorded adaptation decisions. `implemented-core` describes
 existing code; it does not mean the scenario has passed parity review.
 [reference-lock.json](reference-lock.json) pins the runtime source snapshots and
 all 71 production camera requests, including FOV, lighting and fixture intent.
@@ -26,6 +26,19 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Traversal and camera increment — 2026-10-17
+
+Step 5 implements thin-obstacle vaulting, the reference camera motion families,
+sprint/ADS FOV and additive impulse channels. The shared native/WebGL fixture
+uses real Bullet geometry and production fixed ticks; standalone tests compare
+camera state and sampled poses at 30, 60 and 144 presentation FPS. See the
+repository README for commands, adaptation details and qualification scope.
+
+The refreshed source lock carries the current runtime and contract, with no
+stale visual receipts. The previous architecture comparison remains in
+`world-detail-baseline-v1.json`. Traversal fixture receipts are implementation
+evidence, not controlled reference motion captures or a sustained 60 FPS pass.
+
 ## Architecture and dressing increment — 2026-10-15
 
 Step 4 implements source-derived setbacks, balconies, windows, the gate, ruined
@@ -40,7 +53,9 @@ have exact repeats; three matching Three.js camera views document the street,
 interior and courtyard. Captures retain the visible lighting/exposure and
 geometry differences. They are implementation evidence, not final visual or
 sustained 60 FPS qualification. `tests/world_detail_capture.py` records resource
-counts and frozen-scene render/CPU counters alongside its images. The current lock retains four native and three Three.js capture receipts;
+counts and frozen-scene render/CPU counters alongside its images. The historical
+[world-detail-baseline-v1.json](world-detail-baseline-v1.json) retains four native
+and three Three.js capture receipts;
 omitted cameras are not marked as captured. See the README for final measured
 costs and validation commands.
 

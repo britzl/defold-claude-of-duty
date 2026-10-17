@@ -4,7 +4,8 @@ local clips = require "game.weapons.clips"
 local ballistics = require "game.weapons.ballistics"
 local events = require "game.events"
 local rng = require "game.rng"
-local lean = require "game.player.lean"
+local camera = require "game.player.camera"
+local player_tuning = require "game.player.tuning"
 local M = {}
 local ids={"rifle","smg","pistol"}
 
@@ -97,13 +98,13 @@ local function fire(ctx)
     s.chambered=s.mag>0
     if s.chambered then s.mag=s.mag-1 end
     local motion=ctx.player.motion
-    local pitch=motion.pitch+w.recoil.pitch.x
-    local yaw=motion.yaw+w.recoil.yaw.x
+    local eye=camera.compose(ctx,1,{})
+    local pitch=V.clamp(eye.pitch+w.recoil.pitch.x,-player_tuning.pitch_limit,player_tuning.pitch_limit)
+    local yaw=eye.yaw+w.recoil.yaw.x
     local radius=math.sqrt(w.random())*math.tan(math.rad(w.spread))
     local angle=w.random()*2*math.pi
     local dir=V.normalize(V.rotate({x=radius*math.cos(angle),y=radius*math.sin(angle),z=-1},pitch,yaw,0))
-    local origin={x=motion.position.x,y=motion.position.y+lean.eye(motion),z=motion.position.z}
-    origin.x,origin.y,origin.z=lean.apply(ctx.services.capsule,origin,motion.yaw,motion.lean)
+    local origin=eye.camera
     -- Camera-origin rounds preserve crosshair aim and cannot start beyond a wall
     -- when the separately rendered muzzle overlaps it. Flash uses the muzzle.
     ballistics.spawn(w.sim,d,origin,dir,"player",w.sim.fired%d.tracerEvery==0)
@@ -163,6 +164,8 @@ function M.fixed_update(ctx,dt)
     local aim=usable and intent.aim and not w.clip
     local ads_target=aim and 1 or 0
     w.ads=w.ads+V.clamp(ads_target-w.ads,-dt/d.adsTime,dt/d.adsTime)
+    -- Resolve the fixed camera after ADS and before any round samples its aim.
+    if ready then camera.update(ctx,dt) end
     local speed=math.sqrt(motion.velocity.x^2+motion.velocity.z^2)
     local rest=V.lerp(d.spreadHip,d.spreadAds,V.smooth(w.ads))
     rest=rest*(motion.stance=="crouch" and .78 or motion.stance=="prone" and .6 or 1)

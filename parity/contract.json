@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "claude-of-duty-parity-v1",
-  "updated": "2026-10-15",
+  "updated": "2026-10-17",
   "scope": "Observable behavior and presentation in the local Three.js and Kaigen source snapshots; engine algorithms may differ.",
   "status_policy": "Existing test files are coverage, not proof of a current pass. Pending and unavailable evidence never pass a parity gate.",
   "reference_availability": {
@@ -198,6 +198,20 @@
       "current": "Panning and generated room/muffled variants",
       "reference": "Three.js HRTF/convolution; Kaigen engine processing",
       "gate": "audio-spatial"
+    },
+    {
+      "id": "swept-traversal",
+      "state": "recorded",
+      "current": "Swept up/across/down paths revalidated every tick; deep ledges require Jump. Low thin obstacles vault automatically at speed.",
+      "reference": "Rooted curves after initial clearance validation; low deep ledges may also trigger automatically.",
+      "gate": "traversal"
+    },
+    {
+      "id": "camera-integration",
+      "state": "recorded",
+      "current": "Analytic fixed-tick springs with interpolated outputs; deterministic sine shake; final mantle pitch settles before completion.",
+      "reference": "Numerically substepped springs, noise shake and a final rooted mantle pitch offset.",
+      "gate": "camera-feel"
     }
   ],
   "scenarios": [
@@ -282,13 +296,18 @@
         "threejs:src/player/movement.js",
         "kaigen:src/claude_of_duty/cod_player_move.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Run stairs/slopes/low ceilings, sprint/slide/jump, mantle thick ledges and vault thin obstacles with blocked and clear landings.",
       "expect": "Reference movement timing with no clipping, unsupported landings or frame-rate-dependent travel.",
       "coverage": [
         "tests/movement_test.lua",
-        "tests/movement_features_smoke.py"
-      ]
+        "tests/movement_features_smoke.py",
+        "tests/vault_test.lua",
+        "tests/traversal_scenario.lua",
+        "tests/traversal_smoke.py",
+        "tools/validate_traversal_browser.mjs"
+      ],
+      "implementation_notes": "Automatic low thin-obstacle vaults, explicit high vaults and deep-ledge mantles. Clear landing and swept path checks before and during traversal; support rechecked on completion. AI automatic vaulting is deliberately disabled pending animation/tactics work. Cross-engine motion review remains open."
     },
     {
       "id": "camera-feel",
@@ -297,10 +316,16 @@
         "threejs:src/player/camera.js",
         "kaigen:src/claude_of_duty/cod_player_camera.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Record walking, sprint/ADS transitions, strafe/turn, land, slide, mantle and damage sequences.",
       "expect": "Reference spring timing and additive motion without camera collision violations.",
-      "coverage": []
+      "coverage": [
+        "tests/camera_test.lua",
+        "tests/traversal_scenario.lua",
+        "tests/traversal_smoke.py",
+        "tools/validate_traversal_browser.mjs"
+      ],
+      "implementation_notes": "Fixed-tick, interpolated footfall bob, landing/step springs, angular kick residuals, strafe/turn banking, breathing, slide/mantle/vault offsets and movement/ADS FOV. Collision-limited eye and aim shared with firing; damage events and explicit suppression/explosion channels. Detection and gameplay for the latter remain in health/grenades. Controlled reference motion comparison is still open."
     },
     {
       "id": "health",
