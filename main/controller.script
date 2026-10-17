@@ -29,6 +29,7 @@ local APPLY_DAMAGE = hash("apply_damage")
 local HUD_STATE = hash("hud_state")
 local VIEW_ACTIONS = { [hash("view_street")] = "street", [hash("view_shop")] = "shop", [hash("view_room")] = "room" }
 local PLAY, ESCAPE, COURSE = hash("play"), hash("release_mouse"), hash("course")
+local IS_HTML5 = sys.get_sys_info().system_name == "HTML5"
 
 local function select_view(self, name)
     msg.post("@render:","renderer_reset_history",{reason="view"})
@@ -697,7 +698,13 @@ function on_input(self, action_id, action)
     end
     if not action_id then
         if window.get_mouse_lock() and not self.view then
-            input.look(self.ctx.input, (action.dx or 0)*self.ui.sensitivity, (action.dy or 0)*self.ui.sensitivity)
+            local dx, dy = action.dx, action.dy
+            if IS_HTML5 then
+                -- Locked browser deltas are already relative mouse movement.
+                -- dx/dy scale them down with the canvas size (including high DPI).
+                dx, dy = action.screen_dx, action.screen_dy
+            end
+            input.look(self.ctx.input, (dx or 0)*self.ui.sensitivity, (dy or 0)*self.ui.sensitivity)
         end
         return false
     end
