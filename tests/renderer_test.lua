@@ -152,7 +152,28 @@ render.draw=function(predicate,options)
     draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture}
 end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
+local function renderer_stats()
+    for i=#messages,1,-1 do
+        if messages[i].name=="renderer_stats" then return messages[i].data end
+    end
+end
+-- Each of these API calls queues one Defold render-script command. Count the
+-- real calls made by the renderer so additions cannot silently exceed 1024.
+local commands=0
+for _,name in ipairs({"set_camera","set_view","set_projection","set_depth_mask",
+    "set_stencil_mask","disable_state","enable_state","set_depth_func","clear",
+    "draw_debug3d","set_blend_func","set_viewport","set_render_target",
+    "enable_material","disable_material","enable_texture","disable_texture","draw"}) do
+    local original=render[name]
+    render[name]=function(...) commands=commands+1;return original(...) end
+end
 dofile("render/game.render_script")
+local render_update=update
+update=function(state,dt)
+    commands=0
+    render_update(state,dt)
+    assert(commands<=1024,"Render command capacity exceeded: "..commands)
+end
 local self={}
 test("recipes, padded mip chains and filtered environment finish before the world draws",function()
     init(self)
@@ -167,15 +188,19 @@ test("recipes, padded mip chains and filtered environment finish before the worl
     for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
     end
-    local frames=0
+    local frames,max_jobs=0,0
     while self.bake_step<atlas.job_count do
         local previous=self.bake_step
         update(self);frames=frames+1
-        assert(self.bake_step>previous and self.bake_step-previous<=8)
+        assert(self.bake_step>previous)
+        max_jobs=math.max(max_jobs,self.bake_step-previous)
         assert(self.bake_draws>=self.bake_step)
-        if self.bake_step<atlas.job_count then assert(self.shadow_frames==0) end
+        assert(self.shadow_frames==0,"Scene draws shared a bake command buffer")
+        assert(not renderer_stats().ready,"Reported ready before the first scene frame")
         assert(frames<atlas.job_count)
     end
+    assert(max_jobs>16 and frames<60,"Loading still waits on small fixed batches")
+    assert(self.bake_frames==frames and self.bake_peak_commands<=896)
     local recipes,filters,cube=0,0,0
     for _,draw in ipairs(draws) do
         if draw.material=="bake" then recipes=recipes+1 end
@@ -183,8 +208,9 @@ test("recipes, padded mip chains and filtered environment finish before the worl
         if draw.material=="environment" then cube=cube+1 end
     end
     assert(recipes==#atlas.surfaces*2 and filters==atlas.draw_count-#atlas.surfaces*2-1 and cube==1)
-    assert(self.shadow_frames==1)
+    assert(self.shadow_frames==0)
     update(self)
+    assert(self.shadow_frames==1 and renderer_stats().ready)
     assert(self.targets.scratch_a==nil and self.targets.atlas_spare==nil)
     assert(self.bake_draws==atlas.draw_count)
 end)
@@ -435,5 +461,29 @@ test("OpenGL resize replaces complete depth/MRT targets without rebaking maps",f
     end
     final(web)
     for _,target in ipairs(targets) do assert(target.deleted) end
+end)
+test("all atlas qualities and context rebakes fit the command buffer",function()
+    local original=atlas.new(atlas.quality)
+    for _,quality in ipairs({"low","medium","high"}) do
+        for key,value in pairs(atlas.new(quality)) do atlas[key]=value end
+        local state={};init(state)
+        local peak_commands=0
+        for cycle=1,2 do
+            if cycle==2 then listener(nil,"restored") end
+            local frames=0
+            while state.bake_step<atlas.job_count do
+                update(state);frames=frames+1
+                peak_commands=math.max(peak_commands,commands)
+                assert(not renderer_stats().ready)
+                assert(frames<60,"Bake scheduling regressed: "..quality)
+            end
+            assert(state.bake_draws==atlas.draw_count*cycle)
+            update(state)
+            assert(renderer_stats().ready and state.targets.scratch_a==nil)
+        end
+        print("BAKE",quality,"updates",state.bake_frames/2,"peak commands",peak_commands)
+        final(state)
+    end
+    for key,value in pairs(original) do atlas[key]=value end
 end)
 print(tests.." renderer tests passed")

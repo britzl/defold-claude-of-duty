@@ -53,6 +53,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--uncapped', action='store_true', help='Diagnostic: launch with display.swap_interval=0')
+    parser.add_argument('--material-quality', choices=('low','medium','high'), default='medium')
     parser.add_argument('--backend', choices=('lua','native'), default='native')
     parser.add_argument('--verify', action='store_true', help='Compare every native shape with the Lua reference; not a performance run')
     parser.add_argument('--audio-backend', choices=('lua','native'), default='native')
@@ -65,6 +66,7 @@ def main():
         reserved.bind(('127.0.0.1', 0)); profiler_port = reserved.getsockname()[1]
     command = [str(ROOT/'build/arm64-osx/dmengine'), str(ROOT/'build/default/game.projectc'),
         f'--config=profiler.remotery_port={profiler_port}', f'--config=world_mesh.backend={args.backend}',
+        f'--config=render.material_quality={args.material_quality}',
         f'--config=world_mesh.verify={int(args.verify)}',
         f'--config=audio_synthesis.backend={args.audio_backend}',
         f'--config=audio_synthesis.verify={int(args.verify_audio)}',

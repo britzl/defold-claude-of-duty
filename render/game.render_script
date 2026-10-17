@@ -131,21 +131,32 @@ local function bake_environment(self)
     self.environment_dirty=false
     self.report=true
 end
+-- Defold 1.14 has 1024 render-script commands per update. Reserve 128 for
+-- the loading screen/HUD; scene rendering starts in the following update.
+local BAKE_COMMAND_BUDGET=896
+local function bake_job_commands(job)
+    -- fullscreen() emits ten commands. Include target/viewport and texture
+    -- bindings; atlas patches also issue a complete preservation pass.
+    if not job then return 26 end -- sky + environment
+    if job.op=="recipe" then return 12 end
+    return (job.target=="scratch_a" or job.target=="scratch_b") and 16 or 32
+end
 local function bake_next(self)
-    -- Expensive recipes get their own frame. Cheap copies/mip reductions run
-    -- eight at a time, with no world draws until every map is complete.
+    local commands=0
     if self.bake_step==0 then
         if not self.targets.scratch_a then bake_scratch(self) end
         for _,name in ipairs({"albedo","normal","material"}) do
             render.set_render_target(self.targets[name])
             render.clear({[COLOR]=vmath.vector4()})
         end
+        commands=6
     end
-    for _=1,8 do
-        if self.bake_step>=atlas.job_count then return end
+    while self.bake_step<atlas.job_count do
         local job=self.bake_jobs[self.bake_step+1]
+        local cost=bake_job_commands(job)
+        if commands+cost>BAKE_COMMAND_BUDGET then break end
+        commands=commands+cost
         if job then
-            if job.op=="recipe" and _>1 then return end
             if job.target~="scratch_a" and job.target~="scratch_b" then
                 -- Defold 1.14 Lua targets use DONT_CARE load operations. On
                 -- tile GPUs a partial viewport discards neighbouring pixels.
@@ -187,15 +198,18 @@ local function bake_next(self)
         self.bake_step=self.bake_step+1
         self.bake_draws=self.bake_draws+1
         self.report=true
-        if job and job.op=="recipe" then return end
     end
+    self.bake_frames=self.bake_frames+1
+    self.bake_peak_commands=math.max(self.bake_peak_commands,commands)
 end
 local function report(self)
     if not self.report and self.frames%30~=0 then return end
     self.report=false
     local target_count=0;for _ in pairs(self.targets) do target_count=target_count+1 end
     msg.post("main:/controller#script","renderer_stats",{
-        ready=self.bake_step==atlas.job_count, bake_jobs=self.bake_step, bake_draws=self.bake_draws,
+        ready=self.bake_step==atlas.job_count and not self.targets.scratch_a,
+        bake_jobs=self.bake_step, bake_draws=self.bake_draws, bake_frames=self.bake_frames,
+        bake_peak_commands=self.bake_peak_commands, bake_command_budget=BAKE_COMMAND_BUDGET,
         atlas_width=atlas.width,atlas_height=atlas.height,material_quality=atlas.quality,surface_count=#atlas.surfaces-1,
         detail_resolution=atlas.surfaces[atlas.detail_kind+1].size,
         environment_faces=self.bake_step==atlas.job_count and 6 or 0, environment_size=settings.environment_size,
@@ -273,6 +287,7 @@ function init(self)
     self.grain_time=0
     self.photo_constants=render.constant_buffer()
     self.frames,self.bake_step,self.bake_draws,self.resizes,self.shadow_frames=0,0,0,0,0
+    self.bake_frames,self.bake_peak_commands=0,0
     self.bake_jobs=atlas.jobs()
     self.light_count=0
     self.environment_updates=0
@@ -347,14 +362,18 @@ function update(self,dt)
     if not resize(self) then return end
     self.frames=self.frames+1
     -- Previous frame's queued bake draws have now consumed these resources.
-    if self.bake_step==atlas.job_count and self.targets.scratch_a then release_bake_scratch(self) end
-    if self.bake_step<atlas.job_count then
+    local baking=self.bake_step<atlas.job_count
+    if not baking and self.targets.scratch_a then
+        release_bake_scratch(self)
+        self.report=true
+    end
+    if baking then
         if profiler then profiler.scope_begin("loading.renderer.bake") end
         bake_next(self)
         if profiler then profiler.scope_end() end
     end
     local t,o=self.targets,self.options
-    if self.bake_step==atlas.job_count then
+    if not baking then
         if self.environment_dirty then bake_environment(self) end
         -- Capture the same interpolated camera used by the world and weapon.
         local view=camera.get_view(WORLD_CAMERA)

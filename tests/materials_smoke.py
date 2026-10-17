@@ -4,6 +4,7 @@ PYTHONPATH=automation-bridge-python python3 tests/materials_smoke.py
 Requires Pillow and Lua. Owns/closes the Defold engine.
 """
 from pathlib import Path
+import argparse
 import subprocess
 import json
 from PIL import Image, ImageChops, ImageStat
@@ -69,7 +70,11 @@ def validate_maps(images, layout):
 
 
 def main():
-    output = ROOT / "captures/rendering/material-validation"
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output',type=Path,default=ROOT / 'captures/rendering/material-validation')
+    parser.add_argument('--compare',type=Path,help='Require exact RGB equality with previously captured atlas maps')
+    args=parser.parse_args()
+    output = args.output
     output.mkdir(parents=True, exist_ok=True)
     project = editor.open_project(ROOT, start_if_needed=False)
     game = project.build_and_run(timeout=180)
@@ -101,7 +106,18 @@ def main():
                     combined.paste(image,(column*1024,height-(row+1)*1024))
             combined.save(output/(view+".png"));images[view]=combined
         (output/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
-        validate_maps(images, atlas_layout())
+        validate_maps(images, atlas_layout(stats['material_quality']))
+        if args.compare:
+            differences={}
+            for view,image in images.items():
+                with Image.open(args.compare/(view+'.png')) as reference:
+                    assert reference.size==image.size,(view,reference.size,image.size)
+                    delta=ImageChops.difference(reference.convert('RGB'),image)
+                    differences[view]={'exact_rgb_match':delta.getbbox() is None,
+                        'max_channel_difference':max(high for low,high in delta.getextrema())}
+            (output/'comparison.json').write_text(json.dumps(differences,indent=2)+'\n')
+            assert all(d['exact_rgb_match'] for d in differences.values()),differences
+            print('PASS exact atlas RGB comparison',flush=True)
     finally:
         game.close_engine(); game.close()
     errors = [line for line in project.console.read().lines if "ERROR:" in line]

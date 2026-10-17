@@ -38,6 +38,31 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Faster material-atlas loading (2026-10-17)
+
+Atlas baking now fills an **896-command budget** per loading update instead of
+limiting copies/filters to eight jobs and giving every recipe its own frame.
+The remaining 128 commands are reserved for the loading screen and HUD. The
+first scene render runs in the following update, after the final bake commands
+have consumed their scratch textures; renderer readiness is reported then.
+
+At medium quality this reduces baking from **194 to 31 updates**. Three fresh
+macOS/Metal debug captures reduced median combined readiness from **1.706 to
+0.825 seconds (52%)**, measured from world initialization. Renderer readiness
+fell to **0.345 seconds**, with world generation now finishing last. Both sets
+use the same native mesh/audio engine, 1920×1280 drawable and unchanged VSync.
+These are application wall times, not GPU timestamps. Baseline evidence comes
+from the preceding startup profile with matching sources and engine binary.
+
+The recipe/filter order, 1,145 jobs, reported 1,727 bake draws, atlas dimensions
+and preservation passes are unchanged. All three medium-quality atlas RGB maps
+match the original pixel-for-pixel, including their mip regions. Command-count
+tests cover all material qualities and context rebakes: 28/31/35 updates for
+low/medium/high, with at most 914 commands including the loading UI.
+`renderer.snapshot` exposes `bake_frames`, `bake_peak_commands` (bake work only)
+and `bake_command_budget`. See the local
+[measurements and validation](captures/bake-scheduling-2026-10-17/findings.txt).
+
 ## Native procedural audio (2026-10-17)
 
 The [AudioSynth extension](audiosynth/README.md) now generates the 76-sound bank
@@ -1230,8 +1255,8 @@ have zero wear/contact masks; visibility cuts cannot introduce fake worn edges.
 Mesh contact occlusion combines with baked cavities using their maximum, rather
 than multiplying them and darkening a cavity twice.
 
-Loading remains budgeted: expensive recipe draws run individually and up to eight
-copy/filter jobs run per frame. The environment is one complete 128-sample bake
+Loading fills an 896-command budget per update, including recipe, copy and filter
+jobs. Scene rendering starts on the update after baking completes. The environment is one complete 128-sample bake
 pass at the end of loading; it is never rebuilt during normal play. Defold's discard-on-load targets need
 full-atlas preservation before partial updates. The two scratch targets and spare
 atlas are released after queued bake draws finish: twelve targets during loading,
