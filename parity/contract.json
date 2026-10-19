@@ -359,7 +359,9 @@
       "expect": "Matching rates, chambers, ammunition transfers and interruption rules; correct requested weapon in capture.",
       "coverage": [
         "tests/weapons_test.lua",
-        "tests/weapons_smoke.py"
+        "tests/weapons_smoke.py",
+        "tests/viewmodel_scenario.lua",
+        "tools/validate_viewmodel_browser.mjs"
       ]
     },
     {
@@ -369,13 +371,19 @@
         "threejs:src/weapons/viewmodel.js",
         "kaigen:src/claude_of_duty/cod_weapons_view.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Capture every weapon hip/ADS/reload/inspect indoors and outdoors, plus camera turns and walking.",
       "expect": "Reference silhouettes and hand grips; aligned optics and lag/sway without broken joints.",
       "coverage": [
         "tests/render_capture_test.lua",
-        "tests/combat_rendering_smoke.py"
-      ]
+        "tests/combat_rendering_smoke.py",
+        "tests/viewmodel_test.lua",
+        "tests/viewmodel_scenario.lua",
+        "tests/viewmodel_smoke.py",
+        "tests/viewmodel_render_smoke.py",
+        "tools/validate_viewmodel_browser.mjs"
+      ],
+      "implementation_notes": "Source-scale bounded weapon assemblies, shared 17-joint arms, body-fixed shoulder IK, finger poses, magazine/charge hand tracks and fixed-tick follow/sway/footfall motion. Full ADS and collimated dot constrained to the camera axis; tactical/empty transfers and interruptions preserved. Native/release WebGL shared fixtures pass. Reduced geometry, bounded sleeve length correction, material/detail matching, reference motion and controlled Kaigen comparisons remain explicit qualification limits."
     },
     {
       "id": "ballistics",

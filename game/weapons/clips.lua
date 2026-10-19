@@ -27,11 +27,73 @@ function M.duration(name,def)
     return def[name] or (name=="inspect" and def.inspectTime) or (name=="draw" and def.drawTime)
         or (name=="holster" and def.holsterTime) or 0
 end
-function M.sample(name,t)
+local function hand_keys(name,model,def)
+    local grip=model.left
+    local at={model.magazine[1]+.012,model.magazine[2],model.magazine[3]+.012}
+    local low={at[1]+.038,at[2]-def.magLen*.88,at[3]+.078}
+    local off={at[1]+.098,at[2]-def.magLen*1.10,at[3]+.148}
+    local high={at[1]-.006,at[2]-def.magLen*.16,at[3]-.004}
+    local wrap={model.left_finger,model.left_back,model.grip}
+    local pinch={{.1,.72,-.68},{-.86,.34,-.38},"pinch"}
+    local open={pinch[1],pinch[2],"open"}
+    local function key(t,p,pose) return {t,p,pose[1],pose[2],pose[3]} end
+    if name=="reloadTac" or name=="reloadEmpty" then
+        local empty=name=="reloadEmpty"
+        local keys={key(0,grip,wrap),key(empty and .08 or .10,at,pinch),key(empty and .16 or .20,at,pinch),
+            key(empty and .26 or .30,low,pinch),key(empty and .36 or .42,off,open),
+            key(empty and .48 or .56,off,pinch),key(empty and .58 or .68,low,pinch),
+            key(empty and .66 or .76,high,pinch),key(empty and .71 or .81,at,pinch)}
+        if empty then
+            keys[#keys+1]=key(.75,at,open)
+            local charge={model.charge[1],model.charge[2],model.charge[3]}
+            local pulled={charge[1],charge[2],charge[3]+(def.id=="pistol" and .035 or .065)}
+            local hold={{.55,.2,.81},{-.2,.94,-.27},"pinch"}
+            keys[#keys+1]=key(.86,charge,hold);keys[#keys+1]=key(.90,pulled,hold)
+            keys[#keys+1]=key(.917,charge,hold)
+        else keys[#keys+1]=key(.88,at,open) end
+        keys[#keys+1]=key(1,grip,wrap)
+        return keys,at
+    elseif name=="inspect" then
+        return {key(0,grip,wrap),key(.30,{grip[1]-.01,grip[2]-.01,grip[3]+.03},wrap),
+            key(.55,{grip[1]+.01,grip[2]-.02,grip[3]-.02},wrap),key(1,grip,wrap)}
+    elseif name=="draw" or name=="holster" then
+        local released={grip[1]-.02,grip[2]-.09,grip[3]+.06}
+        local loose={wrap[1],wrap[2],"open"}
+        return name=="draw" and {key(0,released,loose),key(.6,grip,wrap),key(1,grip,wrap)}
+            or {key(0,grip,wrap),key(1,released,loose)}
+    end
+    return {key(0,grip,wrap),key(1,grip,wrap)}
+end
+function M.sample(name,t,model,def)
     local out={pos={0,0,0},rot={0,0,0},mag=0,mag_visible=true,bolt=0,hand=0,charge=0}
     local track=tracks[name]
-    if not track then return out end
     t=V.clamp(t,0,1)
+    if model then
+        -- Cache immutable reference tracks with the generated model.
+        model.clips=model.clips or {}
+        local key=name or "idle"
+        if not model.clips[key] then
+            local keys,at=hand_keys(name,model,def);model.clips[key]={keys=keys,at=at}
+        end
+        local data=model.clips[key];local keys=data.keys
+        local a,b=keys[1],keys[#keys]
+        for i=1,#keys-1 do if t<=keys[i+1][1] then a,b=keys[i],keys[i+1];break end end
+        local f=V.smooth((t-a[1])/(b[1]-a[1]))
+        local hand={position={},finger={},back={},pose=a[5],next_pose=b[5],blend=f}
+        for j,field in ipairs({"position","finger","back"}) do
+            for i=1,3 do hand[field][i]=V.lerp(a[j+1][i],b[j+1][i],f) end
+        end
+        out.left=hand
+        out.mag_position={0,0,0}
+        if data.at then
+            local empty=name=="reloadEmpty"
+            local pull,seat=empty and .16 or .20,empty and .71 or .81
+            if t>=pull and t<=seat then
+                for i=1,3 do out.mag_position[i]=hand.position[i]-data.at[i] end
+            end
+        end
+    end
+    if not track then return out end
     local a,b=track[1],track[#track]
     for i=1,#track-1 do if t<=track[i+1][1] then a,b=track[i],track[i+1];break end end
     local w=V.smooth((t-a[1])/(b[1]-a[1]))

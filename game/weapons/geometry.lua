@@ -65,13 +65,76 @@ function M.quad(b)
     triangle(b,{-.5,-.5,0},{.5,.5,0},{-.5,.5,0},n,c)
     return b
 end
-local function hand(batch,left)
-    M.box(batch,0,0,0,.055,.07,.038,"glove",-.22)
-    M.box(batch,0,-.048,.018,.048,.052,.042,"skin",-.22)
-    M.box(batch,0,-.090,.040,.064,.068,.060,"tan",-.30)
-    for i=0,3 do M.box(batch,(i-1.5)*.014,.038,-.012,.012,.035,.018,"glove",.6) end
-    M.box(batch,left and .032 or -.032,.004,-.026,.021,.039,.023,"glove",-.65)
+-- Profile of elliptical rings along -Z, used for folded sleeves and gloves.
+-- Faceted normals keep the small generated mesh independent of imported art.
+function M.profile(b,rings,color,segments)
+    color=M.colors[color] or color
+    local count=segments or 10
+    local function point(r,i)
+        local a=i/count*math.pi*2
+        return {math.cos(a)*r[2],math.sin(a)*r[3],-r[1]}
+    end
+    local function face(a,c,d)
+        local ax,ay,az=c[1]-a[1],c[2]-a[2],c[3]-a[3]
+        local bx,by,bz=d[1]-a[1],d[2]-a[2],d[3]-a[3]
+        local n=V.normalize({x=ay*bz-az*by,y=az*bx-ax*bz,z=ax*by-ay*bx})
+        triangle(b,a,c,d,{n.x,n.y,n.z},color)
+    end
+    for j=1,#rings-1 do for i=0,count-1 do
+        local a,c,d,e=point(rings[j],i),point(rings[j+1],i),point(rings[j+1],i+1),point(rings[j],i+1)
+        face(a,c,d);face(a,d,e)
+    end end
+    for i=0,count-1 do
+        face({0,0,-rings[1][1]},point(rings[1],i),point(rings[1],i+1))
+        face({0,0,-rings[#rings][1]},point(rings[#rings],i+1),point(rings[#rings],i))
+    end
 end
+
+-- Chamfered box: six panels, twelve bevels and eight corner triangles.
+function M.bevel(b,x,y,z,w,h,d,r,color)
+    color=M.colors[color] or color
+    local half={w/2,h/2,d/2};r=math.min(r,math.min(w,h,d)*.49)
+    local function face(points)
+        local a,c,e=points[1],points[2],points[3]
+        local u={c[1]-a[1],c[2]-a[2],c[3]-a[3]}
+        local v={e[1]-a[1],e[2]-a[2],e[3]-a[3]}
+        local n=V.normalize({x=u[2]*v[3]-u[3]*v[2],y=u[3]*v[1]-u[1]*v[3],z=u[1]*v[2]-u[2]*v[1]})
+        if n.x*a[1]+n.y*a[2]+n.z*a[3]<0 then
+            local rev={};for i=#points,1,-1 do rev[#rev+1]=points[i] end;points=rev
+            n.x,n.y,n.z=-n.x,-n.y,-n.z
+        end
+        for i=2,#points-1 do for _,p in ipairs({points[1],points[i],points[i+1]}) do
+            vertex(b,{x+p[1],y+p[2],z+p[3]},{n.x,n.y,n.z},color)
+        end end
+    end
+    for axis=1,3 do
+        local j,k=axis%3+1,(axis+1)%3+1
+        for _,s in ipairs({-1,1}) do
+            local pts={}
+            for _,q in ipairs({{-1,-1},{1,-1},{1,1},{-1,1}}) do
+                local p={0,0,0};p[axis]=s*half[axis];p[j]=q[1]*(half[j]-r);p[k]=q[2]*(half[k]-r);pts[#pts+1]=p
+            end
+            face(pts)
+        end
+        for _,sj in ipairs({-1,1}) do for _,sk in ipairs({-1,1}) do
+            local pts={}
+            for _,q in ipairs({{-1,0},{1,0},{1,1},{-1,1}}) do
+                local p={0,0,0};p[axis]=q[1]*(half[axis]-r)
+                p[j]=sj*(half[j]-(q[2]==0 and 0 or r));p[k]=sk*(half[k]-(q[2]==0 and r or 0));pts[#pts+1]=p
+            end
+            face(pts)
+        end end
+    end
+    for _,sx in ipairs({-1,1}) do for _,sy in ipairs({-1,1}) do for _,sz in ipairs({-1,1}) do
+        local pts={};local signs={sx,sy,sz}
+        for axis=1,3 do
+            local p={};for j=1,3 do p[j]=signs[j]*(half[j]-(axis==j and 0 or r)) end;pts[#pts+1]=p
+        end
+        face(pts)
+    end end end
+end
+
+M.part_names={"body","magazine","bolt","charge","trigger","selector","reticle","flash"}
 function M.weapon(id)
     local pistol=id=="pistol"
     local smg=id=="smg"
@@ -79,7 +142,7 @@ function M.weapon(id)
     local muzzle=pistol and -.153 or smg and -.330 or -.502
     local sight=pistol and .070 or smg and .123 or .142
     local parts={}
-    for _,name in ipairs({"body","magazine","bolt","charge","left_hand","right_hand","reticle","flash"}) do parts[name]=M.batch() end
+    for _,name in ipairs(M.part_names) do parts[name]=M.batch() end
     local b=parts.body
     if pistol then
         M.box(b,0,.003,-.04,.029,.045,.15,"polymer")
@@ -87,7 +150,7 @@ function M.weapon(id)
         M.box(b,0,-.031,-.038,.029,.008,.047,"dark")
         M.box(b,0,-.016,-.061,.029,.034,.008,"polymer")
         M.tube(b,0,bore,muzzle+.026,.007,.0045,.052,"steel")
-        M.box(parts.bolt,0,bore,-.055,.031,.031,.183,"steel")
+        M.bevel(parts.bolt,0,bore,-.0395,.0262,.0248,.183,.002,"metal")
         for i=0,6 do M.box(parts.bolt,0,bore+.016,.015-i*.004,.032,.002,.0018,"dark") end
         -- Open reflex hood so ADS has a genuine sight picture.
         M.box(parts.bolt,0,sight-.015,.012,.029,.005,.018,"dark")
@@ -101,19 +164,26 @@ function M.weapon(id)
     else
         local fore=smg and -.200 or -.290
         local fore_len=smg and .125 or .235
-        M.tube(b,0,bore,-.045,.023,0,.185,"metal")
-        M.box(b,0,bore-.025,-.036,.043,.045,.133,"metal")
+        M.tube(b,0,bore,-.045,smg and .0158 or .0192,0,smg and .174 or .198,"metal")
+        M.bevel(b,0,bore-.025,-.036,smg and .027 or .0245,.045,.133,.003,"metal")
         M.box(b,0,-.031,.021,.031,.10,.045,"polymer",-.30)
         M.box(b,0,-.007,-.032,.032,.007,.052,"dark")
         M.box(b,0,.006,-.061,.032,.028,.008,"metal")
-        M.tube(b,0,bore,fore,.028,.020,fore_len,"polymer",12)
+        -- Open handguard: chassis rings, longitudinal panels and separated
+        -- rail teeth leave real ventilation slots instead of painted holes.
+        for i=0,4 do M.tube(b,0,bore,fore+fore_len*(i/4-.5),smg and .022 or .027,.018,.008,"metal",12) end
+        for _,s in ipairs({-1,1}) do
+            M.bevel(b,s*.021,bore-.009,fore,.012,.018,fore_len,.003,"polymer")
+            M.bevel(b,s*.017,bore+.018,fore,.014,.012,fore_len,.002,"metal")
+        end
+        M.bevel(b,0,bore-.024,fore,.028,.009,fore_len,.002,"polymer")
         M.tube(b,0,bore,(fore-fore_len/2+muzzle)/2,.009,.0045,fore-fore_len/2-muzzle,"steel")
         M.tube(b,0,bore,muzzle+.013,.013,.006,.026,"dark")
         for i=0,5 do
             M.box(b,.028,bore,fore+fore_len*.42-i*fore_len/6,.003,.013,.015,"dark")
             M.box(b,-.028,bore,fore+fore_len*.42-i*fore_len/6,.003,.013,.015,"dark")
         end
-        M.box(b,0,bore+.027,-.095,.036,.008,.235,"steel")
+        M.bevel(b,0,bore+.027,-.095,.030,.008,.235,.001,"metal")
         for i=0,21 do M.box(b,0,bore+.033,.017-i*.010,.040,.004,.004,"dark") end
         M.tube(b,0,bore,.11,.015,0,.15,"metal")
         if smg then
@@ -126,18 +196,57 @@ function M.weapon(id)
         M.tube(b,0,sight,-.020,smg and .015 or .017,smg and .012 or .014,smg and .044 or .052,"dark",24)
         M.box(parts.reticle,0,sight,-.046,.001,.001,.001,"red")
         M.box(parts.charge,0,bore+.017,.068,.057,.008,.015,"steel")
-        M.box(parts.bolt,.021,bore,-.018,.006,.019,.06,"steel")
         M.box(b,.024,bore,-.020,.003,.026,.075,"dark")
+        M.bevel(parts.bolt,.027,bore,-.018,.004,.015,.05,.001,"steel")
         local mw=smg and .024 or .030
         local mh=smg and .162 or .182
         M.box(parts.magazine,0,-.035,-.075,mw,mh,smg and .037 or .065,smg and "polymer" or "steel",.13)
         for i=0,3 do M.box(parts.magazine,mw/2+.001,-.035,-.100+i*.016,.002,mh*.85,.004,"dark",.13) end
         M.box(parts.magazine,0,-.13,-.087,mw+.007,.010,smg and .046 or .075,"dark")
     end
-    hand(parts.left_hand,true);hand(parts.right_hand,false)
+    -- Distinct attachments and controls; all dimensions remain in metres.
+    if pistol then
+        for _,s in ipairs({-1,1}) do
+            for i=0,7 do M.box(parts.bolt,s*.0135,bore,.027-i*.004,.001,.018,.0016,"dark") end
+            M.bevel(b,s*.014,-.038,.020,.003,.070,.030,.001,"dark")
+        end
+        M.bevel(parts.bolt,.014,bore+.001,-.008,.003,.010,.026,.001,"steel") -- extractor
+        M.box(b,0,.006,-.075,.028,.004,.042,"metal") -- accessory rail
+        M.bevel(b,-.016,.008,.008,.004,.008,.020,.001,"metal") -- slide stop
+        M.box(parts.selector,0,-.012,-.013,.002,.015,.003,"steel") -- trigger safety
+    else
+        M.bevel(b,0,bore-.011,.166,.040,.066,.105,.008,"polymer")
+        M.bevel(b,0,bore-.032,.235,.043,.104,.016,.004,"dark")
+        for i=0,4 do M.box(b,0,bore-.032+i*.014-.028,.244,.040,.002,.002,"polymer") end
+        for _,s in ipairs({-1,1}) do
+            M.bevel(b,s*.024,bore-.027,-.026,.006,.013,.020,.001,"steel")
+            for _,z in ipairs({.038,-.092}) do M.bevel(b,s*.023,bore-.017,z,.004,.008,.008,.001,"steel") end
+        end
+        M.bevel(b,0,bore+.042,-.105,.034,.008,.018,.001,"dark") -- folded rear sight
+        M.bevel(b,0,bore+.038,smg and -.254 or -.38,.022,.014,.026,.002,"metal")
+        M.bevel(b,.025,sight,-.020,.013,.018,.018,.002,"metal") -- optic adjustment
+        if smg then
+            M.bevel(b,0,-.002,-.21,.028,.10,.032,.004,"polymer") -- vertical foregrip
+            for i=0,4 do M.box(b,0,-.034+i*.013,-.228,.029,.003,.003,"dark") end
+        else
+            M.bevel(b,.028,bore-.010,-.037,.010,.008,.070,.001,"metal") -- dust cover
+            M.tube(b,0,bore,muzzle+.043,.012,.009,.022,"metal",12)
+        end
+        M.bevel(parts.selector,-.027,bore-.025,.020,.007,.009,.021,.002,"steel")
+    end
+    M.bevel(parts.trigger,0,-.019,-.030,.006,.026,.005,.001,"steel")
     M.quad(parts.flash)
     return {parts=parts,muzzle={0,bore,muzzle},sight={0,sight,pistol and .012 or .006},
-        left=pistol and {-.025,-.024,-.025} or {-.016,.006,smg and -.20 or -.28},right={.014,-.040,.024},
-        magazine=pistol and {0,-.08,.02} or {0,-.09,-.075}}
+        reticle={0,sight,pistol and .006 or -.046},
+        left=pistol and {-.03,-.012,.076} or smg and {-.056,.015,-.153} or {-.1,.0734,-.2098},
+        right=pistol and {.028,.003,.07} or smg and {.024,.028,.064} or {.0251,.06,.1223},
+        left_finger=pistol and {.34,-.28,-.9} or smg and {.45,.05,-.89} or {.8977,-.3267,-.2955},
+        left_back=pistol and {.15,.93,-.33} or smg and {-.88,-.05,-.45} or {-.2784,-.7648,.581},
+        right_finger=pistol and {0,-.315,-.949} or smg and {-.05,-.4,-.915} or {.05,-.55,-.833},
+        right_back=pistol and {.98,0,-.2} or smg and {.97,-.05,-.22} or {1,.03,.04},
+        grip=pistol and "cup" or smg and "wrap" or "clamp",
+        magazine=pistol and {0,-.08,.02} or {0,-.09,-.075},
+        charge=pistol and {-.027,.060,.013} or {-.025,bore+.017,.068},
+        trigger={0,-.006,-.030},selector=pistol and {0,-.006,-.013} or {-.027,bore-.025,.020}}
 end
 return M

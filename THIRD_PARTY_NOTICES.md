@@ -1,5 +1,12 @@
 # Third-party notices
 
+The weapon dimensions, arm lengths, grip frames, finger curls and animation
+tuning in `game/weapons/geometry.lua`, `arms.lua`, `motion.lua` and `clips.lua`
+adapt Claude-of-Duty's `src/weapons/models/*.js`, `hands.js`, `viewmodel.js` and
+`clips.js` under the licence below. The bounded Lua recipes, rigid-joint arm
+shader, fixed-tick motion, exact ADS constraint and connected-wrist IK are
+Defold adaptations.
+
 `render/agx.glsl` adapts the neutral AgX implementation in
 Claude-of-Duty's `src/render/glsl.js`, also used by the Kaigen reference.
 

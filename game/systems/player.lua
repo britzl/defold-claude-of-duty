@@ -43,6 +43,7 @@ function M.reset(ctx, point, yaw)
     player.previous_lean = 0
     player.footstep_distance = 0
     camera.reset(player.camera)
+    if ctx.weapons then ctx.weapons.motion=require("game.weapons.motion").new() end
     player.camera_disabled = false
     -- Reset must also place the displayed eye when a paused frame skips update.
     camera.compose(ctx, 1, ctx.presentation)

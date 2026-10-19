@@ -6,6 +6,7 @@ local events = require "game.events"
 local rng = require "game.rng"
 local camera = require "game.player.camera"
 local player_tuning = require "game.player.tuning"
+local view_motion = require "game.weapons.motion"
 local M = {}
 local ids={"rifle","smg","pistol"}
 
@@ -22,11 +23,15 @@ local function pattern(def)
     end
     return out
 end
+local function transition(w)
+    if w.clip then w.clip_transition={name=w.clip,progress=w.clip_time/w.clip_duration,age=0} end
+end
 local function play(w,name)
     w.clip=name;w.clip_time=0;w.clip_duration=clips.duration(name,defs[w.equipped]);w.beat=1
 end
 local function cancel(ctx)
     local w=ctx.weapons
+    transition(w)
     if w.clip=="reloadTac" or w.clip=="reloadEmpty" then
         events.emit(ctx.events,events.WEAPON_RELOAD,{weapon=w.equipped,phase="cancel"})
     end
@@ -37,7 +42,7 @@ function M.init(ctx)
         cooldown=0,burst=0,burst_cooldown=0,since_shot=10,shot_index=0,ads=0,previous_ads=0,
         spread=defs.rifle.spreadHip,random=rng.new(ctx.world.seed,"weapons"),shells={},
         recoil={pitch=V.spring(),yaw=V.spring(),back=V.spring(),up=V.spring(),roll=V.spring()},
-        previous_recoil={},dry=0,flash=0}
+        previous_recoil={},dry=0,flash=0,motion=view_motion.new()}
     ctx.weapons=w
     for _,id in ipairs(ids) do
         local d=defs[id]
@@ -81,6 +86,7 @@ local function advance_clip(ctx,dt)
     if w.clip_time+1e-9>=w.clip_duration then
         if w.clip=="holster" and w.switch_to then
             w.equipped=w.switch_to;w.switch_to=nil;w.shot_index=0;w.spread=defs[w.equipped].spreadHip
+            w.clip_transition=nil
             w.cooldown=0;w.burst_cooldown=0;play(w,"draw")
         else w.clip=nil;w.clip_time=0 end
     end
@@ -94,6 +100,7 @@ local function fire(ctx)
         events.emit(ctx.events,events.WEAPON_DRY,{weapon=w.equipped})
         return false
     end
+    if w.clip=="inspect" then transition(w) end
     w.clip=nil;w.clip_time=0
     s.chambered=s.mag>0
     if s.chambered then s.mag=s.mag-1 end
@@ -124,6 +131,12 @@ local function fire(ctx)
 end
 function M.fixed_update(ctx,dt)
     local w=ctx.weapons
+    w.previous_clip,w.previous_clip_time=w.clip,w.clip_time
+    w.previous_since_shot=w.since_shot
+    if w.clip_transition then
+        w.clip_transition.age=w.clip_transition.age+dt
+        if w.clip_transition.age>=.12 then w.clip_transition=nil end
+    end
     local b,intent=ctx.input.buttons,w.intent
     local live=ctx.player.actor.alive and ctx.player.enabled
     intent.fire=live and (b.fire.held or b.fire.pressed)
@@ -196,6 +209,7 @@ function M.fixed_update(ctx,dt)
             events.emit(ctx.events,events.WEAPON_SHELL,shell);table.remove(w.shells,i)
         end
     end
+    view_motion.update(ctx,dt,d)
     ballistics.update(ctx,w.sim,dt,ctx.services.bullets)
 end
 function M.snapshot(ctx)

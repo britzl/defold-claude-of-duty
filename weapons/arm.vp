@@ -1,0 +1,27 @@
+attribute highp vec3 position;
+attribute mediump vec3 normal;
+attribute mediump vec4 color;
+attribute highp float joint;
+uniform highp mat4 arm_palette[17];
+uniform highp mat4 world_view_proj;
+uniform highp mat4 world;
+uniform highp mat4 lighting_transform;
+varying highp vec3 var_world;
+varying mediump vec3 var_normal;
+varying mediump vec4 var_color;
+varying highp vec3 var_local;
+varying highp vec3 var_surface_normal;
+void main() {
+    mat4 skin = arm_palette[int(joint)];
+    vec4 p = skin * vec4(position, 1.0);
+    // Sleeves may lengthen slightly on extreme poses; inverse scale keeps
+    // their normal directions correct without a GLSL inverse() requirement.
+    mat3 basis = mat3(skin);
+    vec3 n = basis * (normal / vec3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2])));
+    gl_Position = world_view_proj * p;
+    var_world = (lighting_transform * world * p).xyz;
+    var_normal = normalize((lighting_transform * world * vec4(n, 0.0)).xyz);
+    var_color = color;
+    var_local = position;
+    var_surface_normal = normal;
+}

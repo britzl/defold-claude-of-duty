@@ -177,6 +177,9 @@ function init(self)
     if sys.get_config_int("traversal_validation.enabled",0)==1 then
         self.traversal_validation=require("tests.traversal_scenario").new()
     end
+    if sys.get_config_int("viewmodel_validation.enabled",0)==1 then
+        self.viewmodel_validation=require("tests.viewmodel_scenario").new()
+    end
     if sys.get_config_int("health_validation.enabled",0)==1 then
         self.health_validation=require("tests.health_scenario").new()
     end
@@ -503,6 +506,7 @@ function update(self, dt)
     end
     if self.market_validation then require("tests.market_browser").update(self.market_validation,self,dt) end
     if self.traversal_validation then require("tests.traversal_scenario").update(self.traversal_validation,self,dt) end
+    if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)

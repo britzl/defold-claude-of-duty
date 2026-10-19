@@ -3,19 +3,26 @@ local pose = require "game.weapons.viewmodel"
 local trace = require "game.weapons.trace"
 local V = require "game.weapons.math"
 local events = require "game.events"
+local arms = require "game.weapons.arms"
 local M = {}
 local POSITION,NORMAL,COLOR=hash("position"),hash("normal"),hash("color")
 local GROUPS={hash("world"),hash("enemy")}
 local function vector(p) return vmath.vector3(p[1],p[2],p[3]) end
 local function rotation(r) return vmath.quat_rotation_y(r[2])*vmath.quat_rotation_x(r[1])*vmath.quat_rotation_z(r[3]) end
 local function upload(adapter,batch,factory_url)
-    local data=buffer.create(batch.vertex_count,{
+    local declarations={
         {name=POSITION,type=buffer.VALUE_TYPE_FLOAT32,count=3},
         {name=NORMAL,type=buffer.VALUE_TYPE_FLOAT32,count=3},
-        {name=COLOR,type=buffer.VALUE_TYPE_FLOAT32,count=4}})
+        {name=COLOR,type=buffer.VALUE_TYPE_FLOAT32,count=4}}
+    if batch.joints then declarations[#declarations+1]={name=hash("joint"),type=buffer.VALUE_TYPE_FLOAT32,count=1} end
+    local data=buffer.create(batch.vertex_count,declarations)
     local p,n,c=buffer.get_stream(data,POSITION),buffer.get_stream(data,NORMAL),buffer.get_stream(data,COLOR)
     for i=1,#batch.positions do p[i]=batch.positions[i];n[i]=batch.normals[i] end
     for i=1,#batch.colors do c[i]=batch.colors[i] end
+    if batch.joints then
+        local joints=buffer.get_stream(data,hash("joint"))
+        for i,v in ipairs(batch.joints) do joints[i]=v end
+    end
     buffer.set_metadata(data,"AABB",batch.bounds,buffer.VALUE_TYPE_FLOAT32)
     local id=factory.create(factory_url)
     local path=resource.create_buffer("/generated/weapon_"..hash_to_hex(id)..".bufferc",{buffer=data})
@@ -32,16 +39,21 @@ local function visible(part,enabled)
     end
 end
 function M.new(ctx,mesh_factory,effect_factory)
-    local a={models={},objects={},buffers={},effects={},effect_cursor=0,vertices=0}
+    local a={models={},objects={},buffers={},effects={},effect_cursor=0,vertices=0,arms={}}
     for _,id in ipairs({"rifle","smg","pistol"}) do
         local model=geometry.weapon(id)
         a.models[id]=model
-        for _,name in ipairs({"body","magazine","bolt","charge","left_hand","right_hand","reticle","flash"}) do
+        for _,name in ipairs(geometry.part_names) do
             model.parts[name]=upload(a,model.parts[name],name=="flash" and "#weapon_flash" or mesh_factory)
             visible(model.parts[name],false)
         end
         go.set_scale(.14,model.parts.flash.id)
         go.set(model.parts.reticle.url,"tint",vmath.vector4(1,1,1,1))
+    end
+    for _,side in ipairs({"left","right"}) do
+        a.arms[side]=upload(a,arms.geometry(side=="left" and -1 or 1),"#weapon_arm")
+        a.arms[side].palette={}
+        visible(a.arms[side],false)
     end
     -- Fixed resource budget for short-lived surface particles, tracers and cases.
     local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,0})
@@ -103,10 +115,23 @@ function M.update(a,ctx,dt,shown,capture_pose,capture_weapon,capture_flash)
             visible(part,enabled)
             if enabled then
                 go.set_position(root+vmath.rotate(q,vector(part_pose.position)),part.id)
-                go.set_rotation(q,part.id)
+                go.set_rotation(q*rotation(part_pose.rotation),part.id)
             end
         end
     end
+    for side,part in pairs(a.arms) do
+        visible(part,shown)
+        if shown then
+            for i,t in ipairs(sample.arms[side]) do
+                local m=part.palette[i] or vmath.matrix4();part.palette[i]=m
+                m.m00,m.m01,m.m02,m.m03=t[1],t[2],t[3],t[4]
+                m.m10,m.m11,m.m12,m.m13=t[5],t[6],t[7],t[8]
+                m.m20,m.m21,m.m22,m.m23=t[9],t[10],t[11],t[12]
+            end
+            go.set(part.url,"arm_palette",part.palette)
+        end
+    end
+    a.sample=sample
     for _,e in ipairs(a.effects) do
         if capture_pose then visible(e,false)
         elseif e.life>0 then

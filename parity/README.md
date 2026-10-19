@@ -26,6 +26,20 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Weapon animation increment — 2026-10-19
+
+Step 7 adds generated weapon detail, shared 17-joint arms with body-fixed shoulder
+IK, articulated grips, reload/charge hand tracks and fixed-tick lag/sway/stride
+motion. Full ADS and the collimated dot remain on the camera axis. The shared
+native/release-WebGL fixture passes 19 checks with 19 captures per backend;
+ammunition timing and interrupted empty reloads retain their production owner.
+The 268-check Lua matrix includes frame-rate equivalence and singular IK cases.
+Seven Three.js hip/ADS/indoor still requests are available for review. Reduced
+mesh detail, bounded sleeve length correction, different lighting/materials and
+unqualified reference/Kaigen motion remain documented adaptations and gates.
+The refreshed source lock carries no stale capture receipts. These checks do
+not establish exact visual parity or sustained performance.
+
 ## Player health increment — 2026-10-19
 
 Step 6 implements delayed/ramped regeneration, fall damage, projectile/hit/blast

@@ -38,6 +38,74 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Weapons and first-person animation (2026-10-19)
+
+Step 7 adds generated arm meshes with **17 joints per arm**, body-fixed shoulders,
+two-bone IK and jointed gloved fingers. The same two meshes serve all three weapons.
+The rifle support hand wraps its handguard, the SMG uses its vertical foregrip,
+and the pistol support hand cups the firing hand. Reloads visit the magazine,
+withdraw below the frame, seat the replacement and operate the charging handle
+or pistol slide. The firing index finger and trigger move together; selectors
+follow the selected fire mode. Inspection, draw and holster have support-hand tracks.
+
+Weapon recipes now include chamfered receivers and controls, open handguard
+vents, rail teeth, stock pads, optic adjustment housings, folded sights, slide
+serrations and an extractor. These remain bounded procedural approximations of
+the source models, with visibly lower tessellation and detail density.
+
+Camera-follow springs, layered idle sway, breathing, landing response and
+figure-eight bob advance at 120 Hz. Bob follows actual footfall distance, so
+pushing into a wall does not keep cycling it. Sprint/low-ready blend smoothly;
+rendering interpolates fixed state without advancing animation. Pause freezes
+both pose and reload time, inspection cameras/death stop the motion layer, and
+teleports/restart clear follow history. A 120 ms outgoing-pose blend softens
+inspection firing and reload-to-holster interruptions without delaying gameplay.
+
+ADS now solves translation **after rotation and additive motion**. At full aim,
+the sight remains on the camera axis at the weapon's eye relief. The collimated
+dot projects that axis onto the optic plane; it does not drift with camera-follow
+lag. The pistol dot is hidden while its slide is cycling or locked back. Existing
+ammo ownership and the 81%/71% magazine transfers and 91.7% chamber beat are unchanged.
+
+Arms use the existing weapon material/lighting functions and independent
+viewmodel depth and AA pass. No render targets, atlas allocations or native
+extensions were added. Weapons total **19,446 vertices** across 24 parts; the two
+shared arms add **15,096 vertices** and 34 joint matrices in two palette uploads
+per displayed frame. Combined vertex streams are **1,442,064 bytes** before engine
+overhead. Including the unchanged 24 effect slots, the adapter owns 50 objects,
+50 buffers and 35,406 vertices. The active viewmodel gains two draw calls. The
+IK keeps wrists connected by allowing limited sleeve length correction on
+extreme reload poses (maximum 1.162× in the sampled clip matrix). Normal hip/ADS
+grips and all authored clips are checked for finite, connected joints.
+
+Validation commands:
+
+```sh
+lua tests/viewmodel_test.lua
+lua tests/weapons_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/viewmodel_smoke.py
+# Requires Pillow:
+PYTHONPATH=automation-bridge-python python3 tests/viewmodel_render_smoke.py
+# Build release wasm-web with tests/viewmodel_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_viewmodel_browser.mjs --bundle=/path/to/bundle
+```
+
+All 268 standalone checks across 29 suites passed, plus the 12 baseline-tool
+checks. The shared fixture passed 19 checks and saved 19 captures on each of
+Mac Metal and release Chrome WebGL2/ANGLE Metal. Seven native frozen views repeat
+exactly; arm-material, indoor-lighting and weapon-AA toggles change the expected
+pixels and restore exactly. The unit matrix covers geometry/winding, singular IK cases, connected joints,
+ADS/dot alignment under motion, magazine/hand attachment, stride/lag, interruption,
+pause and 30/60/144 FPS equivalence. Native and browser fixtures use production
+input, firing, reload and switching code and capture hip/ADS/fire/reload/charge/
+inspect for all three weapons plus an indoor view. Results are under
+`build/viewmodel-unit-validation`, `build/viewmodel-native-validation`,
+`build/viewmodel-browser-validation` and `build/viewmodel-render-validation`.
+Seven matching Three.js stills are in `build/viewmodel-threejs-validation`.
+They support visual review; differing lighting/materials, reduced geometry,
+controlled reference motion, Kaigen comparison and sustained performance remain
+qualification work. No exact cross-engine appearance or performance claim is made.
+
 ## Player health and suppression (2026-10-19)
 
 Player health now recovers after **4.6 seconds** without damage, ramping over
@@ -509,6 +577,7 @@ lua tests/vault_test.lua
 lua tests/camera_test.lua
 lua tests/health_test.lua
 lua tests/weapons_test.lua
+lua tests/viewmodel_test.lua
 lua tests/ai_test.lua
 lua tests/navigation_test.lua
 lua tests/squads_test.lua
@@ -1019,10 +1088,11 @@ five-second lifetime. Future actor colliders can join the query registry with
 `actor` and optional `headshot` metadata; the firing-range targets exercise it.
 
 `geometry.lua` generates all three models during loading using merged primitive
-recipes and source-scale attachment points. These are simplified models, not
-full copies of every reference mesh detail. The three weapons contain 11,568
-vertices across 24 independently transformable parts, including hands, reticles
-and muzzle flashes (462,720 bytes of vertex streams before resource overhead).
+recipes and source-scale attachment points. The three weapons contain 19,446
+vertices across 24 independently transformable parts. Two shared, generated arm
+meshes add 15,096 vertices with articulated gloves, fingers and two-bone IK.
+Together their vertex streams occupy 1,442,064 bytes before resource overhead.
+See the step-7 section above for motion, hand tracks and visual qualification limits.
 Twenty-four pooled effect meshes provide short-lived impact particles, cases and
 tracers; they have no debris physics. All generated buffers and game objects are
 released on teardown. Surface audio routing now selects generated impact samples;
@@ -1033,15 +1103,17 @@ colour target with a separate depth attachment. Its lighting coordinates are
 transformed through the world camera, so the same sun, shadows, environment and
 room light illuminate the weapon and world. The weapon receives no world fog or
 world bloom; both layers go through one exposure and tone-mapping function before
-GUI. The reticle appears only in ADS. Weapon vertex alpha stores metalness while
-the shader writes opaque coverage. Temporal effects remain later work.
+GUI. The reticle appears only in ADS. Weapon vertex alpha selects the combat
+surface family while the shader writes opaque coverage. World temporal AA and
+independent spatial weapon AA are implemented; arms share the latter.
 
-The 18 weapon Lua tests cover timing, inputs, reload interruptions, deterministic
+The 19 weapon Lua tests cover timing, inputs, reload interruptions, deterministic
 spread/recoil, geometry bounds/winding and continuous collision/penetration.
 The native weapon suite uses real input bindings, fixed ticks and Bullet targets,
 checks damage through wood versus concrete and at a muzzle-obstructing wall,
 and captures hip/ADS/reload/inspection views. Native validation targets
-macOS/Metal; full browser/mobile weapon-suite validation remains outstanding.
+macOS/Metal. The step-7 fixture additionally covers the animation/ammunition
+matrix on release WebGL; physical mobile qualification remains outstanding.
 
 ## Framework contract
 
