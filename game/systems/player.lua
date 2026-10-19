@@ -5,6 +5,8 @@ local events = require "game.events"
 local driver = require "game.player.driver"
 local lean = require "game.player.lean"
 local camera = require "game.player.camera"
+local health = require "game.player.health"
+local health_tuning = require "game.player.health_tuning"
 local M = {}
 
 function M.camera_impulse(ctx, kind, strength, direction)
@@ -16,7 +18,7 @@ end
 function M.init(ctx)
     local spawn = ctx.world.spawn
     ctx.player = {
-        actor = combat.register(ctx.combat, "player", ctx.config.player_health),
+        actor = combat.register(ctx.combat, "player", ctx.config.player_health, health_tuning.regeneration),
         previous = { x = spawn.x, y = spawn.y, z = spawn.z },
         position = { x = spawn.x, y = spawn.y, z = spawn.z },
         intent = { move_x = 0, move_z = 0, look_x = 0, look_y = 0 },
@@ -26,14 +28,9 @@ function M.init(ctx)
     }
     ctx.player.motion = capsule.new(ctx.player.position)
     ctx.player.camera = camera.new()
+    health.init(ctx)
     events.on(ctx.events, events.CAMERA_IMPULSE, ctx.player, function(_, cue)
         M.camera_impulse(ctx, cue.kind, cue.strength, cue.direction)
-    end)
-    events.on(ctx.events, events.DAMAGE_TAKEN, ctx.player, function(_, hit)
-        local source = ctx.ai and ctx.ai.actors[hit.source]
-        local p, at = ctx.player.position, source and source.position
-        M.camera_impulse(ctx, "damage", math.min(1, hit.amount/35),
-            at and {x=at.x-p.x, y=at.y-p.y, z=at.z-p.z} or nil)
     end)
 end
 
@@ -64,6 +61,7 @@ function M.fixed_update(ctx, dt)
     local alive = player.actor.alive and player.enabled
     if not alive and not player.camera_disabled then camera.reset(player.camera) end
     player.camera_disabled = not alive
+    health.fixed_update(ctx, dt)
     intent.enabled = alive
     intent.move_x = alive and (ctx.input.move_x + (buttons.right.held and 1 or 0) - (buttons.left.held and 1 or 0)) or 0
     intent.move_z = alive and (ctx.input.move_z + (buttons.back.held and 1 or 0) - (buttons.forward.held and 1 or 0)) or 0
@@ -91,6 +89,10 @@ function M.fixed_update(ctx, dt)
     end
     if motion.landed then
         if alive then camera.land(player.camera, motion.impact_speed) end
+        if alive and motion.impact_speed > health_tuning.fall_speed then
+            combat.request(ctx.combat,{target="player",kind="fall",
+                amount=(motion.impact_speed-health_tuning.fall_speed)*health_tuning.fall_damage_per_speed})
+        end
         events.emit(ctx.events, events.PLAYER_LAND, { velocity = motion.impact_speed, surface = motion.surface })
         player.footstep_distance = 0
         player.camera.phase = 0

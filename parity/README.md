@@ -26,6 +26,18 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Player health increment — 2026-10-19
+
+Step 6 implements delayed/ramped regeneration, fall damage, projectile/hit/blast
+suppression and low-health/recovery presentation. The shared 13-case fixture
+passes on Mac Metal and desktop Chrome WebGL2/ANGLE Metal; three pixel gates per
+backend verify colour loss and restoration. The reference timing is retained;
+projectile ownership/visibility and the existing pre-AgX composite are documented
+adaptations. Explosion damage and heartbeat audio remain their later steps.
+The source lock is refreshed without stale capture receipts. These gameplay and
+visual smoke checks do not claim controlled reference or sustained-performance
+parity. Commands and evidence directories are in the repository README.
+
 ## Traversal and camera increment — 2026-10-17
 
 Step 5 implements thin-obstacle vaulting, the reference camera motion families,

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "claude-of-duty-parity-v1",
-  "updated": "2026-10-17",
+  "updated": "2026-10-19",
   "scope": "Observable behavior and presentation in the local Three.js and Kaigen source snapshots; engine algorithms may differ.",
   "status_policy": "Existing test files are coverage, not proof of a current pass. Pending and unavailable evidence never pass a parity gate.",
   "reference_availability": {
@@ -325,7 +325,7 @@
         "tests/traversal_smoke.py",
         "tools/validate_traversal_browser.mjs"
       ],
-      "implementation_notes": "Fixed-tick, interpolated footfall bob, landing/step springs, angular kick residuals, strafe/turn banking, breathing, slide/mantle/vault offsets and movement/ADS FOV. Collision-limited eye and aim shared with firing; damage events and explicit suppression/explosion channels. Detection and gameplay for the latter remain in health/grenades. Controlled reference motion comparison is still open."
+      "implementation_notes": "Fixed-tick, interpolated footfall bob, landing/step springs, angular kick residuals, strafe/turn banking, breathing, slide/mantle/vault offsets and movement/ADS FOV. Collision-limited eye and aim shared with firing; damage events and explicit suppression/explosion channels. Player suppression detection is implemented by the health increment; grenade damage remains step 12. Controlled reference motion comparison is still open."
     },
     {
       "id": "health",
@@ -334,12 +334,18 @@
         "threejs:src/player/health.js",
         "kaigen:src/claude_of_duty/cod_player.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Take timed hits, wait for recovery, fall from known heights and receive near misses; repeat with pause and death.",
       "expect": "Delayed ramped regeneration, appropriate fall damage and suppression; no healing dead actors or duplicate damage.",
       "coverage": [
-        "tests/runtime_test.lua"
-      ]
+        "tests/runtime_test.lua",
+        "tests/health_test.lua",
+        "tests/health_scenario.lua",
+        "tests/health_smoke.py",
+        "tools/validate_health_browser.mjs",
+        "tests/health_pixels.mjs"
+      ],
+      "implementation_notes": "Fixed-tick 4.6 s regeneration delay, .55 s ramp to 34 HP/s, fall damage above 15 m/s at 7 HP/(m/s), real-segment/impact/hit suppression with cover and per-round maximum contributions, source-origin directional impulses, low-health desaturation/pulse and recovery/heartbeat events. Explosion notifications provide feedback only; grenade damage remains step 12, heartbeat audio step 15. Uses the existing composite before AgX and after temporal resolve, without exposure-meter feedback. Native/WebGL shared fixtures pass; controlled reference visual comparison remains open."
     },
     {
       "id": "weapons",

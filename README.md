@@ -38,6 +38,60 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Player health and suppression (2026-10-19)
+
+Player health now recovers after **4.6 seconds** without damage, ramping over
+**0.55 seconds** to **34 HP/s**. New hits restart the delay. Landings faster than
+**15 m/s** cause **7 HP** damage per additional m/s, once per landing, through
+the combat owner. Dead actors cannot heal.
+
+Hostile rounds passing within **3.2 m** of the eye, visible nearby impacts,
+hits and explosion events feed a bounded suppression pool. Segments, entry/exit
+impacts and hits from one round contribute only their strongest stimulus.
+Visibility checks start at the player's clear eye so rounds stopped inside a
+wall cannot suppress through it. Player-fired rounds are excluded. Firing
+origins are copied into damage notifications for camera/HUD direction.
+Suppression decays at **0.62/s** and strengthens camera sway/impulses.
+
+Below **36% health**, the scene gradually loses colour and gains a pulsing red
+rim; below **18%** the state is critical. The double heartbeat envelope speeds
+up from **1.05 to 2.05 Hz** with severity. The HUD displays `RECOVERING` during
+regeneration. The treatment uses the existing composite in exposed linear HDR
+before AgX, after temporal resolve; it adds no targets or draw passes and does
+not affect scene exposure metering. Damage/pulse/recovery timers use fixed
+simulation ticks. Pause, loading and inspection freeze progression; death stops
+heartbeat/suppression/recovery and holds the death treatment; restart clears it.
+
+`gameplay.snapshot.recovery` exposes health fraction, low/critical/regenerating
+flags, time since damage, suppression, effect, pulse, hit flash and heartbeat
+frequency. `player:health` and `player:heartbeat` notifications provide the
+state for later HUD/audio work. Heartbeat sound remains step 15. `explosion`
+notifications accept `{position, radius, token?}` for feedback; the grenade
+owner in step 12 will apply obstruction-aware damage separately.
+
+All **257 Lua checks in 28 suites** passed, plus 12 baseline-tool checks.
+The same **13 native/browser scenarios** cover recovery, pause, Bullet falls,
+real projectile near misses/hits, wall occlusion, explosions, death and restart.
+Each backend also passed three healthy/low-health/recovered pixel gates, with
+visually inspected captures. Native used Defold 1.14.0/Metal; browser used its
+release Wasm engine in Chrome WebGL2/ANGLE Metal. These establish implementation
+behavior, not controlled reference visuals, audio or sustained performance.
+
+```sh
+lua tests/health_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/health_smoke.py
+# Build a release wasm-web bundle with tests/health_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_health_browser.mjs --bundle=/path/to/bundle
+PNGJS_MODULE=/path/to/pngjs node tests/health_pixels.mjs build/health-native-validation
+PNGJS_MODULE=/path/to/pngjs node tests/health_pixels.mjs build/health-browser-validation
+```
+
+Reports and screenshots are under `build/health-native-validation` and
+`build/health-browser-validation`; standalone logs are under
+`build/health-unit-validation`. Browser bundling used the editor's Bob endpoint
+with `platform=wasm-web`, `architectures=wasm-web`, `variant=release`, `archive=true`,
+`settings=[tests/health_browser.project]`, and a separate `output` directory.
+
 ## Faster material-atlas loading (2026-10-17)
 
 Atlas baking now fills an **896-command budget** per loading update instead of
@@ -453,6 +507,7 @@ lua tests/world_test.lua
 lua tests/movement_test.lua
 lua tests/vault_test.lua
 lua tests/camera_test.lua
+lua tests/health_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua
 lua tests/navigation_test.lua

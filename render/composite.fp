@@ -9,6 +9,7 @@ uniform highp sampler2D exposure_texture;
 uniform highp sampler2D grade_texture;
 uniform highp vec4 photo; // grade, sharpen, vignette, grain
 uniform highp vec4 photo_screen; // inverse resolution, presentation seconds
+uniform highp vec4 health; // low-health weight, heartbeat, hit flash, reserved
 uniform highp vec4 post; // exposure, bloom strength, debug view, atlas half (0=all,1=lower,2=upper)
 #include "/render/radiance.glsl"
 #include "/render/agx.glsl"
@@ -107,6 +108,23 @@ void main() {
         vec2 delta=var_uv-.5;
         float falloff=pow(1.0/(1.0+dot(delta,delta)*2.4),2.0);
         hdr*=mix(1.0,falloff,photo.z);
+        // Linear, exposed HDR before AgX, after temporal resolve: damage cannot
+        // trail through history or drive the scene exposure meter. No extra RT.
+        if(health.x>.004 || health.z>.004) {
+            vec2 aspect=vec2(min(1.0,photo_screen.y/photo_screen.x),min(1.0,photo_screen.x/photo_screen.y));
+            float r=length(delta*aspect)*1.414;
+            float wide=smoothstep(.18,1.0,r),rim=smoothstep(.34,1.1,r);
+            float beat=health.x*(.32+.68*health.y);
+            float luma=photo_luma(hdr);
+            hdr=mix(hdr,vec3(luma)*vec3(.93,.97,1.06),clamp(health.x*(.74+.16*health.y),0.0,.94));
+            hdr*=1.0-wide*(.40+.28*beat)*health.x;
+            float k=rim*beat;
+            hdr*=mix(vec3(1.0),vec3(1.16,.26,.22),clamp(k*.98,0.0,1.0));
+            hdr+=vec3(.115,.008,.005)*k;
+            float flash=clamp(health.z*(.3+.7*smoothstep(.05,.95,r)),0.0,1.0);
+            hdr*=mix(vec3(1.0),vec3(1.3,.4,.34),flash);
+            hdr+=vec3(.16,.012,.008)*flash;
+        }
         vec3 colour=display_colour(agx_neutral(hdr));
         colour=mix(colour,grade(colour),photo.x);
         float dither=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));

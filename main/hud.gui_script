@@ -87,10 +87,10 @@ local function update_hud(self,state)
     if state.diagnostic~=previous.diagnostic then
         for _,group in ipairs({TL,TR,BL,BR,TOP,BOTTOM}) do gui.set_enabled(group.root,not state.diagnostic) end
     end
-    if state.health~=previous.health then
-        gui.set_text(self.health,string.format("HEALTH %d",math.ceil(state.health)))
-        gui.set_color(self.health,state.health<=30 and W.red or W.white)
-        gui.set_color(self.health_bar,state.health<=30 and W.red or W.accent)
+    if state.health~=previous.health or state.regenerating~=previous.regenerating then
+        gui.set_text(self.health,string.format("%s %d",state.regenerating and "RECOVERING" or "HEALTH",math.ceil(state.health)))
+        gui.set_color(self.health,state.low_health and W.red or W.white)
+        gui.set_color(self.health_bar,state.low_health and W.red or W.accent)
         gui.set_size(self.health_bar,vmath.vector3(math.max(.01,188*state.health/100),5,0))
     end
     if state.ammo~=previous.ammo then gui.set_text(self.ammo,state.ammo) end
@@ -113,7 +113,7 @@ local function update_hud(self,state)
             or "CLICK TO CAPTURE MOUSE  /  ESC MENU")
     end
     for _,node in ipairs(self.damage) do
-        gui.set_alpha(node,state.diagnostic and 0 or math.max(state.damage*.48,state.health>0 and state.health<=30 and .15 or 0))
+        gui.set_alpha(node,state.diagnostic and 0 or state.damage*.48)
     end
     for name,node in pairs(self.direction) do
         gui.set_enabled(node,state.damage_direction==name and state.damage>0 and state.alive and not state.diagnostic)

@@ -12,6 +12,8 @@ local M = {
     PLAYER_LAND = "player:land",
     PLAYER_FOOTSTEP = "player:footstep",
     PLAYER_STATE = "player:state",
+    PLAYER_HEALTH = "player:health",
+    PLAYER_HEARTBEAT = "player:heartbeat",
     CAMERA_IMPULSE = "camera:impulse",
     EXPLOSION = "explosion",
 }

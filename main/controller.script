@@ -5,6 +5,8 @@ local config = require "game.config"
 local world_adapter = require "game.world.defold"
 local capsule_queries = require "game.player.bullet"
 local player_system = require "game.systems.player"
+local player_health = require "game.player.health"
+local health_tuning = require "game.player.health_tuning"
 local driver = require "game.player.driver"
 local course = require "game.player.course"
 local weapon_system = require "game.systems.weapons"
@@ -65,7 +67,8 @@ local function restart_encounter(self)
     audio_system.reset(self.ctx)
     select_view(self,nil)
     combat.remove(self.ctx.combat,"player")
-    self.ctx.player.actor=combat.register(self.ctx.combat,"player",config.player_health)
+    self.ctx.player.actor=combat.register(self.ctx.combat,"player",config.player_health,health_tuning.regeneration)
+    player_health.reset(self.ctx)
     player_system.reset(self.ctx,self.ctx.world.spawn,0)
     weapon_system.init(self.ctx)
     combat_fx.reset(self.combat_visuals)
@@ -97,6 +100,7 @@ local function snapshot(ctx)
         frame = ctx.time.frame, frame_elapsed = ctx.time.frame_elapsed,
         fixed_dt = ctx.time.fixed_dt, alpha = ctx.time.alpha,
         health = ctx.player.actor.health, alive = ctx.player.actor.alive,
+        recovery = player_health.snapshot(ctx),
         move_x = ctx.player.intent.move_x, move_z = ctx.player.intent.move_z,
         physics = sys.get_config_string("physics.type"),
         gravity = sys.get_config_number("physics.gravity_y"),
@@ -172,6 +176,9 @@ function init(self)
     end
     if sys.get_config_int("traversal_validation.enabled",0)==1 then
         self.traversal_validation=require("tests.traversal_scenario").new()
+    end
+    if sys.get_config_int("health_validation.enabled",0)==1 then
+        self.health_validation=require("tests.health_scenario").new()
     end
     self.view = nil
     self.position = vmath.vector3()
@@ -496,6 +503,7 @@ function update(self, dt)
     end
     if self.market_validation then require("tests.market_browser").update(self.market_validation,self,dt) end
     if self.traversal_validation then require("tests.traversal_scenario").update(self.traversal_validation,self,dt) end
+    if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
     end
@@ -606,7 +614,9 @@ function late_update(self, dt)
     if profiler then profiler.scope_begin("late.render_state") end
     msg.post("@render:","renderer_photographic_state",{
         ads=self.capture and (self.capture.shot.weapon=="ads" and 1 or 0) or (visible and self.ctx.weapons.ads or 0),
-        paused=not self.capture and self.ctx.paused or false})
+        paused=not self.capture and self.ctx.paused or false,
+        health=not view and vmath.vector4(self.ctx.player.health_state.effect,
+            self.ctx.player.health_state.pulse,self.ctx.player.health_state.hit_flash,0) or vmath.vector4()})
     local active_flash=visible and weapon_pose.parts.flash.visible or false
     if self.weapon_flash_active~=active_flash then
         self.weapon_flash_active=active_flash

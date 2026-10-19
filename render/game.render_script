@@ -793,6 +793,7 @@ function update(self,dt)
         self.post_constants.photo=vmath.vector4(treatment and o.grade_strength or 0,treatment and o.temporal_aa and o.sharpen or 0,
             treatment and o.vignette or 0,treatment and o.grain or 0)
         self.post_constants.photo_screen=vmath.vector4(1/self.width,1/self.height,self.capture.active and 0 or self.grain_time,0)
+        self.post_constants.health=treatment and not self.capture.active and self.photo_state.health or vmath.vector4()
         self.post_constants.environment_debug=vmath.vector4(o.environment_level,0,0,0)
         local page=o.atlas_page-1
         self.post_constants.atlas_window=page<0 and vmath.vector4(0,0,1,1) or

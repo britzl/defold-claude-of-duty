@@ -8,7 +8,7 @@ function M.new() return {live={}, fired=0, impacts=0, exits=0, retired=0} end
 function M.spawn(sim, def, origin, direction, source, tracer)
     if #sim.live==MAX_LIVE then table.remove(sim.live,1);sim.retired=sim.retired+1 end
     sim.fired=sim.fired+1
-    local p={position=V.copy(origin), velocity=V.point({x=0,y=0,z=0},direction,def.muzzleVelocity),
+    local p={position=V.copy(origin), origin=V.copy(origin), velocity=V.point({x=0,y=0,z=0},direction,def.muzzleVelocity),
         damage=def.damage,power=def.penetration,initial_power=def.penetration,travelled=0,age=0,
         def=def,source=source or "player",tracer=tracer,inside={},hit_actors={},layers=0,alive=true,token={}}
     sim.live[#sim.live+1]=p
@@ -25,7 +25,7 @@ local function impact(ctx,sim,p,hit,point,exiting)
     if not exiting and hit.actor and not p.hit_actors[hit.actor] then
         p.hit_actors[hit.actor]=true
         combat.request(ctx.combat,{target=hit.actor,source=p.source,amount=damage(p)*(hit.headshot and 2 or 1)*(p.damage_scale or 1),
-            headshot=hit.headshot,point=V.copy(point)})
+            headshot=hit.headshot,point=V.copy(point),from=p.origin,kind="bullet",round=p.token})
     end
 end
 local function travel(p, length)

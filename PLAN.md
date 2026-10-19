@@ -1,6 +1,6 @@
 # Defold port implementation plan
 
-Created: 2026-10-13. Updated: 2026-10-17. Target engine: Defold 1.14.0.
+Created: 2026-10-13. Updated: 2026-10-19. Target engine: Defold 1.14.0.
 
 Implement a runtime-generated Defold port of Claude of Duty, with Lua gameplay systems and a custom render pipeline. Introduce a portable native extension only where measured geometry, animation or audio requirements justify it. The current acceptance platforms are Mac native and desktop browser, targeting 60 FPS (user decision, 2026-10-15). Keep input and graphics adaptable; physical mobile qualification is deferred outside the current gate.
 
@@ -8,7 +8,7 @@ The target is feature and presentation parity with the local Three.js and Kaigen
 
 ## Current status and scope
 
-The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
+The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families. Step 6 adds player regeneration, fall damage, suppression and low-health feedback; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
 
 **Status convention:** `[x]` means the stated implementation is complete in the current port; `[ ]` means work remains. Implementation completion does not imply full source fidelity, all-platform qualification or an agreed performance budget. The ordered backlog below is the current execution plan; the historical record at the end preserves earlier design and validation details.
 
@@ -116,20 +116,24 @@ The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json
 - [x] Add stride/footfall camera motion, landing dip/pitch/roll, strafe/turn banking, breathing and reference slide/mantle camera offsets.
 - [x] Match sprint/ADS FOV transitions and provide camera impulse channels for damage, suppression and explosions.
 
-**Implementation check:** Thin obstacles and deep ledges have distinct endpoints; all paths and landing clearance are checked before committing and rechecked during traversal. Camera bob follows actual footfall distance; landing, banking, breathing, slide/mantle/vault motion and FOV use reference tuning. The composed eye/aim is shared with firing and collision-limited after interpolation. Damage hooks and bounded suppression/explosion camera channels are present; detection/gameplay for the latter remain in steps 6 and 12.
+**Implementation check:** Thin obstacles and deep ledges have distinct endpoints; all paths and landing clearance are checked before committing and rechecked during traversal. Camera bob follows actual footfall distance; landing, banking, breathing, slide/mantle/vault motion and FOV use reference tuning. The composed eye/aim is shared with firing and collision-limited after interpolation. Damage hooks and bounded suppression/explosion camera channels are present; step 6 connects suppression detection/feedback, while grenade damage remains step 12.
 
 **Adaptations:** Preserve per-tick swept up/across/down traversal rather than the references' unchecked rooted curve; require Jump for deep ledges. Springs use analytic integration, shake uses deterministic sine components, and the mantle pitch settles before completion. Controlled cross-engine motion review and sustained performance remain steps 18–19.
 
 **2026-10-17 validation:** All 244 standalone checks across 27 suites passed, including vault rejection/interruption, camera pose equivalence at 30/60/144 presentation FPS, bounded impulses, firing alignment and pause/death/reset handling. The shared 13-scenario fixture passed on Mac Metal and Chrome WebGL2 / ANGLE Metal (release engine), including real Bullet vault/mantle paths, dynamic obstruction, pause/resume and applied camera FOV. Native and Wasm fixed-input traversal counters match, with endpoint differences below 0.03 mm. The existing native movement and feature suites also passed. Full-market regression passed all 16 player routes in both directions, 108 six-actor route queries, both E1 AI stair flights, the eastern AI circuit and eight inspection captures, with clean shutdown. The fixtures are implementation evidence, not controlled reference motion or sustained-performance qualification. Reports are in `build/traversal-unit-validation`, `build/traversal-native-validation` and `build/traversal-browser-validation`.
 
-### 6. Complete player health and suppression — PARTIAL
+### 6. Complete player health and suppression — IMPLEMENTED
 
 - [x] Centralized damage/death, health display, hit flash and basic damage direction.
-- [ ] Add delayed, ramped regeneration and fall damage through the existing health owner.
-- [ ] Add near-miss/hit/explosion suppression and directional camera impulses using step 5's channels.
-- [ ] Add low-health pulse/desaturation and recovery state for the HUD/audio work; ensure death, pause and restart reset or freeze it correctly.
+- [x] Add delayed, ramped regeneration and fall damage through the existing health owner.
+- [x] Add near-miss/hit/explosion suppression and directional camera impulses using step 5's channels.
+- [x] Add low-health pulse/desaturation and recovery state for the HUD/audio work; ensure death, pause and restart reset or freeze it correctly.
 
-**Completion check:** Repeatable damage, near-miss, fall and recovery scenarios match the reference timing, do not duplicate damage and cannot regenerate a dead actor.
+**Implementation check:** Combat owns the 4.6 s recovery delay, 0.55 s ramp to 34 HP/s and landing damage above 15 m/s at 7 HP per additional m/s. Real hostile projectile segments/impacts feed a bounded suppression pool with visibility checks and per-round maximum contributions, including hits. Shot origins drive camera/HUD direction. Low health provides smoothed desaturation, a double heartbeat pulse, hit flash and HUD recovery state. Pause/loading/inspection freeze progression; death stops recovery/heartbeat/suppression and freezes the death treatment; encounter restart clears all feedback.
+
+**Adaptations and remaining scope:** Suppression uses actual travelled projectile segments and explicit ownership instead of the reference impact-direction heuristic. Visibility rays start at the clear eye so endpoints inside solid cover cannot leak suppression. Explosion events supply feedback only; the future grenade owner applies obstruction-aware blast damage once (step 12). The existing composite applies the health treatment in exposed linear HDR before AgX and after temporal resolve, without extra render targets/passes or exposure-meter feedback. Heartbeat/health events are ready for step 15 audio; no heartbeat sound was added. Controlled reference visual comparison remains step 19.
+
+**2026-10-19 validation:** All 257 standalone Lua checks across 28 suites passed, plus 12 baseline-tool checks. The shared 13-scenario fixture passed on Mac Metal and Chrome WebGL2 / ANGLE Metal (release Wasm engine), using real Bullet falls, stopped rounds, near misses and player hits. It covers delayed/ramped/interrupted/full recovery, pause, death and restart. Three captures per backend show healthy, low-health and recovered states; three pixel gates per backend verify colour loss/restoration. Reports are in `build/health-unit-validation`, `build/health-native-validation` and `build/health-browser-validation`. No render targets, draw passes, atlas allocations or audio samples were added; sustained performance and cross-engine parity are not established by these fixtures.
 
 ### 7. Complete weapons and first-person animation — PARTIAL
 

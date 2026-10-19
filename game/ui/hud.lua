@@ -1,5 +1,6 @@
 -- Engine-independent presentation state. Notifications never apply damage.
 local events = require "game.events"
+local health = require "game.player.health"
 -- map_limit bounds visible GUI nodes, never the stored world geometry.
 local M = { feed_limit = 4, feed_seconds = 6, map_limit = 256, map_range = 22 }
 local function name(id)
@@ -21,7 +22,7 @@ function M.init(ctx)
     events.on(ctx.events, events.DAMAGE_TAKEN, ctx.hud, function(state, hit)
         state.damage = 1
         local source = ctx.ai.actors[hit.source]
-        local p = source and source.position
+        local p = hit.from or (source and source.position)
         state.source = p and { x = p.x, z = p.z } or false
     end)
 end
@@ -45,6 +46,7 @@ end
 
 function M.snapshot(ctx)
     local state, out = ctx.hud, ctx.presentation
+    local hp = health.snapshot(ctx)
     local lines = {}
     for i, entry in ipairs(state.feed) do lines[i] = entry.text end
     local direction = ""
@@ -58,7 +60,9 @@ function M.snapshot(ctx)
     return { feed = table.concat(lines, "\n"), feed_count = #lines, damage = state.damage,
         damage_direction = direction, headshot = state.headshot or false,
         heading = M.heading(out.yaw), x = out.position.x, y = out.position.y, z = out.position.z,
-        yaw = out.yaw, alive = ctx.player.actor.alive }
+        yaw = out.yaw, alive = ctx.player.actor.alive,
+        low_health=hp.low,critical=hp.critical,regenerating=hp.regenerating,
+        health_effect=hp.effect,health_pulse=hp.pulse,suppression=hp.suppression }
 end
 
 -- Clip a north-up, player-centred map to its square and the player's floor.

@@ -118,7 +118,8 @@ function M.update(ctx, dt)
     local B, move = C.breath, clamp01(speed/2.2)
     local health = clamp01(player.actor.health/player.actor.max_health)
     local amp = B.amplitude*(1+(B.ads_scale-1)*ads)*(1+(B.health_scale-1)*(1-health))
-        *(1+(B.suppression_scale-1)*rig.suppression)*(1-B.move_damp*move)
+        *(1+(B.suppression_scale-1)*math.max(rig.suppression,
+            player.health_state and player.health_state.suppression or 0))*(1-B.move_damp*move)
     rig.breath = (rig.breath+dt)%200 -- Both reference frequencies repeat after 200 seconds.
     local ba, bb = math.sin(rig.breath*2*math.pi*B.a), math.sin(rig.breath*2*math.pi*B.b+1.7)
     local my, mf, mp, mr = 0, 0, 0, 0

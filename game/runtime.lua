@@ -52,7 +52,7 @@ function M.fixed_update(ctx, dt)
     time.fixed_dt = dt
     -- Observe Defold's steps for presentation only. Never step Bullet ourselves.
     time.remainder = time.remainder - dt
-    combat.fixed_update(ctx)
+    combat.fixed_update(ctx, dt)
     for i, system in ipairs(systems) do
         if system.fixed_update then
             if profiler then profiler.scope_begin(fixed_scopes[i]) end
