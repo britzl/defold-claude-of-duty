@@ -38,6 +38,70 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Ballistics and regional damage (2026-10-19)
+
+Step 8 adds deterministic material deflection and reconciles damage with the
+references. Soldier hits now use **4× head, 1× chest, .9× lower torso, .65× arms
+and .7× legs**. Four new arm boxes follow the upper-arm and forearm bones. All
+11 volumes use the authoritative pose, and the first volume struck selects
+one damage application per actor per round. Damage/death events preserve
+`region` and `part`; the combat module remains the sole health owner.
+
+Each layer consumes `distance / material_depth` penetration power. Damage
+retention is `max(.05, 1 - material_loss * distance / entry_budget)`, where
+`entry_budget = material_depth * remaining_power_at_entry`. This replaces the
+previous exponential approximation. Loss accumulates across fixed ticks;
+overlapping solids consume power together and keep independent entry budgets.
+Weapon damage, velocity, drag, penetration, range and quadratic falloff tuning
+already matched the source and are retained. Falloff applies once using actual
+travelled distance, including penetration and bends.
+
+At an exit, two Gaussian samples scatter the direction by the material's
+reference coefficient times the used budget fraction. Each round owns its RNG;
+impacts do not consume weapon-spread, AI or presentation randomness. The rest
+of that tick is re-queried from the exit, and tracer/suppression segments follow
+the bend. No epsilon jump skips adjacent thin geometry. Speed is preserved by
+deflection; gravity and drag continue normally. Six material entries and 128
+live rounds per subsystem remain the bounds.
+
+**Firing-origin rule:** rounds start at the collision-limited eye. Cover on the
+aim ray is hit even if the independently rendered muzzle extends through it.
+An obstruction that overlaps only the visual muzzle does not block a clear eye
+ray. This intentionally retains crosshair aiming and does not make gameplay
+depend on the interpolated viewmodel or its separate projection.
+
+Bullet queries now refresh spatial bounds before reading moved hit volumes;
+the previous ray API could miss a limb transformed earlier in the same frame.
+The soldier adapter owns **66 hit volumes and 78 objects** for six actors,
+adding 24 collision objects. Meshes, GPU buffers, joint palettes, draw calls,
+render targets and audio banks are unchanged. Immediate-query cost still needs
+sustained-combat profiling. Oriented box proxies, split arm segments, accumulated
+travel and private RNG sequences are documented adaptations.
+
+```sh
+lua tests/ballistics_test.lua
+lua tests/weapons_test.lua
+lua tests/ai_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/ballistics_smoke.py
+# Build release wasm-web with tests/ballistics_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_ballistics_browser.mjs --bundle=/path/to/bundle
+```
+
+All **282 standalone checks in 30 Lua suites**, plus the **12 baseline-tool
+checks**, passed. The shared fixture passes eight checks on Mac Metal and release
+Chrome WebGL2/ANGLE Metal: six material lanes, repeatable scatter, multi-tick
+penetration, all 11 real Bullet volumes in three poses, a lethal headshot,
+production firing against cover, pause and three encounter resets. Reports are
+under `build/ballistics-unit-validation`, `build/ballistics-native-validation`
+and `build/ballistics-browser-validation`. The existing 13-check native player-health
+fixture also passes, including hostile hits and blocked-round suppression. The
+updated native soldier suite passes head/forearm/lower-torso shots, pursuit,
+occlusion, room entry and eight replacements; its log is
+`build/ballistics-ai-validation.log`. The unit matrix also checks all twelve
+surfaces and three weapons, targets reached/missed after deflection, adjacent
+thin geometry, per-region damage/ownership and falloff. Controlled reference
+comparisons and sustained performance remain qualification work.
+
 ## Weapons and first-person animation (2026-10-19)
 
 Step 7 adds generated arm meshes with **17 joints per arm**, body-fixed shoulders,
@@ -744,7 +808,7 @@ pose buffers, separate from authoritative simulation poses and other soldiers.
 The identity bind axes allow inverse-bind composition to update only translation.
 One shared generated buffer serves all six soldiers and
 replacement instances; each live soldier uses two mesh components on one GO, one movement capsule and
-seven hit-volume GOs. Conservative bounds include the supported animations and
+eleven hit-volume GOs. Conservative bounds include the supported animations and
 death collapse. The fragment shader supplies procedural camouflage, with the
 world's sun, ambient light and fog. `skinning.glsl` is shared by the colour and
 animated sun shadow passes introduced in renderer step 6.
@@ -857,11 +921,12 @@ legs toward planted ankles and keeps the rifle above the floor. Mesh, shadows,
 head-based perception, muzzle and authoritative hit volumes use the same pose;
 presentation interpolates it without modifying simulation collision.
 
-Head, chest, hips, thighs and shins have kinematic Bullet boxes transformed by
-the same skeleton as the mesh. Projectile thickness is measured in each box's
-rotated local frame. Head hits retain the existing 2× multiplier; overlapping
-body volumes still submit at most one hit per actor per round. Limbs use simple
-proxies; arms, hands and equipment do not have separate damage volumes yet.
+Head, chest, hips, thighs, shins and both upper arms/forearms have kinematic
+Bullet boxes transformed by the same skeleton as the mesh. Projectile thickness
+is measured in each box's rotated local frame. Step 8 uses reference regional
+scales (4× head, 1× chest, .9× hips, .65× arms, .7× legs); overlapping volumes
+submit at most one hit per actor per round. Hands and equipment have no separate
+damage volumes. See the step-8 validation above for current coverage.
 
 The 13 soldier Lua tests check mesh winding and weights, bind/deformed poses,
 animated bounds, rotated hit volumes, headshot/duplicate-damage rules, routing,
@@ -875,8 +940,9 @@ Lua-side palette upload time and AI tick cost; these are not GPU timings or
 whole-frame performance measurements. `tests/squads_smoke.py` checks six native
 actors, protected cover fire, a completed rear flank during ongoing combat,
 pause, all six deaths and eight full replacements. Its profiler and review
-images are saved in `build/squad-validation`. The six soldiers use 54 game
-objects, 42 live hit volumes and one shared 0.49 MiB mesh buffer; the existing
+images are saved in `build/squad-validation`. That historical increment used 54
+objects and 42 live hit volumes; step 8 raises those to 78 and 66. The soldiers
+retain one shared 0.49 MiB mesh buffer; the existing
 mesh/collision/audio limits are unchanged. A debug `wasm-web` bundle also passed
 a manual WebGL 2 browser check for world/soldier rendering, walking, enemy
 return fire, player death and key-9 restart, with no new console errors. That
@@ -898,7 +964,8 @@ and 30/60/144-FPS equivalence. All 119 Lua checks pass. The shared native Metal 
 HTML5/WebGL 2 fixture fires real rounds past a cover holder and into the barrier,
 checks that firing stops, verifies the head volume drops from about 1.67 m to
 0.77 m behind actual Bullet cover, and waits for recovery and resumed fire.
-The six actors still use 54 objects, 42 hit volumes and one shared mesh buffer.
+That suppression increment retained 54 objects and 42 hit volumes; step 8 adds
+arm volumes, bringing the counts to 78 and 66 with the same shared mesh buffer.
 Native screenshots and results are written to `build/suppression-validation`.
 For the browser fixture, bundle debug `wasm-web` with Bob's
 `--settings tests/suppression_browser.project`; stdout reports

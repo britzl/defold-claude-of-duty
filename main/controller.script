@@ -183,6 +183,9 @@ function init(self)
     if sys.get_config_int("health_validation.enabled",0)==1 then
         self.health_validation=require("tests.health_scenario").new()
     end
+    if sys.get_config_int("ballistics_validation.enabled",0)==1 then
+        self.ballistics_validation=require("tests.ballistics_scenario").new()
+    end
     self.view = nil
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
@@ -255,7 +258,8 @@ function init(self)
         automation_bridge.command("ai.volumes",function()
             local result={}
             for _,shape in pairs(self.ctx.services.soldiers.by_id) do
-                if not shape.disabled then result[#result+1]={id=shape.id,actor=shape.actor,x=shape.x,y=shape.y,z=shape.z,headshot=shape.headshot or false} end
+                if not shape.disabled then result[#result+1]={id=shape.id,actor=shape.actor,x=shape.x,y=shape.y,z=shape.z,
+                    headshot=shape.headshot or false,region=shape.region,part=shape.part,damage_scale=shape.damage_scale} end
             end
             return result
         end)
@@ -508,6 +512,7 @@ function update(self, dt)
     if self.traversal_validation then require("tests.traversal_scenario").update(self.traversal_validation,self,dt) end
     if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
+    if self.ballistics_validation then require("tests.ballistics_scenario").update(self.ballistics_validation,self,dt,restart_encounter) end
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
     end

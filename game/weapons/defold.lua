@@ -157,23 +157,30 @@ function M.update(a,ctx,dt,shown,capture_pose,capture_weapon,capture_flash)
 end
 function M.query(registries,options)
     options=options or {}
+    local groups={}
+    for _,group in ipairs(options.groups or GROUPS) do groups[group]=true end
     return {segment=function(_,from,dir,length)
-        local destination=V.point(from,dir,length)
-        local hits=physics.raycast(vmath.vector3(from.x,from.y,from.z),
-            vmath.vector3(destination.x,destination.y,destination.z),options.groups or GROUPS,{all=true}) or {}
+        if length<=1e-9 then return {} end
+        -- This immediate API refreshes broadphase bounds after skeleton setters.
+        -- physics.raycast can otherwise miss a moved limb until the next step.
+        local hits=bullet3d.world.cast_ray(bullet3d.get_world(),vmath.vector3(from.x,from.y,from.z),
+            vmath.vector3(dir.x*length,dir.y*length,dir.z*length),{include_triggers=false})
         local result,seen={},{}
         for _,hit in ipairs(hits) do
-            local shape
-            for _,registry in ipairs(registries) do shape=registry[hit.id] or shape end
-            if shape and shape.disabled then
-                seen[hit.id]=true
-            elseif shape then
-                local interval=trace.box(shape,from,dir,length)
-                if interval then result[#result+1]=interval;seen[hit.id]=true end
-            else
-                local actor=options.actors and options.actors[hit.id]
-                result[#result+1]={id=hash_to_hex(hit.id),surface=actor and "flesh" or "concrete",actor=actor,enter=hit.fraction*length,
-                    normal={x=hit.normal.x,y=hit.normal.y,z=hit.normal.z}}
+            hit.id=bullet3d.get_gameobject_id(hit.object)
+            if hit.id and groups[physics.get_group(msg.url(nil,hit.id,"collision"))] then
+                local shape
+                for _,registry in ipairs(registries) do shape=registry[hit.id] or shape end
+                if shape and shape.disabled then
+                    seen[hit.id]=true
+                elseif shape then
+                    local interval=trace.box(shape,from,dir,length)
+                    if interval then result[#result+1]=interval;seen[hit.id]=true end
+                else
+                    local actor=options.actors and options.actors[hit.id]
+                    result[#result+1]={id=hash_to_hex(hit.id),surface=actor and "flesh" or "concrete",actor=actor,enter=hit.fraction*length,
+                        normal={x=hit.normal.x,y=hit.normal.y,z=hit.normal.z}}
+                end
             end
         end
         -- Bullet rays starting inside a shape do not report its entry. Include

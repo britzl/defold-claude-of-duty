@@ -162,7 +162,7 @@ test("tracer rotations stay finite on both forward axes and almost antiparallel 
     end
 end)
 
-test("overlapping body volumes apply one hit per round, and heads double damage",function()
+test("overlapping body volumes apply one hit per round, and heads quadruple damage",function()
     for _,head in ipairs({false,true}) do
         local ctx,e=context();ctx.ai.enabled=false
         local shape={id="a",actor=e.id,surface="flesh",headshot=head,x=0,y=1,z=-1,w=.3,h=.4,d=.1}
@@ -173,7 +173,7 @@ test("overlapping body volumes apply one hit per round, and heads double damage"
         ballistics.update(ctx,sim,h,trace.boxes({shape,shape2}))
         assert(e.actor.health==100)
         combat.fixed_update(ctx)
-        near(e.actor.health,head and 60 or 80)
+        near(e.actor.health,head and 20 or 80)
         runtime.final(ctx)
     end
 end)

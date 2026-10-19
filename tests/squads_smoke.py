@@ -49,8 +49,8 @@ def main():
         engine.wait_until(lambda: len(snapshot()["actors"]) == 6, timeout=5)
         s = snapshot()
         assert len(s["squads"]) == 2 and all(len(q["members"]) == 3 for q in s["squads"].values()), s
-        assert s["render"]["actors"] == 6 and s["render"]["objects"] == 54, s
-        assert s["render"]["active_hitboxes"] == 42 and s["render"]["buffers"] == 1, s
+        assert s["render"]["actors"] == 6 and s["render"]["objects"] == 78, s
+        assert s["render"]["active_hitboxes"] == 66 and s["render"]["buffers"] == 1, s
         print("PASS native six-actor resources", s["render"], flush=True)
 
         # The west side of the street barrier protects from a player to its east.
@@ -124,7 +124,7 @@ def main():
             game.wait_frames(3)
             s = snapshot()
             assert len(s["actors"]) == 6 and all(e["health"] == 100 for e in s["actors"])
-            assert s["render"]["objects"] == 54 and s["render"]["active_hitboxes"] == 42 and s["render"]["buffers"] == 1
+            assert s["render"]["objects"] == 78 and s["render"]["active_hitboxes"] == 66 and s["render"]["buffers"] == 1
             assert len(cmd("ai.volumes")) == 42 and s["live"] == 0 and s["fired"] == 0
         cmd("gameplay.restart")
         game.wait_frames(5)

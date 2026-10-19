@@ -31,6 +31,7 @@ function M.request(combat, hit)
         actor = actor, amount = hit.amount, source = hit.source,
         headshot = hit.headshot == true, point = copy(hit.point), impulse = copy(hit.impulse),
         from = copy(hit.from), kind = hit.kind, round = hit.round,
+        region = hit.region, part = hit.part,
     }
     return true
 end
@@ -54,6 +55,7 @@ function M.fixed_update(ctx, dt)
                 health = actor.health, killed = not actor.alive,
                 headshot = hit.headshot, point = hit.point, from = hit.from,
                 kind = hit.kind, round = hit.round,
+                region = hit.region, part = hit.part,
             }
             events.emit(ctx.events, events.DAMAGE_DEALT, notification)
             if actor.id == "player" then
@@ -63,6 +65,7 @@ function M.fixed_update(ctx, dt)
                 events.emit(ctx.events, events.ACTOR_DEATH, {
                     actor = actor.id, source = hit.source,
                     point = hit.point, impulse = hit.impulse,
+                    region = hit.region, part = hit.part, headshot = hit.headshot,
                 })
             end
         end

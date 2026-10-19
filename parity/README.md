@@ -26,6 +26,24 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Ballistics and regional damage increment — 2026-10-19
+
+Step 8 uses the reference regional scales, twelve material scatter coefficients
+and remaining-budget penetration loss. Eleven bone-driven boxes include separate
+upper arms and forearms; region/part metadata reaches damage and death events.
+Private round streams keep deflection independent of spread and AI randomness.
+Flight re-queries after exits, and immediate Bullet bounds refresh prevents
+misses on recently transformed limbs. The eye-origin rule is explicit in the
+contract: cover on the aim ray is tested before the visual muzzle, while
+muzzle-only overlap does not block a clear eye ray.
+
+All 282 standalone Lua checks and 12 baseline-tool checks pass. Native Metal and
+release Chrome WebGL2/ANGLE Metal pass the shared eight-check fixture, including
+33 posed-volume checks and repeated reset/resource bounds. Measured oriented
+boxes, accumulated overlapping-layer travel and different RNG sequences remain
+explicit adaptations. The source lock is refreshed without stale captures;
+these checks do not close controlled-reference or sustained-performance gates.
+
 ## Weapon animation increment — 2026-10-19
 
 Step 7 adds generated weapon detail, shared 17-joint arms with body-fixed shoulder

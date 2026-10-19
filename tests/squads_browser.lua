@@ -58,7 +58,7 @@ function M.update(test,self,dt,restart)
         end
     elseif test.phase=="restart" and ctx.time.elapsed>=test.next_reset then
         if test.restarts>0 then
-            assert(snapshot.render.objects==54 and snapshot.render.active_hitboxes==42 and snapshot.render.buffers==1)
+            assert(snapshot.render.objects==78 and snapshot.render.active_hitboxes==66 and snapshot.render.buffers==1)
             for _,e in ipairs(snapshot.actors) do assert(e.health==100) end
             assert(snapshot.live==0 and count(ctx.ai.cover_claims)==0 and count(ctx.ai.flank_claims)==0)
         end

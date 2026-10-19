@@ -50,6 +50,7 @@ function M.box(shape, origin, direction, length)
     end
     if leave<=1e-7 or enter>length or leave-enter<1e-7 then return end
     return { id=shape.id, surface=shape.surface, actor=shape.actor, headshot=shape.headshot,
+        region=shape.region, part=shape.part, damage_scale=shape.damage_scale,
         enter=math.max(0,enter), leave=leave,
         normal=shape.transform and T.direction(shape.transform,ni) or V.rotate(ni,angle,0,0),
         exit_normal=shape.transform and T.direction(shape.transform,no) or V.rotate(no,angle,0,0) }
@@ -58,7 +59,7 @@ function M.boxes(shapes)
     return { segment=function(_,from,dir,length)
         local hits={}
         for _,shape in ipairs(shapes) do
-            local hit=M.box(shape,from,dir,length)
+            local hit=not shape.disabled and M.box(shape,from,dir,length)
             if hit then hits[#hits+1]=hit end
         end
         return hits

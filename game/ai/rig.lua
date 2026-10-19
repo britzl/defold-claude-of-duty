@@ -126,22 +126,39 @@ function M.pose(state,scratch)
 end
 
 M.hitboxes={
-    {name="head",bone="Head",center=v(0,1.67,-.008),w=.235,h=.26,d=.235,headshot=true},
-    {name="chest",bone="Spine2",center=v(0,1.30,0),w=.38,h=.36,d=.25},
-    {name="hips",bone="Hips",center=v(0,1.02,0),w=.32,h=.22,d=.25},
-    {name="leg_r",bone="UpLegR",center=v(.096,.73,-.01),w=.17,h=.43,d=.18},
-    {name="leg_l",bone="UpLegL",center=v(-.096,.73,-.01),w=.17,h=.43,d=.18},
-    {name="shin_r",bone="LegR",center=v(.1,.295,.008),w=.135,h=.39,d=.15},
-    {name="shin_l",bone="LegL",center=v(-.1,.295,.008),w=.135,h=.39,d=.15},
+    {name="head",bone="Head",center=v(0,1.67,-.008),w=.235,h=.26,d=.235,headshot=true,region="head",damage_scale=4},
+    {name="chest",bone="Spine2",center=v(0,1.30,0),w=.38,h=.36,d=.25,region="torso",damage_scale=1},
+    {name="hips",bone="Hips",center=v(0,1.02,0),w=.32,h=.22,d=.25,region="torso",damage_scale=.9},
+    {name="leg_r",bone="UpLegR",center=v(.096,.73,-.01),w=.17,h=.43,d=.18,region="leg",damage_scale=.7},
+    {name="leg_l",bone="UpLegL",center=v(-.096,.73,-.01),w=.17,h=.43,d=.18,region="leg",damage_scale=.7},
+    {name="shin_r",bone="LegR",center=v(.1,.295,.008),w=.135,h=.39,d=.15,region="leg",damage_scale=.7},
+    {name="shin_l",bone="LegL",center=v(-.1,.295,.008),w=.135,h=.39,d=.15,region="leg",damage_scale=.7},
 }
+-- Reference arm scale/radius, split at the elbow so both segments follow the
+-- actual mesh bones. The bind frame aligns each box's long axis with the limb.
+for _,side in ipairs({"R","L"}) do
+    for _,segment in ipairs({{"upper_arm_","UpperArm","Forearm"},{"forearm_","Forearm","Hand"}}) do
+        local bone,tail=segment[2]..side,segment[3]..side
+        local a,b=M.bones[M.index[bone]].bind,M.bones[M.index[tail]].bind
+        local delta=v(b.x-a.x,b.y-a.y,b.z-a.z)
+        local y=V.normalize(delta)
+        local x=V.normalize(v(y.y,-y.x,0))
+        local z=v(x.y*y.z-x.z*y.y,x.z*y.x-x.x*y.z,x.x*y.y-x.y*y.x)
+        M.hitboxes[#M.hitboxes+1]={name=segment[1]..side:lower(),bone=bone,center=V.point(a,delta,.5),
+            w=.144,h=V.length(delta)+.04,d=.144,region="arm",damage_scale=.65,
+            orientation={x.x,y.x,z.x,0,x.y,y.y,z.y,0,x.z,y.z,z.z,0}}
+    end
+end
 function M.volumes(palette,position,yaw,id)
     local root=T.root(position,yaw)
     local out={}
     for i,box in ipairs(M.hitboxes) do
         local transform=T.mul(root,palette[M.index[box.bone]])
         local center=T.point(transform,box.center)
+        if box.orientation then transform=T.mul(transform,box.orientation) end
         transform[4],transform[8],transform[12]=center.x,center.y,center.z
         out[i]={id=id.."/"..box.name,actor=id,surface="flesh",headshot=box.headshot,
+            region=box.region,part=box.name,damage_scale=box.damage_scale,
             x=center.x,y=center.y,z=center.z,w=box.w,h=box.h,d=box.d,transform=transform}
     end
     return out

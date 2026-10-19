@@ -53,7 +53,7 @@ local function spawn(ctx,point)
 end
 function M.init(ctx)
     ctx.ai={actors={},order={},squads={},cover_claims={},flank_claims={},nav_cache={},enabled=true,spawned=false,
-        planner=planner.new(),sim=ballistics.new(),damage_scale=1,work_seconds=0,peak_tick=0,ticks=0}
+        planner=planner.new(),sim=ballistics.new(ctx.world.seed,"enemy"),damage_scale=1,work_seconds=0,peak_tick=0,ticks=0}
     events.on(ctx.events,events.BULLET_SEGMENT,ctx.ai,function(_,segment) suppression.observe(ctx,segment,false) end)
     events.on(ctx.events,events.BULLET_IMPACT,ctx.ai,function(_,hit) suppression.observe(ctx,hit,true) end)
     events.on(ctx.events,events.DAMAGE_DEALT,ctx.ai,function(_,hit)
@@ -281,7 +281,7 @@ function M.reset(ctx,position,yaw)
     end
     local ai=ctx.ai
     ai.actors={};ai.order={};ai.squads={};ai.cover_claims={};ai.flank_claims={};ai.nav_cache={}
-    ai.planner=planner.new();ai.sim=ballistics.new();ai.spawned=true;ai.work_seconds=0;ai.peak_tick=0;ai.ticks=0
+    ai.planner=planner.new();ai.sim=ballistics.new(ctx.world.seed,"enemy");ai.spawned=true;ai.work_seconds=0;ai.peak_tick=0;ai.ticks=0
     if position then return spawn(ctx,{id="enemy_1",position=position,yaw=yaw}) end
     for _,point in ipairs(ctx.world.spawn_points) do
         if point.id~="player" then spawn(ctx,point) end

@@ -46,7 +46,7 @@ def main():
         game.wait_frames(50)
         assert soldier()["travel"] > before + .25
         render = state()["render"]
-        assert render["vertices"] == 7140 and render["buffers"] == 1 and render["active_hitboxes"] == 42, render
+        assert render["vertices"] == 7140 and render["buffers"] == 1 and render["active_hitboxes"] == 66, render
         assert render["palette_uploads"] > 10 and render["palette_bytes"] == 4800, render
         print("PASS generated mesh, 25-bone palette uploads and native patrol", render, flush=True)
 
@@ -56,18 +56,27 @@ def main():
         before = soldier()["health"]
         shot()
         head_damage = before - soldier()["health"]
-        assert 65 < head_damage < 68, (head_damage, state())
-        print("PASS native head volume and doubled damage", head_damage, flush=True)
+        assert head_damage == 100, (head_damage, state())
+        print("PASS native head volume and lethal 4x damage", head_damage, flush=True)
 
         player()
         reset_enemy()
         pitch = math.atan2(1.30 - 1.664, 7)
         drive([dict(ticks=1, look_y=pitch/.0022)], "movement")
         shot()
+        arm_damage = 100 - soldier()["health"]
+        assert 21 < arm_damage < 22, (arm_damage, state())
+        print("PASS raised forearm takes the first hit at 0.65x without a second torso hit", arm_damage, flush=True)
+
+        player()
+        reset_enemy()
+        pitch = math.atan2(1.02 - 1.664, 7)
+        drive([dict(ticks=1, look_y=pitch/.0022)], "movement")
+        shot()
         body_damage = 100 - soldier()["health"]
-        assert 32 < body_damage < 34, (body_damage, state())
-        assert head_damage > body_damage*1.95
-        print("PASS rotated skeleton body volume and single damage owner", body_damage, flush=True)
+        assert 29 < body_damage < 30, (body_damage, state())
+        assert head_damage > body_damage*3.3
+        print("PASS lower torso at 0.9x and single damage owner", body_damage, flush=True)
 
         command("gameplay.damage", dict(target="enemy_1", amount=1000, source="player"))
         engine.wait_until(lambda: soldier()["death"] >= 1, timeout=4)
@@ -117,8 +126,8 @@ def main():
             reset_enemy()
         game.wait_frames(3)
         render = state()["render"]
-        assert render["objects"] == 9 and render["buffers"] == 1 and render["active_hitboxes"] == 7, render
-        assert len(command("ai.volumes")) == 7
+        assert render["objects"] == 13 and render["buffers"] == 1 and render["active_hitboxes"] == 11, render
+        assert len(command("ai.volumes")) == 11
         command("gameplay.damage", dict(target="player", amount=1000))
         engine.wait_until(lambda: not command("gameplay.snapshot")["alive"], timeout=3)
         game.key("9", wait="released")

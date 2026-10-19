@@ -159,15 +159,15 @@
     },
     {
       "id": "shot-origin",
-      "state": "decision-open",
-      "current": "Collision-limited eye origin; rendered muzzle flash",
+      "state": "recorded",
+      "current": "Collision-limited eye origin retained. Every travelled segment tests cover, including before a visual muzzle protruding through a wall. Muzzle-only overlap does not block a clear eye ray; the interpolated viewmodel never determines projectile origin or collision.",
       "reference": "Muzzle-origin rounds",
       "gate": "ballistics"
     },
     {
       "id": "damage",
-      "state": "reconcile",
-      "current": "2x head damage and no separate arm damage volumes",
+      "state": "reconciled",
+      "current": "Reference scales: head 4x, chest 1x, lower torso .9x, arms .65x, legs .7x. Eleven bone-driven oriented boxes, with separate upper-arm/forearm segments, replace reference capsule proxies. First region hit applies damage once per actor per round.",
       "reference": "Three.js head collider 4x; torso/arm/leg scales",
       "gate": "regional-damage"
     },
@@ -392,13 +392,18 @@
         "threejs:src/physics/penetration.js",
         "kaigen:src/claude_of_duty/cod_weapons_ballistics.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Shoot bare targets, thin wood, thick concrete, overlapping layers and a muzzle-obstructing wall with fixed seeds.",
       "expect": "Reference attenuation/deflection, complete travelled-segment checks and documented origin behavior.",
       "coverage": [
         "tests/weapons_test.lua",
-        "tests/weapons_smoke.py"
-      ]
+        "tests/weapons_smoke.py",
+        "tests/ballistics_test.lua",
+        "tests/ballistics_scenario.lua",
+        "tests/ballistics_smoke.py",
+        "tools/validate_ballistics_browser.mjs"
+      ],
+      "implementation_notes": "Reference material depths/loss/scatter and unchanged weapon/range tuning. Linear loss uses each layer entry budget, accumulated over actual travel; overlapping solids consume power concurrently. Exit deflection uses private round Gaussian streams and re-queries remaining tick flight with no untested epsilon jump. Quadratic range falloff is applied once to travelled distance. Eye-origin rule is documented and production firing/penetration/pause/reset fixtures pass on native and release WebGL. Exact reference RNG sequences, proxy geometry and sustained cost remain explicit differences/qualification limits."
     },
     {
       "id": "regional-damage",
@@ -407,13 +412,18 @@
         "threejs:src/ai/agent.js",
         "kaigen:src/claude_of_duty/cod_ai_spawn.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Hit head, upper/lower torso, arms and legs while actors move and crouch.",
       "expect": "Reference regional scales and correct skeleton-driven volumes; one damage application per actor per round.",
       "coverage": [
         "tests/ai_test.lua",
-        "tests/ai_smoke.py"
-      ]
+        "tests/ai_smoke.py",
+        "tests/ballistics_test.lua",
+        "tests/ballistics_scenario.lua",
+        "tests/ballistics_smoke.py",
+        "tools/validate_ballistics_browser.mjs"
+      ],
+      "implementation_notes": "Eleven bone-driven oriented boxes: head 4x, chest 1x, hips .9x, upper arms/forearms .65x, thighs/shins .7x. First hit region owns one damage request per actor/round; region and part survive damage/death events. Immediate Bullet queries refresh broadphase after pose setters. Native and release-WebGL fixtures verify all eleven volumes in three poses, lethal headshot and bounded reset counts. Box versus reference capsule coverage and controlled reference comparisons remain documented qualifications."
     },
     {
       "id": "soldiers",

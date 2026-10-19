@@ -75,7 +75,7 @@ function M.update(test,ctx)
             else
                 record(test,"RECOVERED",{shots=e.shots,peeks=e.peeks,score=e.suppression})
                 local render=ai.snapshot(ctx).render
-                assert(render.objects==54 and render.active_hitboxes==42 and render.buffers==1)
+                assert(render.objects==78 and render.active_hitboxes==66 and render.buffers==1)
                 record(test,"PASS",{actors=6,objects=render.objects,hitboxes=render.active_hitboxes,buffers=render.buffers})
                 test.phase="done";ctx.ai.enabled=false
             end

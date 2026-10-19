@@ -38,7 +38,7 @@ local function cancel(ctx)
     w.clip=nil;w.clip_time=0;w.switch_to=nil;w.burst=0
 end
 function M.init(ctx)
-    local w={equipped="rifle",inventory={},intent={},sim=ballistics.new(),
+    local w={equipped="rifle",inventory={},intent={},sim=ballistics.new(ctx.world.seed,"player"),
         cooldown=0,burst=0,burst_cooldown=0,since_shot=10,shot_index=0,ads=0,previous_ads=0,
         spread=defs.rifle.spreadHip,random=rng.new(ctx.world.seed,"weapons"),shells={},
         recoil={pitch=V.spring(),yaw=V.spring(),back=V.spring(),up=V.spring(),roll=V.spring()},
@@ -112,8 +112,9 @@ local function fire(ctx)
     local angle=w.random()*2*math.pi
     local dir=V.normalize(V.rotate({x=radius*math.cos(angle),y=radius*math.sin(angle),z=-1},pitch,yaw,0))
     local origin=eye.camera
-    -- Camera-origin rounds preserve crosshair aim and cannot start beyond a wall
-    -- when the separately rendered muzzle overlaps it. Flash uses the muzzle.
+    -- Eye-origin rule: all cover on the aim ray is tested, including cover before
+    -- the rendered muzzle. Muzzle-only overlap does not block a clear eye ray.
+    -- Flash uses the independent viewmodel; presentation never moves the round.
     ballistics.spawn(w.sim,d,origin,dir,"player",w.sim.fired%d.tracerEvery==0)
     local recoil=s.pattern[math.min(w.shot_index+1,#s.pattern)]
     local scale=V.lerp(1,.7,w.ads)
@@ -218,7 +219,7 @@ function M.snapshot(ctx)
     return {weapon=w.equipped,label=d.label,mode=d.modes[s.mode],mag=s.mag,chambered=s.chambered,
         ammo=s.mag+(s.chambered and 1 or 0),reserve=s.reserve,clip=w.clip or "idle",
         progress=w.clip and w.clip_time/w.clip_duration or 0,ads=w.ads,spread=w.spread,
-        fired=w.sim.fired,impacts=w.sim.impacts,exits=w.sim.exits,live=#w.sim.live,dry=w.dry,
+        fired=w.sim.fired,impacts=w.sim.impacts,exits=w.sim.exits,deflections=w.sim.deflections,live=#w.sim.live,dry=w.dry,
         recoil_pitch=w.recoil.pitch.x,recoil_back=w.recoil.back.x}
 end
 function M.final(ctx) ctx.weapons=nil end
