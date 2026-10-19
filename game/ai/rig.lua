@@ -1,8 +1,10 @@
 -- Reference src/ai/rig.js joint names, hierarchy and metre proportions. Rotate
 -- the source +Z-facing carry pose 180 degrees to our -Z forward convention.
--- Bind axes are identity here; ragdoll joint frames will need a separate mapping.
+-- Render bind axes are identity; joint_frames supplies physics-oriented frames.
 local T = require "game.ai.transform"
 local V = require "game.weapons.math"
+local variants=require "game.ai.variants"
+local IK=require "game.ai.ik"
 local M = {}
 local function elbow(s,w,pole)
     local axis=V.normalize({x=w.x-s.x,y=w.y-s.y,z=w.z-s.z})
@@ -41,88 +43,187 @@ for i,s in ipairs(specs) do
 end
 M.count=#M.bones
 
--- phase is distance-driven; aim/death/time are fixed-tick state interpolated
--- only by the presenter. The same evaluator supplies authoritative hit volumes.
--- Optional scratch belongs to one evaluator (simulation or presentation).
--- Never share it between those clocks, with hit volumes, or another soldier.
+-- A single evaluator owns skinning, hit volumes and ragdoll handoff frames.
 function M.pose(state,scratch)
-    local rotations=scratch and scratch.rotations or {}
-    local function rotate(name,x,y,z)
-        local i=M.index[name]
-        rotations[i]=T.rotation(x,y,z,rotations[i])
+    scratch=scratch or {}
+    local rotations,worlds,palette=scratch.rotations or {},scratch.worlds or {},scratch.palette or {}
+    local angles={}
+    local function add(name,x,y,z)
+        local i=M.index[name];local a=angles[i] or {0,0,0};angles[i]=a
+        a[1],a[2],a[3]=a[1]+(x or 0),a[2]+(y or 0),a[3]+(z or 0)
     end
-    local death=V.smooth(state.death or 0)
-    local crouch=V.clamp(state.crouch or 0,0,1)*(1-death)
-    local walk=(state.walk or 0)*(1-death)*(1-crouch*.7)
+    local death=V.smooth(state.death or 0);local live=1-death
+    local crouch=V.clamp(state.crouch or 0,0,1)*live
+    local walk=V.clamp(state.walk or 0,0,1)*live
+    local run=V.clamp(state.run or 0,0,1)*walk*(1-crouch)
     local phase=state.phase or 0
-    local aim=(state.aim or 0)*(1-death)
-    local breathe=math.sin((state.time or 0)*2.1)*.008*(1-death)
-    local hip_pitch=-.85*crouch-.10*walk*(1-crouch)
-    rotate("Hips",hip_pitch,0,.025*math.sin(phase)*walk*(1-crouch))
-    rotate("Spine",breathe,0,0)
-    -- The carried rifle points slightly down; bring it onto the aim line.
-    rotate("Spine1",aim*(.05+(state.pitch or 0)*.45),0,0)
-    rotate("Spine2",aim*(.05+(state.pitch or 0)*.55)+(state.recoil or 0)*.055,0,0)
-    rotate("Head",.60*crouch-.07*aim,math.sin((state.time or 0)*.7)*.07*(1-aim),0)
-    rotate("ClavicleR",.9*crouch,0,0)
-    rotate("ClavicleL",.9*crouch,0,0)
+    local aim=V.clamp(state.aim or 0,0,1)*live
+    local hurt=V.clamp(state.wounded or 0,0,1)*live
+    local breathe=math.sin((state.time or 0)*2.1)*.008*live
+    local turn=math.sin(math.pi*V.clamp(state.turn or 0,0,1))*(state.turn_weight or 0)*live
+    local turn_side=(state.turn_direction or 1)>=0 and "R" or "L"
+    local vault=math.sin(math.pi*V.clamp(state.vault or 0,0,1))*(state.vault_weight or 0)*live
+    local reload=math.min(1,(state.reload or 0)*6,(1-(state.reload or 0))*6)*(state.reload_weight or 0)*live
+    local pitch=V.clamp(state.pitch or 0,-.6,.6)*aim
+    local yaw=V.clamp(state.aim_yaw or 0,-.75,.75)*aim
+    local recoil=(state.recoil or 0)*live
+    add("Hips",-.85*crouch-.10*walk-.12*run-.12*hurt-.32*vault,turn*.08,.025*math.sin(phase)*walk+.04*hurt)
+    add("Spine",breathe+.32*crouch-.12*hurt-.20*vault,0,-.03*hurt)
+    add("Spine1",.22*crouch+pitch*.4+.05*aim-.09*hurt-.12*vault,yaw*.4-reload*.10,0)
+    add("Spine2",.30*crouch+pitch*.6+.05*aim+recoil*.055-.05*hurt-.10*vault,yaw*.6-reload*.28,-reload*.05)
+    add("Head",-.07*aim+.12*crouch-pitch*.25,math.sin((state.time or 0)*.7)*.07*(1-aim)+yaw*.15,0)
+    add("Neck",-.07*hurt,0,0)
+    add("ClavicleR",.12*crouch,0,0);add("ClavicleL",.12*crouch,0,0)
     for _,side in ipairs({"R","L"}) do
         local swing=math.sin(phase+(side=="R" and 0 or math.pi))
-        rotate("UpLeg"..side,swing*.42*walk,0,0)
-        rotate("Leg"..side,-math.max(0,swing)*.65*walk,0,0)
-        rotate("Foot"..side,-swing*.13*walk,0,0)
-        if crouch>0 then
-            -- Bend each leg toward a planted ankle as the pelvis lowers. This
-            -- small sagittal solve prevents the duck from sinking feet below
-            -- the floor; it is not terrain-following foot IK.
-            local upper=M.bones[M.index["UpLeg"..side]].local_position
-            local shin=M.bones[M.index["Leg"..side]].local_position
-            local foot=M.bones[M.index["Foot"..side]].local_position
-            local hy=.98-.70*crouch+math.cos(hip_pitch)*upper.y-math.sin(hip_pitch)*upper.z
-            local hz=.005+.12*crouch+math.sin(hip_pitch)*upper.y+math.cos(hip_pitch)*upper.z
-            local dy,dz=.088-hy,.022-hz
-            local a=math.sqrt(shin.y^2+shin.z^2)
-            local b=math.sqrt(foot.y^2+foot.z^2)
-            local d=V.clamp(math.sqrt(dy*dy+dz*dz),math.abs(a-b)+.00001,a+b-.00001)
-            local axis=math.atan2(-dz,-dy)
-            local bend=math.acos(V.clamp((a*a+d*d-b*b)/(2*a*d),-1,1))
-            local thigh=axis+bend
-            local knee_y,knee_z=hy-math.cos(thigh)*a,hz-math.sin(thigh)*a
-            local lower=math.atan2(-(.022-knee_z),-(.088-knee_y))
-            local upper_angle=thigh-math.atan2(-shin.z,-shin.y)
-            local lower_angle=lower-math.atan2(-foot.z,-foot.y)
-            rotate("UpLeg"..side,upper_angle-hip_pitch,0,0)
-            rotate("Leg"..side,lower_angle-upper_angle,0,0)
-            rotate("Foot"..side,-lower_angle,0,0)
+        local stride=walk*(1-crouch*.55)
+        add("UpLeg"..side,swing*(.42+.30*run)*stride-.8*vault,0,0)
+        add("Leg"..side,-math.max(0,swing)*(.65+.65*run)*stride-1.0*vault,0,0)
+        add("Foot"..side,-swing*.13*stride+.35*vault,0,0)
+        if side==turn_side then add("UpLeg"..side,-.18*turn,0,0);add("Leg"..side,-.5*turn,0,0) end
+    end
+    local hit=(state.hit or 0)*live
+    local side=state.hit_side or 1
+    local region=state.hit_region or "torso"
+    if hit>0 then
+        if region=="head" then
+            add("Head",-.35*hit,side*.24*hit,side*.14*hit);add("Neck",-.22*hit,0,0)
+        elseif region=="arm" then
+            add(side>0 and "ClavicleR" or "ClavicleL",-.24*hit,side*.1*hit,side*.18*hit)
+            add("Spine2",-.09*hit,side*.10*hit,0)
+        elseif region=="leg" then
+            add("Hips",-.14*hit,0,-side*.10*hit)
+            add(side>0 and "UpLegR" or "UpLegL",-.24*hit,0,side*.1*hit)
+        else
+            add("Spine",-.10*hit,side*.05*hit,side*.03*hit)
+            add("Spine1",-.16*hit,side*.08*hit,side*.05*hit)
+            add("Spine2",-.19*hit,side*.10*hit,side*.07*hit)
         end
     end
-    local worlds,palette=scratch and scratch.worlds or {},scratch and scratch.palette or {}
+    local pelvis=(state.pelvis or 0)*live
     for i,bone in ipairs(M.bones) do
-        local m=rotations[i] or T.identity()
-        rotations[i]=m
-        local p=bone.local_position
-        m[4],m[8],m[12]=p.x,p.y,p.z
+        local a=angles[i] or {0,0,0}
+        local m=T.rotation(a[1],a[2],a[3],rotations[i]);rotations[i]=m
+        local p=bone.local_position;m[4],m[8],m[12]=p.x,p.y,p.z
         if i==1 then
-            m[8]=m[8]+math.abs(math.sin(phase))*.025*walk+breathe*.3
-            -- Bounded authored collapse, not a simulated ragdoll.
-            local fall=T.rotation(death*math.pi*.49,0,death*.10,scratch and scratch.fall)
-            if scratch then scratch.fall=fall end
-            fall[8]=-.77*death
-            m=T.mul(fall,m,worlds[i])
-            -- Rotate around pelvis, then lower it to the floor.
-            m[8]=.98-.77*death-.70*crouch+breathe*.3+math.abs(math.sin(phase))*.025*walk*(1-crouch)
-            m[12]=.005+.38*death+.12*crouch
+            local fall=T.rotation(death*math.pi*.49,0,death*.10)
+            m=T.mul(fall,m)
+            m[8]=.98-.77*death-.70*crouch-.10*hurt+breathe*.3+math.abs(math.sin(phase))*.025*walk+pelvis+.10*vault
+            m[12]=.005+.38*death+.12*crouch+.03*hurt
         end
-        worlds[i]=bone.parent>0 and T.mul(worlds[bone.parent],m,worlds[i]) or m
-        -- Bind axes are identity: world * inverse_bind only changes translation.
-        local w,b,out=worlds[i],bone.bind,palette[i] or {}
-        out[1],out[2],out[3],out[4]=w[1],w[2],w[3],w[1]*-b.x+w[2]*-b.y+w[3]*-b.z+w[4]
-        out[5],out[6],out[7],out[8]=w[5],w[6],w[7],w[5]*-b.x+w[6]*-b.y+w[7]*-b.z+w[8]
-        out[9],out[10],out[11],out[12]=w[9],w[10],w[11],w[9]*-b.x+w[10]*-b.y+w[11]*-b.z+w[12]
+        if bone.parent>0 then worlds[i]=T.mul(worlds[bone.parent],m,worlds[i])
+        else
+            worlds[i]=worlds[i] or {};for k=1,12 do worlds[i][k]=m[k] end
+        end
+    end
+    -- Lower the pelvis enough to reach planted ankles without stretching knees.
+    local reach_drop=0
+    if live>0 and vault<.001 then
+        for _,side in ipairs({"R","L"}) do
+            local foot=state.feet and state.feet[side]
+            if foot and foot.weight>0 then
+                local hip=T.origin(worlds[M.index["UpLeg"..side]])
+                local knee=T.origin(worlds[M.index["Leg"..side]])
+                local ankle=T.origin(worlds[M.index["Foot"..side]])
+                local function distance(a,b) return math.sqrt((a.x-b.x)^2+(a.y-b.y)^2+(a.z-b.z)^2) end
+                local reach=distance(hip,knee)+distance(knee,ankle)-.003
+                local p=foot.target
+                local vertical=math.sqrt(math.max(.01,reach^2-(hip.x-p.x)^2-(hip.z-p.z)^2))
+                reach_drop=math.min(reach_drop,(p.y+vertical-hip.y)*foot.weight*live)
+            end
+        end
+        reach_drop=math.max(-.32,reach_drop)
+        for _,w in ipairs(worlds) do w[8]=w[8]+reach_drop end
+    end
+    scratch.reach_drop=reach_drop
+    -- Correct feet after the additive layers, before solving the carried weapon.
+    for _,side in ipairs({"R","L"}) do
+        local foot=state.feet and state.feet[side]
+        local solve=live>0 and vault<.001 and ((foot and foot.weight>1e-6) or (not foot and (crouch>0 or hurt>0)))
+        if solve then
+            local at=T.origin(worlds[M.index["Foot"..side]])
+            local target=foot and foot.target or {x=side=="R" and .103 or -.103,y=.088,z=.022}
+            local weight=foot and foot.weight or 1
+            target={x=V.lerp(at.x,target.x,weight*live),y=V.lerp(at.y,target.y,weight*live),z=V.lerp(at.z,target.z,weight*live)}
+            IK.solve(worlds,M.bones,M.index["UpLeg"..side],M.index["Leg"..side],M.index["Foot"..side],target,{x=side=="R" and .10 or -.10,y=.05,z=-1})
+            local normal=foot and foot.normal or {x=0,y=1,z=0}
+            -- Source caps sole tilt at 0.35 radians; reject steep wall normals.
+            local ny=math.max(math.cos(.35),normal.y)
+            local horizontal=math.sqrt(normal.x^2+normal.z^2)
+            local limit=math.sqrt(math.max(0,1-ny*ny))
+            local k=horizontal>1e-7 and math.min(1,limit/horizontal) or 0
+            IK.orient(worlds,M.bones,M.index["Foot"..side],T.between({x=0,y=1,z=0},V.normalize({x=normal.x*k,y=ny,z=normal.z*k})))
+        end
+    end
+    -- A rigid weapon frame follows the chest. Both hands solve to its sockets.
+    local chest=worlds[M.index.Spine2]
+    local gun=T.mul(chest,T.identity(-M.bones[M.index.Spine2].bind.x,-M.bones[M.index.Spine2].bind.y,-M.bones[M.index.Spine2].bind.z))
+    local pivot=M.grip_r
+    local layer=T.mul(T.identity(pivot.x,pivot.y,pivot.z),T.rotation(-.24*run+.08*reload,.10*reload,-.10*run-.20*reload))
+    layer=T.mul(layer,T.identity(-pivot.x,-pivot.y,-pivot.z))
+    gun=T.mul(gun,layer)
+    local right=T.point(gun,M.grip_r)
+    IK.solve(worlds,M.bones,M.index.UpperArmR,M.index.ForearmR,M.index.HandR,right,{x=.35,y=-1,z=.45})
+    IK.orient(worlds,M.bones,M.index.HandR,gun)
+    -- Use the solved hand frame so the support hand always follows the mesh.
+    local hand=worlds[M.index.HandR]
+    gun=T.mul(hand,T.identity(-M.grip_r.x,-M.grip_r.y,-M.grip_r.z))
+    local support=T.point(gun,variants.support(state.variant))
+    if reload>0 then
+        local mag=T.point(gun,variants.magazine)
+        local pouch=T.point(worlds[M.index.Spine2],{x=.02,y=-.155,z=-.164})
+        local t=state.reload
+        local a,b,w
+        if t<.18 then a,b,w=support,mag,t/.18
+        elseif t<.42 then a,b,w=mag,pouch,(t-.18)/.24
+        elseif t<.62 then a,b,w=pouch,mag,(t-.42)/.20
+        elseif t<.78 then a,b,w=mag,mag,0
+        else a,b,w=mag,support,(t-.78)/.22 end
+        support={x=V.lerp(a.x,b.x,V.smooth(w)),y=V.lerp(a.y,b.y,V.smooth(w)),z=V.lerp(a.z,b.z,V.smooth(w))}
+    end
+    if vault>0 then
+        local shoulder=T.origin(worlds[M.index.UpperArmL])
+        local plant=state.vault_hand or {x=shoulder.x-.10,y=shoulder.y-.35,z=shoulder.z-.18}
+        support={x=V.lerp(support.x,plant.x,vault),y=V.lerp(support.y,plant.y,vault),z=V.lerp(support.z,plant.z,vault)}
+    end
+    IK.solve(worlds,M.bones,M.index.UpperArmL,M.index.ForearmL,M.index.HandL,support,{x=-.55,y=-1,z=.2})
+    IK.orient(worlds,M.bones,M.index.HandL,gun)
+    scratch.support_error=V.length({x=worlds[M.index.HandL][4]-support.x,y=worlds[M.index.HandL][8]-support.y,z=worlds[M.index.HandL][12]-support.z})
+    scratch.support_target=support;scratch.weapon_frame=gun
+    local scale=variants.get(state.variant).scale
+    for i,bone in ipairs(M.bones) do
+        local w=worlds[i];w[4],w[8],w[12]=w[4]*scale,w[8]*scale,w[12]*scale
+        local b=bone.bind;local out=palette[i] or {}
+        for k=1,12 do out[k]=w[k] end
+        out[4]=w[4]-(w[1]*b.x+w[2]*b.y+w[3]*b.z)*scale
+        out[8]=w[8]-(w[5]*b.x+w[6]*b.y+w[7]*b.z)*scale
+        out[12]=w[12]-(w[9]*b.x+w[10]*b.y+w[11]*b.z)*scale
         palette[i]=out
     end
-    if scratch then scratch.rotations,scratch.worlds,scratch.palette=rotations,worlds,palette end
+    scratch.rotations,scratch.worlds,scratch.palette=rotations,worlds,palette
     return palette,worlds
+end
+
+-- Physics frames use +Y down each joint, +Z approximately actor-forward. The
+-- local offsets map those frames back to our identity-axis rendering skeleton.
+function M.joint_frames(worlds)
+    local frames={}
+    for i,bone in ipairs(M.bones) do
+        local child
+        for j=i+1,#M.bones do if M.bones[j].parent==i then child=j;break end end
+        local origin=T.origin(worlds[i]);local direction
+        if child then
+            local tail=T.origin(worlds[child]);direction=V.normalize({x=tail.x-origin.x,y=tail.y-origin.y,z=tail.z-origin.z})
+        else direction=T.direction(worlds[i],{x=0,y=1,z=0}) end
+        local forward=T.direction(worlds[i],{x=0,y=0,z=-1})
+        local x=T.cross(direction,forward)
+        if V.length(x)<1e-6 then x=T.cross(direction,{x=1,y=0,z=0}) end
+        x=V.normalize(x);local z=T.cross(x,direction)
+        local f={x.x,direction.x,z.x,origin.x,x.y,direction.y,z.y,origin.y,x.z,direction.z,z.z,origin.z}
+        frames[i]={world=f,render_from_joint=T.mul(T.inverse(f),worlds[i])}
+        if bone.parent>0 then frames[i].parent_local=T.mul(T.inverse(frames[bone.parent].world),f) end
+    end
+    return frames
 end
 
 M.hitboxes={
@@ -149,17 +250,18 @@ for _,side in ipairs({"R","L"}) do
             orientation={x.x,y.x,z.x,0,x.y,y.y,z.y,0,x.z,y.z,z.z,0}}
     end
 end
-function M.volumes(palette,position,yaw,id)
+function M.volumes(palette,position,yaw,id,variant)
+    local definition=variants.get(variant);local scale=definition.scale
     local root=T.root(position,yaw)
     local out={}
     for i,box in ipairs(M.hitboxes) do
         local transform=T.mul(root,palette[M.index[box.bone]])
-        local center=T.point(transform,box.center)
+        local center=T.point(transform,{x=box.center.x*scale,y=box.center.y*scale,z=box.center.z*scale})
         if box.orientation then transform=T.mul(transform,box.orientation) end
         transform[4],transform[8],transform[12]=center.x,center.y,center.z
         out[i]={id=id.."/"..box.name,actor=id,surface="flesh",headshot=box.headshot,
             region=box.region,part=box.name,damage_scale=box.damage_scale,
-            x=center.x,y=center.y,z=center.z,w=box.w,h=box.h,d=box.d,transform=transform}
+            x=center.x,y=center.y,z=center.z,w=box.w*scale*(box.region=="head" and 1 or definition.bulk),h=box.h*scale,d=box.d*scale*(box.region=="head" and 1 or definition.bulk),transform=transform}
     end
     return out
 end

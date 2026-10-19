@@ -1,5 +1,12 @@
 # Third-party notices
 
+The soldier variants, proportions, equipment, weapon sockets and animation
+layers in `game/ai/variants.lua`, `geometry.lua`, `rig.lua` and `animation.lua`
+adapt Claude-of-Duty's `src/ai/soldier.js`, `weapon.js`, `rig.js`, `clips.js`
+and `animator.js` under the licence below. Static-ground contact anchors, the
+rigid Lua IK evaluator, variant-scaled collision boxes and physics-frame mapping
+are Defold adaptations.
+
 The weapon dimensions, arm lengths, grip frames, finger curls and animation
 tuning in `game/weapons/geometry.lua`, `arms.lua`, `motion.lua` and `clips.lua`
 adapt Claude-of-Duty's `src/weapons/models/*.js`, `hands.js`, `viewmodel.js` and

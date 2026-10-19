@@ -3,6 +3,8 @@
 local rig = require "game.ai.rig"
 local primitive = require "game.weapons.geometry"
 local V = require "game.weapons.math"
+local variants=require "game.ai.variants"
+local T=require "game.ai.transform"
 local M = {}
 local cloth={.48,.43,.29,6}
 local gear={.29,.28,.19,3}
@@ -72,18 +74,52 @@ local function limb(b,first,last,r1,r2,color)
         emit(s+1,r);emit(s+1,r+1);emit(s,r+1)
     end end
 end
-function M.build()
+function M.build(name)
+    local variant=variants.get(name)
+    local cloth,gear,skin=variant.cloth,variant.gear,variant.skin
     local b=primitive.batch();b.joints={};b.weights={}
     ellipsoid(b,"Hips",{x=0,y=1.00,z=0},{x=.19,y=.145,z=.14},cloth,"Spine")
     ellipsoid(b,"Spine",{x=0,y=1.22,z=0},{x=.225,y=.255,z=.14},cloth,"Spine2")
     ellipsoid(b,"Neck",{x=0,y=1.50,z=0},{x=.064,y=.065,z=.067},skin)
     ellipsoid(b,"Head",{x=0,y=1.655,z=0},{x=.104,y=.138,z=.108},skin)
-    ellipsoid(b,"Head",{x=0,y=1.745,z=.012},{x=.126,y=.096,z=.135},cloth,"HeadTop")
+    if variant.helmet then
+    ellipsoid(b,"Head",{x=0,y=1.745,z=.012},{x=.126,y=.096,z=.135},variant.shell,"HeadTop")
     box(b,"Head",0,1.705,-.106,.265,.035,.115,gear)
-    box(b,"Head",0,1.668,-.108,.197,.043,.038,dark)
-    box(b,"Head",0,1.60,-.10,.165,.076,.042,gear)
-    box(b,"Spine2",0,1.30,-.14,.32,.31,.062,gear)
-    box(b,"Spine2",0,1.30,.137,.32,.31,.06,gear)
+    else
+        ellipsoid(b,"Head",{x=0,y=1.743,z=.006},{x=.112,y=.079,z=.12},variant.shell)
+        for i=0,3 do box(b,"Head",0,1.725+i*.013,-.098,.20,.009,.026,gear) end
+        box(b,"Neck",-.095,1.51,.05,.055,.18,.032,gear,-.12)
+    end
+    if variant.goggles or variant.shades then
+        local y=variant.goggles and not variant.goggles_down and 1.76 or 1.668
+        box(b,"Head",0,y,-.112,.205,.043,.038,dark)
+        for _,x in ipairs({-.052,.052}) do box(b,"Head",x,y,-.135,.078,.027,.009,{.15,.19,.18,1}) end
+        box(b,"Head",0,y,.08,.22,.018,.10,dark)
+    end
+    if variant.beard then ellipsoid(b,"Head",{x=0,y=1.573,z=-.036},{x=.075,y=.048,z=.07},dark) end
+    box(b,"Head",0,1.652,-.108,.032,.043,.036,skin)
+    for _,x in ipairs({-.105,.105}) do
+        ellipsoid(b,"Head",{x=x,y=1.64,z=.006},{x=.025,y=.039,z=.022},skin)
+    end
+    box(b,"Head",0,1.60,-.10,.165,.076,.042,variant.hard_mask and dark or gear)
+    if variant.hard_mask then
+        for i=-2,2 do box(b,"Head",i*.026,1.596,-.124,.010,.035,.006,primitive.colors.metal) end
+    end
+    if variant.carrier then
+        box(b,"Spine2",0,1.30,-.14,.32,.31,.062,gear)
+        box(b,"Spine2",0,1.30,.137,.32,.31,.06,gear)
+        box(b,"Spine2",.06,1.28,.19,.20,.24,.065,gear)
+    else
+        box(b,"Spine1",0,1.21,-.14,.31,.16,.04,gear)
+    end
+    for _,x in ipairs({-.13,.13}) do
+        box(b,"Spine2",x,1.36,-.12,.043,.22,.04,gear)
+        box(b,"Spine2",x,1.415,0,.043,.025,.26,gear)
+    end
+    for y=1.20,1.40,.04 do box(b,"Spine2",0,y,-.175,.28,.009,.008,dark) end
+    box(b,"Spine2",.18,1.29,-.06,.055,.11,.07,gear)
+    box(b,"Spine2",.19,1.40,-.05,.007,.15,.007,dark)
+    box(b,"Hips",-.19,1.0,.04,.075,.12,.09,gear)
     for i=-1,1 do box(b,"Spine2",i*.101,1.21,-.187,.086,.14,.054,{.36,.32,.21,3}) end
     box(b,"Hips",0,1.018,0,.38,.055,.30,dark)
     for _,side in ipairs({"R","L"}) do
@@ -94,18 +130,59 @@ function M.build()
         limb(b,"UpLeg"..side,"Leg"..side,.096,.071,cloth)
         limb(b,"Leg"..side,"Foot"..side,.073,.053,cloth)
         local sign=side=="R" and 1 or -1
-        box(b,"Leg"..side,sign*.098,.51,-.073,.114,.15,.042,gear)
+        if variant.knee_pads then box(b,"Leg"..side,sign*.098,.51,-.073,.114,.15,.042,gear) end
+        box(b,"UpLeg"..side,sign*.17,.76,.01,.035,.15,.12,gear)
+        box(b,"UpperArm"..side,sign*.23,1.34,0,.035,.08,.065,gear)
         ellipsoid(b,"Foot"..side,{x=sign*.103,y=.075,z=-.06},{x=.076,y=.083,z=.155},dark,"Toe"..side)
         box(b,"Foot"..side,sign*.103,.023,-.06,.147,.038,.28,dark)
     end
-    -- Simplified carried carbine, rigidly skinned to the firing hand.
-    local x=.115
-    box(b,"HandR",x,1.357,-.26,.062,.08,.30,primitive.colors.metal,-.10)
-    box(b,"HandR",x,1.37,-.465,.061,.065,.23,primitive.colors.polymer,-.10)
-    box(b,"HandR",x,1.337,-.622,.021,.021,.18,primitive.colors.steel,-.10)
-    box(b,"HandR",x,1.384,.006,.066,.10,.22,dark,-.10)
-    box(b,"HandR",x,1.255,-.25,.041,.16,.07,dark,-.16)
-    box(b,"HandR",x,1.431,-.24,.041,.045,.058,dark)
+    -- Carbine and long-stroke rifle share authored sockets and an exact bore.
+    local gun=primitive.batch();local long=variant.weapon=="ak"
+    local function part(t,y,w,h,d,color,rx)
+        primitive.box(gun,0,y,-t,w,h,d,color,rx)
+    end
+    part(.265,-.016,.065,.084,.26,primitive.colors.metal)
+    part(.45,-.008,.065,.067,.24,long and {.29,.17,.09,2} or primitive.colors.polymer)
+    part(.70,0,.019,.019,long and .30 or .20,primitive.colors.steel)
+    part(long and .845 or .78,0,.030,.030,.040,dark)
+    part(.055,-.025,.067,.10,.20,long and primitive.colors.metal or dark)
+    part(.26,-.095,.037,.10,.05,dark,-.30)
+    for i=0,5 do part(.33+i*i*(long and .0015 or .0006),-.075-i*.025,.035,.031,.065,dark,-i*.05) end
+    part(.25,-.068,.043,.009,.078,primitive.colors.metal)
+    part(.30,-.045,.008,.026,.008,dark,-.15)
+    if long then
+        part(.62,.025,.012,.055,.018,primitive.colors.metal)
+        part(.30,.04,.032,.018,.035,dark)
+        part(.08,.022,.055,.013,.15,primitive.colors.metal)
+    else
+        part(.31,.055,.043,.05,.064,dark)
+        part(.31,.084,.05,.009,.067,primitive.colors.metal)
+        for i=0,9 do part(.18+i*.027,.042,.06,.009,.010,primitive.colors.metal) end
+        for i=0,4 do part(.40+i*.025,.018,.069,.008,.013,dark) end
+    end
+    local z={x=-variants.bore.x,y=-variants.bore.y,z=-variants.bore.z}
+    local x=V.normalize(T.cross({x=0,y=1,z=0},z));local y=T.cross(z,x)
+    local origin=variants.along(0)
+    local frame={x.x,y.x,z.x,origin.x,x.y,y.y,z.y,origin.y,x.z,y.z,z.z,origin.z}
+    for i=1,#gun.positions,3 do
+        local p=T.point(frame,{x=gun.positions[i],y=gun.positions[i+1],z=gun.positions[i+2]})
+        local n=T.direction(frame,{x=gun.normals[i],y=gun.normals[i+1],z=gun.normals[i+2]})
+        local c=(i-1)/3*4+1
+        vertex(b,p,n,{gun.colors[c],gun.colors[c+1],gun.colors[c+2],gun.colors[c+3]},"HandR")
+    end
+    -- Bulk changes soft-tissue/equipment radii about their joint, not lengths.
+    -- The uniform height scale applies equally to mesh, skeleton and volumes.
+    for i=1,b.vertex_count do
+        local at=(i-1)*3;local joint=b.joints[(i-1)*4+1]+1
+        local bone=rig.bones[joint]
+        local bulk=(bone.name:find("Hand") or bone.name:find("Head") or bone.name=="Neck" or bone.name:find("Foot")) and 1 or variant.bulk
+        b.positions[at+1]=(bone.bind.x+(b.positions[at+1]-bone.bind.x)*bulk)*variant.scale
+        b.positions[at+2]=b.positions[at+2]*variant.scale
+        b.positions[at+3]=(bone.bind.z+(b.positions[at+3]-bone.bind.z)*bulk)*variant.scale
+        local normal=V.normalize({x=b.normals[at+1]/bulk,y=b.normals[at+2],z=b.normals[at+3]/bulk})
+        b.normals[at+1],b.normals[at+2],b.normals[at+3]=normal.x,normal.y,normal.z
+    end
+    b.variant=variant.id
     b.bytes=b.vertex_count*18*4
     -- A fixed conservative bound includes every supported pose and the collapse.
     -- Bind-pose bounds alone would incorrectly cull animated limbs.

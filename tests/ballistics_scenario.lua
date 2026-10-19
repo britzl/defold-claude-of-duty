@@ -156,7 +156,7 @@ function M.update(test,self,dt,restart)
         for _=1,3 do
             restart(self);ctx.ai.enabled=false;frames(5)
             local state=soldiers.snapshot(ctx.services.soldiers)
-            assert(state.active_hitboxes==66 and state.objects==78 and state.buffers==1,json.encode(state))
+            assert(state.active_hitboxes==66 and state.objects==78 and state.buffers==3,json.encode(state))
             assert(#ctx.weapons.sim.live==0 and ctx.weapons.sim.deflections==0)
         end
         check("repeated_reset_keeps_66_hitboxes_and_clears_rounds")

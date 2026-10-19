@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "contract_sha256": "7c65fbe71ab3bdd848bf947d7511177b5805df5152afce79abc203328bd77d36",
+  "contract_sha256": "f564d56ef93e77f0b6c7fcb57db3b8a388343ade9ceaf126e5880cebefc05fe9",
   "fingerprint_method": "Sorted relative UTF-8 path + NUL + decimal byte length + NUL + file bytes; SHA-256.",
   "sources": {
     "defold": {
-      "sha256": "3d16e1b578bdcc0a19f8634493097112aac727d87580087055b903755e2d80e0",
-      "files": 255,
+      "sha256": "d144982dc2907858a6e8853e1088cf68020a2f2476b77ad958417c513a9f4536",
+      "files": 258,
       "scopes": [
         "game",
         "main",
@@ -17,7 +17,7 @@
         "input",
         "game.project"
       ],
-      "git_revision": "a9bef8a398ff5aef791bea3ce166dff88dc0a011",
+      "git_revision": "492dbaa2dec30eef6bc6c8002839d92f7e1f0eb3",
       "revision_status": "Git commit plus working source hash"
     },
     "threejs": {
@@ -1407,7 +1407,7 @@
     },
     "world_seed": 1337
   },
-  "created_utc": "2026-10-19T13:36:38.284628+00:00",
+  "created_utc": "2026-10-19T14:44:27.439923+00:00",
   "evidence": [],
   "parity_qualified": false
 }

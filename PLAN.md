@@ -8,7 +8,7 @@ The target is feature and presentation parity with the local Three.js and Kaigen
 
 ## Current status and scope
 
-The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families. Step 6 adds player regeneration, fall damage, suppression and low-health feedback. Step 7 adds detailed weapon assemblies, shared articulated arms, hand tracks and fixed-tick first-person motion. Step 8 reconciles penetration loss/deflection and animated regional damage, with native and browser fixtures; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
+The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families. Step 6 adds player regeneration, fall damage, suppression and low-health feedback. Step 7 adds detailed weapon assemblies, shared articulated arms, hand tracks and fixed-tick first-person motion. Step 8 reconciles penetration loss/deflection and animated regional damage. Step 9 adds three soldier variants, layered animation, planted foot/hand IK and ragdoll joint frames; native/browser validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
 
 **Status convention:** `[x]` means the stated implementation is complete in the current port; `[ ]` means work remains. Implementation completion does not imply full source fidelity, all-platform qualification or an agreed performance budget. The ordered backlog below is the current execution plan; the historical record at the end preserves earlier design and validation details.
 
@@ -18,7 +18,7 @@ The 2026-10-15 source audit used Defold revision `8146e12` and the two local ref
 - [x] Generated full market layout: 104-metre road, all 20 reference footprints, five flank routes, far cross street, ruin yard and gate passage; connected W2/E1/E2 floors, ground-only E3, shared collision/navigation/cover/room metadata and a full-map minimap. Step 4 adds source-derived architecture, furnished rooms and street dressing.
 - [x] Core traversal: swept capsule, walking/sprinting/tactical sprint, jump buffering/coyote time, crouch/prone, steps/slopes, sliding, clearance-checked mantling/vaulting, collision-limited leaning and a fixed-tick camera rig.
 - [x] Core weapons: M4A1/MPX-9/P-19, fire modes, magazine/chamber state, reload/inspection/switching timelines, ADS, recoil, spread, projectile travel/drop and material penetration; generated weapon assemblies and articulated arm/hand IK in an independent render pass.
-- [x] Core soldiers/combat: generated 25-bone soldier, animated hit volumes, patrol/detection/pursuit/fire/death, two squads of three, shared alerts, cover claims, low-cover peeking, suppression, friendly firing-lane checks and a west-loop flank.
+- [x] Core soldiers/combat: three generated 25-bone soldier variants, terrain/hand IK, layered animation, animated hit volumes, patrol/detection/pursuit/fire/death, two squads of three, shared alerts, cover claims, low-cover peeking, suppression, friendly firing-lane checks and a west-loop flank.
 - [x] Core audio: 76 generated samples, budgeted loading, bounded spatial mixer, player/weapon/surface cues, ambience, initial occlusion and room variants, volume controls and lifecycle cleanup.
 - [x] Core desktop UI: crosshair/hitmarkers, ammo/mode, health/basic damage direction, compass, geometry minimap, killfeed, pause/settings, focus handling and encounter restart.
 - [x] Rendering/capture infrastructure: the stages listed below, deterministic capture manifests, still/motion fixtures, a material laboratory and a Three.js capture adapter.
@@ -165,15 +165,21 @@ The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json
 
 **2026-10-19 validation:** All 282 standalone Lua checks across 30 suites and the 12 baseline-tool checks passed. The shared eight-check fixture passed on Mac Metal and release Chrome WebGL2/ANGLE Metal, including 33 posed native-volume checks and three reset cycles. Reports are in `build/ballistics-unit-validation`, `build/ballistics-native-validation` and `build/ballistics-browser-validation`. The existing 13-check native health fixture and updated native soldier combat/navigation/replacement suite also pass. These implementation checks do not establish controlled cross-engine or sustained-performance parity.
 
-### 9. Complete soldier variants and animation — PARTIAL
+### 9. Complete soldier variants and animation — IMPLEMENTED
 
-- [x] Shared generated 25-bone soldier, basic idle/walk/aim/recoil/crouch and animated hit volumes.
-- [ ] Generate vanguard, irregular and breacher variants with reference anatomy, equipment and carried weapons.
-- [ ] Add run/crouch locomotion, turning steps, wounded poses, regional hit reactions, reload and vault animation layers.
-- [ ] Add terrain-following foot/pelvis IK, weapon-grip/reload hand IK and constrained head/spine aiming.
-- [ ] Keep authoritative hit volumes, visible poses, shadows and current/previous temporal palettes consistent; prepare correct joint frames for ragdolls.
+- [x] Shared generated 25-bone anatomy and eleven animated hit volumes.
+- [x] Vanguard, irregular and breacher with reference height/bulk, distinct headgear/equipment and carbine/AK-style weapons using shared grip/muzzle sockets.
+- [x] Distance-driven walk/run/crouch, turning steps, wounded posture, sided regional hit reactions, reload and vault layers on the fixed simulation clock.
+- [x] Planted terrain contacts, bounded pelvis/sole correction and rigid two-bone leg/hand IK; constrained spine/head aim and reload hand tracks.
+- [x] One evaluator for authoritative hit volumes, visible/shadow poses and independent current/previous temporal palettes; +Y-along-bone joint frames with exact render offsets for ragdoll handoff.
 
-**Completion check:** Variant/animation fixtures cover uneven ground, stairs, turning, aiming, reloads and hits without sliding feet, detached hands, incorrect hit volumes or broken motion vectors.
+**Implementation check:** The shared fixture checks all three variants in six poses through actual Bullet volumes (198 queries), connected hands, uneven support, running foot locks, production capsule traversal up four stairs, turning, damage reactions, pause and three resets. Unit samples cover all clips, rigid limb lengths, aim limits, joint-frame reconstruction and 30/60/144 FPS equivalence. Native/browser pose captures support visual inspection.
+
+**Adaptations and remaining qualification:** Reduced procedural detail, static-ground foot anchors, analytic solves and bounded additive layers are documented adaptations. The carried magazine remains rigid, matching the reference soldier preview. Reload/vault animation interfaces are implemented; ammunition cycles, tactical vault decisions and root traversal remain step 11. Deaths retain the authored collapse until step 10. Controlled reference motion/appearance, Kaigen capture and sustained performance remain steps 18–19; implementation completion is not visual-parity acceptance.
+
+**Resource account:** Three shared meshes: 9,804 / 9,804 / 10,488 vertices and 2,166,912 total stream bytes (2.07 MiB); two additional buffers and 1,652,832 additional bytes. Six actors retain 78 objects, 66 hit volumes, 25 joints and the existing pass/palette counts. Variant dimensions scale collision volumes with the mesh. Two ground rays per actor per fixed tick add at most 1,440 rays/second for six live actors. No new render targets or native extension.
+
+**2026-10-19 validation:** 296 standalone checks across 31 Lua suites and the 12 baseline-tool checks pass. Native Metal and release Chrome WebGL2/ANGLE Metal each pass 11 shared checks and save 15 pose captures. Reports are under `build/soldier-native-validation` and `build/soldier-browser-validation`; commands and limits are in README.md. These are implementation checks, not sustained-performance or cross-engine qualification.
 
 ### 10. Add rigid-body debris and ragdoll deaths — NOT IMPLEMENTED
 

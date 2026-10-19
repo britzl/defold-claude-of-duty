@@ -13,8 +13,8 @@ local function matrix(t,out)
     out.m20,out.m21,out.m22,out.m23=t[9],t[10],t[11],t[12]
     return out
 end
-local function upload(a)
-    local b=geometry.build()
+local function upload(a,variant)
+    local b=geometry.build(variant)
     local streams={{"position",3,b.positions},{"normal",3,b.normals},{"color",4,b.colors},
         {"joint_indices",4,b.joints},{"joint_weights",4,b.weights}}
     local declarations={}
@@ -25,22 +25,25 @@ local function upload(a)
         for i,v in ipairs(s[3]) do out[i]=v end
     end
     buffer.set_metadata(data,"AABB",b.bounds,buffer.VALUE_TYPE_FLOAT32)
-    a.resource=resource.create_buffer("/generated/soldier_"..hash_to_hex(go.get_id())..".bufferc",{buffer=data})
-    a.vertices,a.bytes=b.vertex_count,b.bytes
+    local resource_id=resource.create_buffer("/generated/soldier_"..variant.."_"..hash_to_hex(go.get_id())..".bufferc",{buffer=data})
+    a.resources[variant]={id=resource_id,vertices=b.vertex_count,bytes=b.bytes}
+    a.vertices=(a.vertices or 0)+b.vertex_count;a.bytes=(a.bytes or 0)+b.bytes
+    return resource_id
 end
 function M.new(ctx,world,mesh_factory,mover_factory,hit_factory)
     return {api=M,ctx=ctx,world=world,mesh_factory=mesh_factory,mover_factory=mover_factory,
-        hit_factory=hit_factory,by_id={},instances={},retired={},uploads=0,present_seconds=0,peak_present=0,mat=vmath.matrix4()}
+        hit_factory=hit_factory,resources={},by_id={},instances={},retired={},uploads=0,present_seconds=0,peak_present=0,mat=vmath.matrix4()}
 end
 function M.create(a,e)
-    if not a.resource then upload(a) end
+    local variant=e.variant or "vanguard"
+    local resource_id=a.resources[variant] and a.resources[variant].id or upload(a,variant)
     local item={mesh=factory.create(a.mesh_factory,vector(e.position)),
         mover=factory.create(a.mover_factory,vector(e.position)),hits={},born=a.ctx.time.frame}
     item.url=msg.url(nil,item.mesh,"mesh")
-    go.set(item.url,"vertices",a.resource)
+    go.set(item.url,"vertices",resource_id)
     item.prepass=msg.url(nil,item.mesh,"prepass")
-    go.set(item.prepass,"vertices",a.resource)
-    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id)
+    go.set(item.prepass,"vertices",resource_id)
+    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant)
     for _,shape in ipairs(volumes) do
         local id=factory.create(a.hit_factory,vector(shape))
         local url=msg.url(nil,id,"collision")
@@ -91,7 +94,7 @@ function M.sync(a,e)
     local item=a.instances[e.id]
     if not item.query or item.disabled then return end
     item.query:sync(e.position,e.motion.height)
-    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id)
+    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant)
     for i,shape in ipairs(volumes) do
         local hit=item.hits[i]
         a.by_id[hit.id]=shape
@@ -147,14 +150,16 @@ function M.snapshot(a)
         actors=actors+1;objects=objects+2+#item.hits
         if not item.disabled then boxes=boxes+#item.hits end
     end
-    return {actors=actors,objects=objects,active_hitboxes=boxes,buffers=a.resource and 1 or 0,
+    local buffers=0;for _ in pairs(a.resources) do buffers=buffers+1 end
+    return {actors=actors,objects=objects,active_hitboxes=boxes,buffers=buffers,
         vertices=a.vertices or 0,mesh_bytes=a.bytes or 0,palette_bytes=rig.count*64*3,
         palette_uploads=a.uploads,palette_calls_per_actor=4,
         mean_upload_ms=a.uploads>0 and a.present_seconds*1000/a.uploads or 0,peak_upload_ms=a.peak_present*1000}
 end
 function M.final(a)
     assert(next(a.instances)==nil,"Soldier instances must be removed before their shared buffer")
-    if a.resource then resource.release(a.resource);a.resource=nil end
+    for _,item in pairs(a.resources) do resource.release(item.id) end
+    a.resources={};a.vertices=0;a.bytes=0
     a.by_id={};a.retired={}
 end
 return M

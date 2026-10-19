@@ -45,7 +45,11 @@ for frame=1,7 do for actor=1,2 do
     if not a.instances[id] then a.instances[id]={mesh=id,url=id.."/mesh",prepass=id.."/prepass"} end
     local t=frame==4 and 3 or frame
     scratch[id]=scratch[id] or {}
-    local palette=rig.pose({time=t,phase=t*.37,walk=1,aim=actor-1,crouch=t/10,death=actor==2 and t/10 or 0},scratch[id])
+    local palette=rig.pose({variant=actor==1 and "irregular" or "breacher",time=t,phase=t*.37,
+        walk=1,run=.7,aim=actor-1,crouch=t/10,death=actor==2 and t/10 or 0,
+        reload=t/10,reload_weight=1,hit=.3,hit_region="arm",hit_side=-1,
+        feet={R={target={x=.103,y=.18,z=.12},normal={x=.1,y=.99,z=0},weight=1},
+            L={target={x=-.103,y=.088,z=-.2},normal={x=0,y=1,z=0},weight=1}}},scratch[id])
     local position={x=t*actor,y=actor,z=-t}
     local yaw=t*.13
     local world=vmath.matrix4_rotation_y(yaw)

@@ -430,15 +430,25 @@
       "feature": "Three soldier variants and IK",
       "references": [
         "threejs:src/ai/animator.js",
-        "kaigen:src/claude_of_duty/cod_ai_body_anim.c"
+        "kaigen:src/claude_of_duty/cod_ai_body_anim.c",
+        "threejs:src/ai/soldier.js",
+        "threejs:src/ai/rig.js",
+        "threejs:src/ai/clips.js",
+        "threejs:src/ai/weapon.js"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Show all variants walking/running/crouching/turning on stairs, aiming, reloading, vaulting and reacting to hits.",
       "expect": "Reference equipment/anatomy, grounded feet, attached hands, matching shadows and motion vectors.",
       "coverage": [
+        "tests/soldier_animation_test.lua",
+        "tests/soldier_presentation_test.lua",
         "tests/ai_test.lua",
+        "tests/soldier_scenario.lua",
+        "tests/soldier_smoke.py",
+        "tools/validate_soldier_browser.mjs",
         "tests/temporal_smoke.py"
-      ]
+      ],
+      "implementation_notes": "Three shared variant meshes, source height/bulk and distinct gear/carbine/AK recipes. Fixed-tick run/crouch, turning, wounded/regional-hit, reload and vault layers; two ground probes, world stance anchors, pelvis/sole correction and rigid leg/hand IK. Same evaluator drives scaled Bullet volumes and current/previous render palettes. Physics joint frames reconstruct the animated skeleton. Reload ammunition cycles and AI vault routing remain step 11; ragdolls remain step 10. Native/release-WebGL fixtures exercise posed volumes, uneven terrain, live stairs, pause and bounded resets. Reduced geometry/detail, static contacts and analytic poses are adaptations; reference appearance/motion and sustained cost remain open."
     },
     {
       "id": "dynamics",

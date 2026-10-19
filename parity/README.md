@@ -26,6 +26,23 @@ The complete stress scenario remains unqualified while grenades, ragdolls and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Soldier animation increment — 2026-10-19
+
+Step 9 adds three generated variants with source-derived height/bulk, equipment
+and carbine/AK sockets; fixed-tick locomotion, turning, wounded/hit, reload and
+vault layers; planted foot/pelvis/sole and weapon-hand IK; and physics joint frames
+for the next ragdoll step. Authoritative collision and interpolated render poses
+share the evaluator while retaining separate scratch and temporal histories.
+The shared native/release-WebGL fixture tests real Bullet volumes, uneven terrain,
+live stairs, pause and resets. The 296-check Lua matrix covers clips, limb lengths,
+contacts, palette consistency and frame-rate equivalence. See README.md for the
+resource account, commands and captured views.
+
+Reduced mesh detail, static-ground contacts and analytic pose layers are explicit
+adaptations. Reload/vault tactical decisions remain step 11. The refreshed source
+lock contains no stale capture receipts, and no new controlled reference motion,
+Kaigen comparison or sustained-performance pass is claimed.
+
 ## Ballistics and regional damage increment — 2026-10-19
 
 Step 8 uses the reference regional scales, twelve material scatter coefficients

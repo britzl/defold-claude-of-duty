@@ -46,7 +46,7 @@ def main():
         game.wait_frames(50)
         assert soldier()["travel"] > before + .25
         render = state()["render"]
-        assert render["vertices"] == 7140 and render["buffers"] == 1 and render["active_hitboxes"] == 66, render
+        assert render["vertices"] == 30096 and render["buffers"] == 3 and render["active_hitboxes"] == 66, render
         assert render["palette_uploads"] > 10 and render["palette_bytes"] == 4800, render
         print("PASS generated mesh, 25-bone palette uploads and native patrol", render, flush=True)
 
@@ -126,7 +126,7 @@ def main():
             reset_enemy()
         game.wait_frames(3)
         render = state()["render"]
-        assert render["objects"] == 13 and render["buffers"] == 1 and render["active_hitboxes"] == 11, render
+        assert render["objects"] == 13 and render["buffers"] == 3 and render["active_hitboxes"] == 11, render
         assert len(command("ai.volumes")) == 11
         command("gameplay.damage", dict(target="player", amount=1000))
         engine.wait_until(lambda: not command("gameplay.snapshot")["alive"], timeout=3)

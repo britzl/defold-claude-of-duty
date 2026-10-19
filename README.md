@@ -38,6 +38,74 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Soldier variants and animation (2026-10-19)
+
+Step 9 adds **vanguard, irregular and breacher** to the two squads. Their shared
+25-joint anatomy retains the reference height/bulk ratios: 1/1, .985/.94 and
+1.025/1.06. Generated helmet/wrap, goggles/glasses, masks, carriers/chest rigs,
+pouches and knee pads distinguish their silhouettes. Vanguard and breacher carry
+carbines; irregular carries a longer AK-style rifle. Both weapon recipes use the
+same grip and bore sockets as their animated hands and gameplay muzzle.
+Enemy firing statistics remain the existing tuning until step 11.
+
+The fixed simulation owns run/crouch locomotion, turning steps, wounded posture,
+sided regional hit reactions, reload and vault clips. Movement drives stride;
+stance feet retain world positions while swing feet lift and replant. Two terrain
+rays per live actor find support, the pelvis lowers within reach, and rigid
+leg IK aligns soles with slopes up to .35 radians. Missing or steep support
+releases the constraint. Teleports reset contact history. Hand IK follows the
+carried weapon after spine aiming and recoil; reloads visit the magazine,
+chest pouch and handguard. Aim is limited to .6 radians of pitch and .75 radians
+of spine yaw. Damage events select the hit region/side, and health below 45%
+blends toward a wounded stance, reaching full weight at 20%.
+
+`animation.reload(actor, duration)` and `animation.vault(actor, duration, hand)`
+provide the clips for the later tactical decisions. Reload ammunition cycles
+and AI vault routing remain **step 11**; the vault caller owns root travel.
+The carried magazine stays part of the weapon mesh, as in the reference soldier
+preview. Pose sampling is read-only, pause freezes animation clocks, and both
+simulation and presentation use the same evaluator with separate scratch data.
+Colour, shadow and current/previous depth palettes share the resulting joints.
+`rig.joint_frames` supplies +Y-along-bone physics frames and inverse render offsets
+for the step-10 ragdoll handoff; deaths still use the existing authored collapse.
+
+**Resource account:** three reusable meshes hold 9,804 / 9,804 / 10,488 vertices,
+**30,096 vertices and 2,166,912 stream bytes** in total (2.07 MiB before engine
+overhead). This adds two buffers and 1,652,832 bytes over the previous shared
+mesh. Six actors still own 78 objects and 66 hit volumes; dimensions now follow
+the variant height/bulk; navigation retains the common movement capsule. Each
+actor still uploads 25 joints through the same four
+palette/world assignments and submits one mesh per applicable pass. No new
+render targets, materials, audio banks or native extensions. Six moving actors
+add at most 1,440 terrain rays per simulation second. These bounds are not
+sustained performance measurements.
+
+```sh
+lua tests/soldier_animation_test.lua
+lua tests/soldier_presentation_test.lua
+lua tests/ai_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/soldier_smoke.py
+# Build release wasm-web with tests/soldier_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_soldier_browser.mjs --bundle=/path/to/bundle
+```
+
+Validation covers all **296 standalone checks in 31 Lua suites**, plus the
+**12 baseline-tool checks**. The new unit
+matrix samples every variant/clip, rigid limb lengths, connected hands, grounded
+feet, singular/limited aim, hit events, joint-frame reconstruction and 30/60/144
+FPS equivalence. Mac Metal and release Chrome WebGL2/ANGLE Metal each pass
+**11 shared fixture checks and save 15 pose captures**. The fixture exercises 198 real
+Bullet volume queries, uneven support, planted running feet, live capsule travel
+up four stairs, turning, damage, pause/resume and three resets. The reports and
+pose captures are in `build/soldier-native-validation` and
+`build/soldier-browser-validation`; unit logs are in
+`build/soldier-unit-validation`.
+
+The models use fewer primitives and less surface detail than the reference.
+Static-ground contact anchors, analytic limb solves and bounded pose layers are
+Defold adaptations. Exact reference appearance/motion, controlled Kaigen capture
+and sustained six-actor performance remain steps 18–19.
+
 ## Ballistics and regional damage (2026-10-19)
 
 Step 8 adds deterministic material deflection and reconciles damage with the

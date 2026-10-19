@@ -1,0 +1,6 @@
+[soldier_validation]
+enabled = 1
+[display]
+width = 960
+height = 640
+high_dpi = 0

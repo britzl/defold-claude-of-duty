@@ -11,6 +11,8 @@ local rng = require "game.rng"
 local ballistics = require "game.weapons.ballistics"
 local tactics = require "game.ai.tactics"
 local suppression = require "game.ai.suppression"
+local animation=require "game.ai.animation"
+local variants=require "game.ai.variants"
 local M = {}
 local SHOT={id="enemy_rifle",muzzleVelocity=400,damage=10,penetration=.45,dropoff=.6,maxRange=60,dragK=.01}
 local eye=suppression.eye
@@ -21,12 +23,17 @@ end
 local function angle(dx,dz) return math.atan2(-dx,-dz) end
 local function wrap(v) return (v+math.pi)%(math.pi*2)-math.pi end
 local function muzzle(e)
-    local local_point=transform.point(e.palette[rig.index.HandR],rig.muzzle)
+    local socket=variants.muzzle(e.variant);local scale=variants.get(e.variant).scale
+    local local_point=transform.point(e.palette[rig.index.HandR],{x=socket.x*scale,y=socket.y*scale,z=socket.z*scale})
     return transform.point(transform.root(e.position,e.yaw),local_point)
 end
 local function sample(e)
-    return {time=e.age,phase=e.phase,walk=e.walk,aim=e.aim,pitch=e.pitch,recoil=e.recoil,death=e.death,crouch=e.crouch}
+    local out=animation.sample(e)
+    out.time,out.phase,out.walk,out.aim,out.pitch=e.age,e.phase,e.walk,e.aim,e.pitch
+    out.recoil,out.death,out.crouch=e.recoil,e.death,e.crouch
+    return out
 end
+M.pose_state=sample
 local function spawn(ctx,point)
     local position,yaw,id=point.position,point.yaw or math.pi,point.id
     local index=#ctx.ai.order+1
@@ -37,6 +44,8 @@ local function spawn(ctx,point)
         think=(index-1)/60,notice=0,memory=0,cooldown=1,route=nil,route_age=0,patrol=2,shots=0,travel=0,
         random=rng.new(ctx.world.seed,id),
         patrol_points={V.copy(position),V.copy(point.patrol or {x=0,y=0,z=-5})}}
+    e.variant=variants.get(point.variant or variants.order[(index-1)%#variants.order+1]).id
+    e.run=0;animation.init(e)
     e.motion=capsule.new(e.position);e.motion.yaw=e.yaw
     suppression.init(e)
     e.previous_pose=sample(e)
@@ -58,8 +67,9 @@ function M.init(ctx)
     events.on(ctx.events,events.BULLET_IMPACT,ctx.ai,function(_,hit) suppression.observe(ctx,hit,true) end)
     events.on(ctx.events,events.DAMAGE_DEALT,ctx.ai,function(_,hit)
         local e=ctx.ai.actors[hit.target]
-        if e and hit.source=="player" and e.actor.alive then
-            tactics.alert(ctx,e,ctx.player.position)
+        if e and e.actor.alive then
+            animation.hit(e,hit)
+            if hit.source=="player" then tactics.alert(ctx,e,ctx.player.position) end
         end
     end)
     events.on(ctx.events,events.ACTOR_DEATH,ctx.ai,function(_,hit)
@@ -135,7 +145,8 @@ local function think(ctx,e,query,options)
 end
 local function fire(ctx,e,query)
     if e.state~="fire" or e.suppressed or e.duck or e.crouch>.08 or e.motion.stance~="stand"
-        or not e.visible or e.cooldown>0 or e.aim<.85 then return end
+        or not e.visible or e.cooldown>0 or e.aim<.85
+        or e.animation.reload_time>=0 or e.animation.vault_time>=0 then return end
     local target=player_target(ctx)
     if math.abs(wrap(angle(target.x-e.position.x,target.z-e.position.z)-e.yaw))>.10 then return end
     -- Trace from the animated rifle's muzzle and confirm that the muzzle itself
@@ -192,10 +203,12 @@ function M.fixed_update(ctx,dt)
                 local facing=(e.cover_phase and e.last_seen) or (e.state=="fire" and ctx.player.position) or waypoint
                 if facing then
                     local desired=angle(facing.x-e.position.x,facing.z-e.position.z)
-                    e.yaw=e.yaw+V.clamp(wrap(desired-e.yaw),-dt*4,dt*4)
+                    local delta=wrap(desired-e.yaw)
+                    if math.abs(delta)>.9 and e.motion.travel/dt<.3 then animation.turn(e,delta) end
+                    e.yaw=e.yaw+V.clamp(delta,-dt*4,dt*4)
                 end
                 e.motion.yaw=e.yaw
-                -- AI vault decisions and animation belong to the later tactics increment.
+                -- Vault decisions stay in step 11; animation.vault consumes an accepted traversal.
                 local intent={enabled=true,move_x=0,move_z=0,crouch=e.duck,auto_vault=false}
                 if waypoint then
                     local dx,dz=waypoint.x-e.position.x,waypoint.z-e.position.z
@@ -218,22 +231,25 @@ function M.fixed_update(ctx,dt)
                 -- muzzle, perception and hit volumes all use this same blend.
                 local target_crouch=e.motion.stance=="crouch" and 1 or 0
                 e.crouch=e.crouch+V.clamp(target_crouch-e.crouch,-dt*5,dt*7)
-                e.travel=e.travel+e.motion.travel;e.phase=e.phase+e.motion.travel*2*math.pi/1.25
+                e.travel=e.travel+e.motion.travel;e.phase=e.phase+e.motion.travel*2*math.pi/(1.25+.45*e.run)
                 e.stuck=waypoint and (e.motion.travel<dt*.15 and e.stuck+dt or 0) or 0
                 local speed=e.motion.travel/dt
+                e.run=e.run+(V.clamp((speed-1.25)/.95,0,1)-e.run)*math.min(1,dt*9)
                 e.walk=e.walk+(math.min(1,speed/1.1)-e.walk)*math.min(1,dt*9)
                 local aiming=not e.duck and (e.state=="fire" or e.cover_phase=="peek")
                 e.aim=e.aim+((aiming and 1 or 0)-e.aim)*math.min(1,dt*8)
                 local target=player_target(ctx)
                 local d=math.sqrt((target.x-e.position.x)^2+(target.z-e.position.z)^2)
+                e.aim_yaw=wrap(angle(target.x-e.position.x,target.z-e.position.z)-e.yaw)
                 e.pitch=V.clamp(math.atan2(target.y-(e.position.y+1.4),math.max(.01,d)),-.5,.5)
                 e.recoil=math.max(0,e.recoil-dt*8)
             end
+            if (ai.enabled and ctx.player.enabled) or not e.actor.alive then animation.step(e,dt,query) end
             if profiler then profiler.scope_begin("ai.simulation_pose") end
             -- Simulation owns this scratch independently of interpolated
             -- presentation. Hit volumes copy the transforms they retain.
             e.simulation_pose=e.simulation_pose or {}
-            e.palette=rig.pose(sample(e),e.simulation_pose)
+            e.palette,e.joints=rig.pose(sample(e),e.simulation_pose)
             if profiler then profiler.scope_end();profiler.scope_begin("ai.hitboxes") end
             if service and e.actor.alive then service.api.sync(service,e) end
             if profiler then profiler.scope_end() end
@@ -263,8 +279,7 @@ function M.present(ctx)
     for _,id in ipairs(ctx.ai.order) do
         local e=ctx.ai.actors[id]
         if profiler then profiler.scope_begin("soldiers.pose") end
-        local state=sample(e)
-        for key,value in pairs(state) do state[key]=V.lerp(e.previous_pose[key],value,alpha) end
+        local state=animation.interpolate(e.previous_pose,sample(e),alpha)
         local p={x=V.lerp(e.previous.x,e.position.x,alpha),y=V.lerp(e.previous.y,e.position.y,alpha),z=V.lerp(e.previous.z,e.position.z,alpha)}
         e.presentation_pose=e.presentation_pose or {}
         local palette=rig.pose(state,e.presentation_pose)
@@ -297,7 +312,7 @@ function M.snapshot(ctx)
         local e=ctx.ai.actors[id]
         out.actors[#out.actors+1]={id=e.id,health=e.actor.health,alive=e.actor.alive,state=e.state,
             x=e.position.x,y=e.position.y,z=e.position.z,yaw=e.yaw,visible=e.visible or false,
-            phase=e.phase,aim=e.aim,death=e.death,shots=e.shots,travel=e.travel,route=e.route and #e.route or 0,
+            variant=e.variant,run=e.run,animation=animation.sample(e),phase=e.phase,aim=e.aim,death=e.death,shots=e.shots,travel=e.travel,route=e.route and #e.route or 0,
             suppression=e.suppression,suppressed=e.suppressed,suppression_events=e.suppression_events,
             suppressed_ticks=e.suppressed_ticks,crouch=e.crouch,stance=e.motion.stance,
             cover_phase=e.cover_phase,peek_timer=e.peek_timer,peeks=e.peeks,

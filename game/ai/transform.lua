@@ -38,4 +38,25 @@ function M.root(position,yaw)
     m[4],m[8],m[12]=position.x,position.y,position.z
     return m
 end
+function M.origin(m) return {x=m[4],y=m[8],z=m[12]} end
+function M.cross(a,b) return {x=a.y*b.z-a.z*b.y,y=a.z*b.x-a.x*b.z,z=a.x*b.y-a.y*b.x} end
+function M.dot(a,b) return a.x*b.x+a.y*b.y+a.z*b.z end
+-- Shortest arc, including antiparallel and zero-length input directions.
+function M.between(a,b)
+    local function unit(v)
+        local n=math.sqrt(M.dot(v,v));if n<1e-9 then return end
+        return {x=v.x/n,y=v.y/n,z=v.z/n}
+    end
+    a,b=unit(a),unit(b)
+    if not a or not b then return M.identity() end
+    local c=math.max(-1,math.min(1,M.dot(a,b)))
+    if c>1-1e-12 then return M.identity() end
+    local axis=M.cross(a,b)
+    if c< -1+1e-9 then axis=M.cross(a,math.abs(a.y)<.9 and {x=0,y=1,z=0} or {x=1,y=0,z=0}) end
+    axis=unit(axis)
+    local x,y,z=axis.x,axis.y,axis.z
+    local s=math.sqrt(math.max(0,1-c*c));local d=1-c
+    return {c+x*x*d,x*y*d-z*s,x*z*d+y*s,0,
+        y*x*d+z*s,c+y*y*d,y*z*d-x*s,0,z*x*d-y*s,z*y*d+x*s,c+z*z*d,0}
+end
 return M
