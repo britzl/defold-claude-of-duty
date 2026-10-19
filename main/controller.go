@@ -23,3 +23,4 @@ components { id: "glass_mesh" component: "/render/glass.factory" }
 components { id: "capture_glass" component: "/render/glass_lab.factory" }
 components { id: "combat_particle" component: "/weapons/particle.factory" }
 components { id: "weapon_flash" component: "/weapons/flash.factory" }
+components { id: "physics_body" component: "/physics/body.factory" }

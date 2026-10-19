@@ -116,6 +116,10 @@ end
 function M.present(a,e,palette,position,yaw)
     local started=os.clock()
     local item=a.instances[e.id]
+    if e.ragdoll and e.ragdoll.expired then
+        if not item.hidden then msg.post(item.url,"disable");msg.post(item.prepass,"disable");item.hidden=true end
+        return
+    end
     go.set_position(vector(position),item.mesh)
     go.set_rotation(vmath.quat_rotation_y(yaw),item.mesh)
     local current_world=vmath.matrix4_rotation_y(yaw)

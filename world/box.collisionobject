@@ -7,6 +7,9 @@ mask: "player"
 mask: "enemy"
 mask: "enemy_body"
 mask: "projectile"
+mask: "debris"
+event_collision: false
+event_contact: false
 embedded_collision_shape {
   shapes {
     shape_type: TYPE_BOX

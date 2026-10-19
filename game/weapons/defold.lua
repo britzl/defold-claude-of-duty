@@ -6,7 +6,7 @@ local events = require "game.events"
 local arms = require "game.weapons.arms"
 local M = {}
 local POSITION,NORMAL,COLOR=hash("position"),hash("normal"),hash("color")
-local GROUPS={hash("world"),hash("enemy")}
+local GROUPS={hash("world"),hash("enemy"),hash("debris")}
 local function vector(p) return vmath.vector3(p[1],p[2],p[3]) end
 local function rotation(r) return vmath.quat_rotation_y(r[2])*vmath.quat_rotation_x(r[1])*vmath.quat_rotation_z(r[3]) end
 local function upload(adapter,batch,factory_url)
@@ -55,7 +55,7 @@ function M.new(ctx,mesh_factory,effect_factory)
         a.arms[side].palette={}
         visible(a.arms[side],false)
     end
-    -- Fixed resource budget for short-lived surface particles, tracers and cases.
+    -- Fixed resource budget for short-lived surface particles and tracers.
     local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,0})
     for _=1,24 do
         local part=upload(a,cube,effect_factory);part.life=0
@@ -67,7 +67,7 @@ function M.new(ctx,mesh_factory,effect_factory)
         a.effect_cursor=a.effect_cursor%#a.effects+1
         local e=a.effects[a.effect_cursor]
         e.position=V.copy(position);e.velocity=velocity;e.life=life;e.duration=life;e.size=size
-        e.tracer=false;e.shell=false;e.previous_world=nil
+        e.tracer=false;e.previous_world=nil
         go.set(e.url,"tint",vmath.vector4(color[1],color[2],color[3],0))
         go.set_rotation(vmath.quat(),e.id)
         visible(e,true)
@@ -82,11 +82,6 @@ function M.new(ctx,mesh_factory,effect_factory)
                 hit.effect=="sparks" and .018 or .035, .25+i*.04)
             if hit.effect=="sparks" then go.set(e.url,"tint",vmath.vector4(color[1],color[2],color[3],1)) end
         end
-    end)
-    events.on(ctx.events,events.WEAPON_SHELL,a,function(_,shell)
-        local e=effect(shell.position,shell.velocity,{.58,.42,.16},.014,.65)
-        e.shell=true
-        go.set(e.url,"tint",vmath.vector4(.58,.42,.16,-1))
     end)
     events.on(ctx.events,events.BULLET_TRACER,a,function(_,shot)
         local delta={x=shot.to.x-shot.from.x,y=shot.to.y-shot.from.y,z=shot.to.z-shot.from.z}
@@ -141,9 +136,9 @@ function M.update(a,ctx,dt,shown,capture_pose,capture_weapon,capture_flash)
                 e.position=V.point(e.position,e.velocity,dt)
             end
             go.set_position(vmath.vector3(e.position.x,e.position.y,e.position.z),e.id)
-            go.set_scale(vmath.vector3(e.size,e.size,e.tracer and e.length or e.size*(e.shell and 2.5 or 1)),e.id)
+            go.set_scale(vmath.vector3(e.size,e.size,e.tracer and e.length or e.size),e.id)
             local transform=vmath.matrix4_quat(go.get_rotation(e.id))
-            local scale={e.size,e.size,e.tracer and e.length or e.size*(e.shell and 2.5 or 1)}
+            local scale={e.size,e.size,e.tracer and e.length or e.size}
             for col=0,2 do for row=0,2 do
                 local key="m"..row..col;transform[key]=transform[key]*scale[col+1]
             end end

@@ -63,6 +63,12 @@ and `dressing.lua` adapt `src/world/layout.js`, `buildings.js`, `interiors.js`,
 shared collision/navigation descriptions, route-safe placement changes, mesh
 batching and reduced tessellation are local implementations.
 
+The ragdoll mass proportions, joint swing/twist ranges and settling policy in
+`game/physics/rig.lua` and `game/physics/defold.lua` adapt the humanoid specification
+and sleep rules in `src/physics/ragdoll.js`. The 18-body Bullet articulation,
+box proxies, native body pooling, skeleton mapping and lifecycle are local
+implementations; the reference PBD solver is not copied.
+
 MIT License
 
 Copyright (c) 2026 mshumer

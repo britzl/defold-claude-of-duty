@@ -2,7 +2,7 @@
 
 [contract.json](contract.json) is the acceptance matrix: 24 feature scenarios with
 reference source paths, expected behavior, a verification procedure, existing
-coverage, and eleven recorded adaptation decisions. `implemented-core` describes
+coverage, and twelve recorded adaptation decisions. `implemented-core` describes
 existing code; it does not mean the scenario has passed parity review.
 [reference-lock.json](reference-lock.json) pins the runtime source snapshots and
 all 71 production camera requests, including FOV, lighting and fixture intent.
@@ -22,9 +22,24 @@ These thresholds are engineering proposals, not measured results. The contract
 requires three release runs, each with 60 seconds of warmup and 300 seconds of
 full-map combat sampling. Report actual framebuffer/internal resolution,
 backend, device/OS/browser, dropped samples, CPU/GPU timing and memory scope.
-The complete stress scenario remains unqualified while grenades, ragdolls and
+The complete stress scenario remains unqualified while grenades and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
+
+## Rigid dynamics increment — 2026-10-19
+
+Step 10 uses native Bullet for 18-body/17-joint soldier ragdolls and a 32-slot
+pool of casings, magazines and fragments. Current procedural poses, regional
+lethal impulses, corpse bullet reactions, occluded blasts, interpolated palettes,
+explicit sleep and pause/capture/reset cleanup share production paths. The
+native and release-WebGL fixture records 13 checks, five captures and ten
+reset cycles; 30 pure rig checks cover exact pose/anchor/region mapping.
+
+Box proxies, pose-centred joint limits, attached weapons and world-only body
+collisions are recorded adaptations. The source lock now includes the physics
+factory/collision resources and carries no stale capture receipts. This does
+not close controlled reference motion, Kaigen or sustained-performance gates.
+See README.md for commands, resource bounds and qualification limits.
 
 ## Soldier animation increment — 2026-10-19
 

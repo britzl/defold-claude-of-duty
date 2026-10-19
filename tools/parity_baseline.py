@@ -13,7 +13,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 SCOPES = {
-    "defold": ("game", "main", "render", "world", "weapons", "soldiers", "audio", "input", "game.project"),
+    "defold": ("game", "main", "render", "world", "weapons", "soldiers", "physics", "audio", "input", "game.project"),
     "threejs": ("src", "package.json", "package-lock.json", "index.html", "vite.config.js"),
     "kaigen": ("src", "shaders", "assets", "gameplay_blocks", "hzproject.hzt", "web"),
 }

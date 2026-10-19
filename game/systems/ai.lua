@@ -244,12 +244,13 @@ function M.fixed_update(ctx,dt)
                 e.pitch=V.clamp(math.atan2(target.y-(e.position.y+1.4),math.max(.01,d)),-.5,.5)
                 e.recoil=math.max(0,e.recoil-dt*8)
             end
-            if (ai.enabled and ctx.player.enabled) or not e.actor.alive then animation.step(e,dt,query) end
+            if e.actor.alive and ai.enabled and ctx.player.enabled then animation.step(e,dt,query) end
             if profiler then profiler.scope_begin("ai.simulation_pose") end
             -- Simulation owns this scratch independently of interpolated
             -- presentation. Hit volumes copy the transforms they retain.
             e.simulation_pose=e.simulation_pose or {}
-            e.palette,e.joints=rig.pose(sample(e),e.simulation_pose)
+            if e.ragdoll then e.palette=e.ragdoll.palette
+            elseif e.actor.alive then e.palette,e.joints=rig.pose(sample(e),e.simulation_pose) end
             if profiler then profiler.scope_end();profiler.scope_begin("ai.hitboxes") end
             if service and e.actor.alive then service.api.sync(service,e) end
             if profiler then profiler.scope_end() end
@@ -282,7 +283,9 @@ function M.present(ctx)
         local state=animation.interpolate(e.previous_pose,sample(e),alpha)
         local p={x=V.lerp(e.previous.x,e.position.x,alpha),y=V.lerp(e.previous.y,e.position.y,alpha),z=V.lerp(e.previous.z,e.position.z,alpha)}
         e.presentation_pose=e.presentation_pose or {}
-        local palette=rig.pose(state,e.presentation_pose)
+        local palette
+        if e.ragdoll then palette,p=ctx.services.dynamics.api.palette(e.ragdoll,alpha)
+        else palette=e.actor.alive and rig.pose(state,e.presentation_pose) or e.palette end
         if profiler then profiler.scope_end();profiler.scope_begin("soldiers.upload") end
         service.api.present(service,e,palette,p,V.lerp(e.previous_yaw,e.yaw,alpha))
         if profiler then profiler.scope_end() end
@@ -291,6 +294,7 @@ end
 function M.reset(ctx,position,yaw)
     local service=ctx.services.soldiers
     for id,e in pairs(ctx.ai.actors) do
+        if ctx.services.dynamics then ctx.services.dynamics.api.remove_actor(ctx.services.dynamics,e) end
         if service then service.api.remove(service,e) end
         combat.remove(ctx.combat,id)
     end
@@ -313,6 +317,7 @@ function M.snapshot(ctx)
         out.actors[#out.actors+1]={id=e.id,health=e.actor.health,alive=e.actor.alive,state=e.state,
             x=e.position.x,y=e.position.y,z=e.position.z,yaw=e.yaw,visible=e.visible or false,
             variant=e.variant,run=e.run,animation=animation.sample(e),phase=e.phase,aim=e.aim,death=e.death,shots=e.shots,travel=e.travel,route=e.route and #e.route or 0,
+            ragdoll=e.ragdoll~=nil,corpse_expired=e.ragdoll and e.ragdoll.expired or false,
             suppression=e.suppression,suppressed=e.suppressed,suppression_events=e.suppression_events,
             suppressed_ticks=e.suppressed_ticks,crouch=e.crouch,stance=e.motion.stance,
             cover_phase=e.cover_phase,peek_timer=e.peek_timer,peeks=e.peeks,
@@ -329,6 +334,7 @@ function M.final(ctx)
     events.off_owner(ctx.events,ctx.ai)
     local service=ctx.services.soldiers
     for id,e in pairs(ctx.ai.actors) do
+        if ctx.services.dynamics then ctx.services.dynamics.api.remove_actor(ctx.services.dynamics,e) end
         if service then service.api.remove(service,e) end
         combat.remove(ctx.combat,id)
     end

@@ -42,6 +42,8 @@ function M.set_paused(ctx, paused)
     ctx.weapons.intent = {}
     ctx.time.remainder = 0
     audio.suspend(ctx, paused)
+    local dynamics=ctx.services.dynamics
+    if dynamics then dynamics.api.suspend(dynamics,paused or ctx.capture_active==true) end
 end
 
 function M.fixed_update(ctx, dt)
@@ -53,6 +55,8 @@ function M.fixed_update(ctx, dt)
     -- Observe Defold's steps for presentation only. Never step Bullet ourselves.
     time.remainder = time.remainder - dt
     combat.fixed_update(ctx, dt)
+    local dynamics=ctx.services.dynamics
+    if dynamics then dynamics.api.fixed_update(dynamics,dt) end
     for i, system in ipairs(systems) do
         if system.fixed_update then
             if profiler then profiler.scope_begin(fixed_scopes[i]) end

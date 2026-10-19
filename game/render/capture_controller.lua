@@ -17,6 +17,9 @@ function M.finish(self)
     if not self.capture then return M.snapshot(self) end
     local saved=self.capture.saved
     self.capture=nil
+    self.ctx.capture_active=false
+    local dynamics=self.ctx.services.dynamics
+    if dynamics then dynamics.api.suspend(dynamics,self.ctx.paused) end
     require("game.render.combat_fx_defold").fixture(self.combat_visuals,false)
     self.renderer_settings=saved.settings
     msg.post("@render:","renderer_configure",saved.settings)
@@ -36,6 +39,9 @@ function M.select(self,data)
     local saved=self.capture and self.capture.saved or {settings=self.renderer_settings}
     require("game.render.combat_fx_defold").fixture(self.combat_visuals,shot.combat_fixture)
     self.capture={shot=shot,frame=frame,saved=saved,actors=data.actors==true,temporal_live=data.temporal_live==true}
+    self.ctx.capture_active=true
+    local dynamics=self.ctx.services.dynamics
+    if dynamics then dynamics.api.suspend(dynamics,true) end
     self.renderer_settings=settings.configure(settings.defaults(),{lighting=shot.lighting or "daylight",clouds=shot.clouds~=false,auto_exposure=false})
     self.active_lights=nil
     input.reset(self.ctx.input)

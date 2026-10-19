@@ -25,6 +25,7 @@ local ui = require "game.ui.controller"
 local ui_controls = require "game.ui.controls"
 local hud_model = require "game.ui.hud"
 local touch = require "game.touch"
+local dynamics = require "game.physics.defold"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
@@ -73,6 +74,7 @@ local function restart_encounter(self)
     weapon_system.init(self.ctx)
     combat_fx.reset(self.combat_visuals)
     weapon_adapter.reset(self.weapon_visuals)
+    dynamics.reset(self.ctx.services.dynamics)
     self.ctx.ai.enabled=true
     self.ctx.ai.damage_scale=1
     ai_system.reset(self.ctx)
@@ -153,15 +155,16 @@ function init(self)
     if profiler then profiler.scope_end() end
     if profiler then profiler.scope_begin("loading.init.soldiers") end
     self.ctx.services.soldiers=soldier_adapter.new(self.ctx,self.ctx.world.adapter,"#soldier_mesh","#soldier_mover","#soldier_hit")
+    self.ctx.services.dynamics=dynamics.new(self.ctx)
     if profiler then profiler.scope_end() end
     if sys.get_config_int("world_mesh.verify",0)==1 then require("tests.native_mesh_test").run() end
     if sys.get_config_int("audio_synthesis.verify",0)==1 then require("tests.native_audio_test").run() end
     if sys.get_config_int("mesh_validation.enabled",0)==1 then self.mesh_validation=require("tests.mesh_browser").new() end
     if sys.get_config_int("audio_validation.enabled",0)==1 then self.audio_validation={} end
-    self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id }
+    self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id, self.ctx.services.dynamics.by_id }
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
-    self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id},
-        {groups={hash("world"),hash("player")},actors={[hash("/player")]="player"}})
+    self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id,self.ctx.services.dynamics.by_id},
+        {groups={hash("world"),hash("player"),hash("debris")},actors={[hash("/player")]="player"}})
     if sys.get_sys_info().system_name=="HTML5" and sys.get_config_int("squad_validation.enabled",0)==1 then
         self.squad_validation=require("tests.squads_browser").new()
     end
@@ -185,6 +188,9 @@ function init(self)
     end
     if sys.get_config_int("soldier_validation.enabled",0)==1 then
         self.soldier_validation=require("tests.soldier_scenario").new()
+    end
+    if sys.get_config_int("physics_validation.enabled",0)==1 then
+        self.physics_validation=require("tests.physics_scenario").new()
     end
     if sys.get_config_int("ballistics_validation.enabled",0)==1 then
         self.ballistics_validation=require("tests.ballistics_scenario").new()
@@ -315,6 +321,7 @@ function init(self)
             automation_bridge.describe("command",name,{description=description,input_schema={type="object"},output_schema={type="object"}})
         end
         automation_bridge.command("combat_fx.snapshot",function() return combat_fx.snapshot(self.combat_visuals) end)
+        automation_bridge.command("physics.snapshot",function() return dynamics.snapshot(self.ctx.services.dynamics) end)
         automation_bridge.command("weapons.snapshot", function() return weapon_system.snapshot(self.ctx) end)
         automation_bridge.command("weapons.drive", function(data)
             assert(self.ctx.world.ready, "World is still loading")
@@ -516,6 +523,7 @@ function update(self, dt)
     if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
     if self.soldier_validation then require("tests.soldier_scenario").update(self.soldier_validation,self,dt,restart_encounter) end
+    if self.physics_validation then require("tests.physics_scenario").update(self.physics_validation,self,dt,restart_encounter) end
     if self.ballistics_validation then require("tests.ballistics_scenario").update(self.ballistics_validation,self,dt,restart_encounter) end
     if self.squad_validation then
         require("tests.squads_browser").update(self.squad_validation,self,dt,restart_encounter)
@@ -592,6 +600,7 @@ function late_update(self, dt)
     local out = self.ctx.presentation
     if profiler then profiler.scope_begin("late.soldiers") end
     ai_system.present(self.ctx)
+    dynamics.present(self.ctx.services.dynamics,self.ctx.time.alpha,self.capture~=nil)
     if profiler then profiler.scope_end() end
 
     if profiler then profiler.scope_begin("late.view") end
@@ -789,6 +798,7 @@ function final(self)
     msg.post(".", "release_input_focus")
     -- Automation Bridge clears callbacks with the Lua application lifecycle.
     combat_fx.final(self.combat_visuals,self.ctx)
+    dynamics.final(self.ctx.services.dynamics)
     weapon_adapter.final(self.weapon_visuals, self.ctx)
     if self.range then firing_range.final(self.ctx, self.range) end
     runtime.final(self.ctx)

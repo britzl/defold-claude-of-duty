@@ -32,7 +32,8 @@ local function impact(ctx,sim,p,hit,point,exiting)
         p.hit_actors[hit.actor]=true
         local scale=hit.damage_scale or (headshot and 4 or 1)
         combat.request(ctx.combat,{target=hit.actor,source=p.source,amount=damage(p)*scale*(p.damage_scale or 1),
-            headshot=headshot,region=hit.region,part=hit.part,point=V.copy(point),from=p.origin,kind="bullet",round=p.token})
+            headshot=headshot,region=hit.region,part=hit.part,point=V.copy(point),from=p.origin,kind="bullet",round=p.token,
+            impulse=V.point({x=0,y=0,z=0},V.normalize(p.velocity),math.min(10,damage(p)*.12))})
     end
 end
 local function ordered(inside)

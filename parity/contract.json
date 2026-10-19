@@ -212,6 +212,14 @@
       "current": "Analytic fixed-tick springs with interpolated outputs; deterministic sine shake; final mantle pitch settles before completion.",
       "reference": "Numerically substepped springs, noise shake and a final rooted mantle pitch offset.",
       "gate": "camera-feel"
+    },
+    {
+      "id": "native-rigid-dynamics",
+      "gate": "dynamics",
+      "reason": "Uses the existing engine solver and geometry without a second physics world or native extension. Box contacts and limited collision pairs bound cost; explicit articulation sleep prevents residual constraint contacts from keeping corpses active.",
+      "state": "recorded",
+      "current": "Use native Bullet boxes with pose-centred cone-twist constraints and explicit group sleep. Keep physics at 120 Hz, bounded body pools, world-only collision masks, interpolated skeleton/shadows and physical corpse hit reactions without health damage. The carried gun follows the right hand; detached weapons and body-body collision are outside this increment.",
+      "reference": "Three.js uses position-based capsule ragdolls and probe-based rigid debris. Kaigen uses native capsule bodies. Equivalent motion remains a visual qualification gate."
     }
   ],
   "scenarios": [
@@ -448,19 +456,27 @@
         "tools/validate_soldier_browser.mjs",
         "tests/temporal_smoke.py"
       ],
-      "implementation_notes": "Three shared variant meshes, source height/bulk and distinct gear/carbine/AK recipes. Fixed-tick run/crouch, turning, wounded/regional-hit, reload and vault layers; two ground probes, world stance anchors, pelvis/sole correction and rigid leg/hand IK. Same evaluator drives scaled Bullet volumes and current/previous render palettes. Physics joint frames reconstruct the animated skeleton. Reload ammunition cycles and AI vault routing remain step 11; ragdolls remain step 10. Native/release-WebGL fixtures exercise posed volumes, uneven terrain, live stairs, pause and bounded resets. Reduced geometry/detail, static contacts and analytic poses are adaptations; reference appearance/motion and sustained cost remain open."
+      "implementation_notes": "Three shared variant meshes, source height/bulk and distinct gear/carbine/AK recipes. Fixed-tick run/crouch, turning, wounded/regional-hit, reload and vault layers; two ground probes, world stance anchors, pelvis/sole correction and rigid leg/hand IK. Same evaluator drives scaled Bullet volumes and current/previous render palettes. Physics joint frames reconstruct the animated skeleton. Reload ammunition cycles and AI vault routing remain step 11; step 10 supplies native Bullet ragdolls. Native/release-WebGL fixtures exercise posed volumes, uneven terrain, live stairs, pause and bounded resets. Reduced geometry/detail, static contacts and analytic poses are adaptations; reference appearance/motion and sustained cost remain open."
     },
     {
       "id": "dynamics",
       "feature": "Ragdolls, cases and dropped magazines",
       "references": [
         "threejs:src/physics/ragdoll.js",
-        "kaigen:src/claude_of_duty/cod_ai_body_ragdoll.c"
+        "kaigen:src/claude_of_duty/cod_ai_body_ragdoll.c",
+        "threejs:src/physics/rigidbody.js",
+        "threejs:src/ai/agent.js"
       ],
-      "current": "missing",
+      "current": "implemented-core",
       "procedure": "Kill actors on floors/stairs/beside walls; fire/reload repeatedly; apply blast impulses and reset ten times.",
       "expect": "Stable physical settling and impulses, bounded lifetime/sleep/resource counts.",
-      "coverage": []
+      "coverage": [
+        "tests/physics_rig_test.lua",
+        "tests/physics_scenario.lua",
+        "tests/physics_smoke.py",
+        "tools/validate_physics_browser.mjs"
+      ],
+      "implementation_notes": "Native Bullet owns 120 Hz integration. Eighteen box bodies and seventeen cone-twist joints inherit the animated pose, root velocity and regional lethal impulse; all 25 visible/shadow/motion bones follow interpolated body transforms. Corpses are ray-queryable but never re-enter health damage. The 32-slot debris pool receives player/enemy shells, reload magdrop and impact notifications. World-occluded blast events wake bodies. Whole-articulation and debris sleep explicitly suspend native simulation after sustained pose stability; impulses restore it. Pause/capture preserve physics state; debris expires after 8/10/18 seconds and corpses after 30. Bodies collide only with static world geometry. Box proxies, pose-centred symmetric angular limits, hand-attached weapons, simplified debris meshes and disabled mutual/live-character collisions are adaptations. Controlled reference motion, full visual parity and sustained performance remain open."
     },
     {
       "id": "ai-tactics",

@@ -38,6 +38,78 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Rigid debris and ragdolls (2026-10-19)
+
+Step 10 replaces the authored death collapse with native Bullet ragdolls. Each
+soldier hands its current procedural pose and movement velocity to **18 bodies
+and 17 cone-twist joints**. Regional lethal hits select the matching body and
+apply a bounded impulse at the impact point. The original 25-bone mesh, shadow
+and temporal passes use the same interpolated body transforms. The render origin
+follows the pelvis, keeping culling bounds around displaced corpses. There is no
+second physics world or native extension.
+
+A **32-slot pool** supplies colliding casings, dropped magazines and impact
+fragments. Player/enemy shots and the existing reload `magdrop` beat drive it.
+Bodies have friction, restitution, spin and CCD; they settle against the actual
+market collision geometry. Cases expire after 10 seconds, magazines after 18,
+fragments after 8, and corpses after 30. Time advances only during simulation.
+Oldest-slot replacement bounds sustained firing without accumulating objects.
+Recycled slots receive a new penetration identity.
+
+Sleep uses sustained translation/rotation stability for 0.75 seconds. Sleeping
+items explicitly suspend Bullet simulation; whole ragdolls sleep together, and
+skip native transform reads and pose solves. This avoids residual constraint
+contacts repeatedly reactivating parts of a corpse. Bullet impacts and
+world-occluded `explosion` events wake them. Blasts accept `{position, radius,
+impulse}`; `impulse` is a peak radial velocity budget (default 8 m/s), with
+linear distance falloff and mass-scaled impulses. This path never applies
+health damage. Dead bodies can receive physical bullet hits without another
+kill, hitmarker or damage event. Both player and enemy rounds query them.
+
+Pause, focus loss and capture mode suspend active bodies and preserve velocity,
+sleep and lifetime state. Resets destroy joints before deleting bodies and reuse
+the debris pool. `physics.snapshot` reports active/awake bodies, pending spawns,
+constraints, object/buffer bounds, per-articulation sleep, pool replacements,
+impulses and Lua service timings.
+
+The maximum additional allocation is **172 game objects**: 32 debris bodies,
+32 debris meshes and 108 ragdoll bodies, with 102 joints. This adds at most 140
+collision objects and 64 mesh components, with one shared 1,440-byte generated
+cube buffer. Expiry returns to the 64 pooled objects with zero active physics
+bodies/joints. Existing soldier meshes and palettes are reused; render targets
+and engine resource limits are unchanged. Reported service times exclude
+Bullet, GPU and total frame time and are not a sustained 60 FPS result.
+
+Rigid bodies and world geometry disable unused collision/contact notifications
+on both sides of each pair. Physical collision response and direct hit queries
+remain active without filling the engine's notification queues. The native and
+browser stress runners fail on contact/collision overflow warnings.
+
+Adaptations: collision proxies and debris visuals are boxes, joint limits are
+symmetric around the handed-off pose, and weapons remain attached to the right
+hand. Bodies collide with static world geometry; mutual debris/corpse and live
+character collisions are disabled. The source uses capsule/PBD or native capsule
+articulations, so identical corpse poses are not expected. Full reference motion,
+final visual parity and sustained performance remain open.
+
+```sh
+lua tests/physics_rig_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/physics_smoke.py
+# Build release wasm-web with tests/physics_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_physics_browser.mjs --bundle=/path/to/bundle
+```
+
+The standalone matrix covers 15 poses across all three variants, exact handoff,
+all 25 reconstructed bones, joint anchors, mass and every regional selection
+(30 checks). The shared native/release-browser fixture covers six deaths on
+floor/stairs/beside a wall, sleep, pause/resume, blast wake-up and occlusion,
+physical corpse shots, shell/reload events, pool saturation, debris collision
+and sleep, natural lifetime cleanup and **ten death/restart cycles**. It records
+13 checks and five pose/debris captures per backend in
+`build/physics-native-validation` and `build/physics-browser-validation`.
+All 32 standalone Lua suites and the baseline-tool checks pass. These are
+implementation checks; the source lock does not reuse older capture receipts.
+
 ## Soldier variants and animation (2026-10-19)
 
 Step 9 adds **vanguard, irregular and breacher** to the two squads. Their shared
@@ -67,7 +139,7 @@ preview. Pose sampling is read-only, pause freezes animation clocks, and both
 simulation and presentation use the same evaluator with separate scratch data.
 Colour, shadow and current/previous depth palettes share the resulting joints.
 `rig.joint_frames` supplies +Y-along-bone physics frames and inverse render offsets
-for the step-10 ragdoll handoff; deaths still use the existing authored collapse.
+for the step-10 native Bullet ragdoll handoff.
 
 **Resource account:** three reusable meshes hold 9,804 / 9,804 / 10,488 vertices,
 **30,096 vertices and 2,166,912 stream bytes** in total (2.07 MiB before engine
