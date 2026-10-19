@@ -64,8 +64,14 @@ function M.parameters(recipe)
 end
 
 function M.new(recipe,seed)
-    return {recipe=recipe,frames=math.floor(recipe.duration*M.rate),cursor=0,chunks={},
-        random=rng.new(seed,recipe.kind.."/"..recipe.name.."/"..recipe.variant),
+    local frames=math.floor(recipe.duration*M.rate)
+    local stream=recipe.kind.."/"..recipe.name.."/"..recipe.variant
+    return {recipe=recipe,frames=frames,cursor=0,chunks={},seed=seed,stream=stream,
+        random=rng.new(seed,stream),
+        -- Prime the filters with whole periods of the same noise. Rewinding
+        -- only the random stream leaves the filters continuous at the wrap.
+        warmup=recipe.kind=="ambience" and math.max(1,math.ceil(.5*M.rate/frames)) or 0,
+        hum_a=math.floor(75*frames/M.rate+.5),hum_b=math.floor(112*frames/M.rate+.5),
         low=0,mid=0,muffle=0,dc=0,phase=0,history={},peak=0,square=0}
 end
 
@@ -108,11 +114,10 @@ local function sample(job,t)
         x=job.mid*.7*sin(pi*math.min(1,t/.32))^2
     elseif r.kind=="ambience" then
         local wind=r.name=="wind"
-        local mod=.7+.3*sin(2*pi*t/r.duration)
+        local phase=2*pi*job.cursor/job.frames
+        local mod=.7+.3*sin(phase)
         x=wind and (job.low*1.8+job.mid*.05)*mod
-            or (job.low*.65+sin(2*pi*75*t)*.035+sin(2*pi*112*t)*.025)*mod
-        -- Zero at both ends; quiet fade masks the finite loop seam.
-        x=x*math.min(1,t/.15,(r.duration-t)/.15)
+            or (job.low*.65+sin(phase*job.hum_a)*.035+sin(phase*job.hum_b)*.025)*mod
     end
     if r.treatment=="room" then
         local i=job.cursor+1
@@ -125,9 +130,12 @@ local function sample(job,t)
         job.muffle=job.muffle+.10*(x-job.muffle)
         x=job.muffle
     end
-    -- Remove DC and fade endpoints. Never normalize quiet variants upward.
+    -- Only one-shots fade to silence. Loop filters are already primed above.
     job.dc=job.dc+.002*(x-job.dc)
-    x=(x-job.dc)*math.min(1,t/.0005,(job.frames-1-job.cursor)/(M.rate*.018))
+    x=x-job.dc
+    if r.kind~="ambience" then
+        x=x*math.min(1,t/.0005,(job.frames-1-job.cursor)/(M.rate*.018))
+    end
     return math.max(-.92,math.min(.92,x*.9))
 end
 
@@ -135,14 +143,20 @@ end
 function M.step(job,budget)
     if profiler then profiler.scope_begin("loading.audio.synthesize."..job.recipe.kind) end
     local bytes={}
-    local count=math.min(budget,job.frames-job.cursor)
-    for i=1,count do
+    for _=1,budget do
         local x=sample(job,job.cursor/M.rate)
-        job.peak=math.max(job.peak,math.abs(x));job.square=job.square+x*x
-        bytes[i]=u16(math.floor(x*32767+.5)%65536)
+        if job.warmup==0 then
+            job.peak=math.max(job.peak,math.abs(x));job.square=job.square+x*x
+            bytes[#bytes+1]=u16(math.floor(x*32767+.5)%65536)
+        end
         job.cursor=job.cursor+1
+        if job.cursor==job.frames then
+            if job.warmup==0 then break end
+            job.warmup=job.warmup-1;job.cursor=0
+            job.random=rng.new(job.seed,job.stream)
+        end
     end
-    job.chunks[#job.chunks+1]=table.concat(bytes)
+    if #bytes>0 then job.chunks[#job.chunks+1]=table.concat(bytes) end
     if profiler then profiler.scope_end() end
     if job.cursor==job.frames then
         if profiler then profiler.scope_begin("loading.audio.wav_finalize") end

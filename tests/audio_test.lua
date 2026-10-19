@@ -8,12 +8,12 @@ local input=require "game.input"
 local count=0
 local function test(name,run) run();count=count+1;print("PASS "..name) end
 local function near(a,b) assert(math.abs(a-b)<1e-7,tostring(a).." ~= "..tostring(b)) end
-local function render(recipe,budget)
-    local job=synth.new(recipe,1337)
+local function render(recipe,budget,seed)
+    local job=synth.new(recipe,seed or 1337)
     while true do local wav,info=synth.step(job,budget);if wav then return wav,info end end
 end
 local bank={}
-test("every generated WAV is PCM16 mono, finite, audible, bounded and faded at both ends",function()
+test("every generated WAV is PCM16 mono, finite, audible and bounded; one-shots fade at both ends",function()
     local bytes=0
     for _,recipe in ipairs(synth.catalog()) do
         local wav,info=render(recipe,1024)
@@ -23,12 +23,40 @@ test("every generated WAV is PCM16 mono, finite, audible, bounded and faded at b
         assert(wav:sub(1,4)=="RIFF" and wav:sub(9,16)=="WAVEfmt ")
         assert(uint(5,4)==#wav-8 and uint(21,2)==1 and uint(23,2)==1)
         assert(uint(25,4)==22050 and uint(35,2)==16 and uint(41,4)==#wav-44)
-        assert(uint(45,2)==0 and uint(#wav-1,2)==0)
+        if recipe.kind~="ambience" then assert(uint(45,2)==0 and uint(#wav-1,2)==0) end
         assert(info.peak<.93 and info.rms>.002,recipe.key.." rms="..info.rms)
         for i=45,#wav,2 do local n=uint(i,2);if n>32767 then n=n-65536 end;assert(math.abs(n)<30500) end
         bank[recipe.key]={wav=wav,info=info,recipe=recipe};bytes=bytes+#wav
     end
     assert(bytes==1627520);print("AUDIO BANK",#synth.catalog(),"samples",bytes,"bytes")
+end)
+test("ambience wraps at sustained volume without a click, independent of loading budget",function()
+    local function pcm(wav,frame)
+        local a,b=wav:byte(45+frame*2,46+frame*2)
+        local n=a+b*256
+        return (n>32767 and n-65536 or n)/32767
+    end
+    for _,name in ipairs({"wind","city"}) do
+        local item=bank["ambience/"..name]
+        assert(render(item.recipe,97)==item.wav,name.." changes with loading budget")
+        for _,seed in ipairs({1337,42,-31.75,2147483647}) do
+            local wav,info=render(item.recipe,1024,seed)
+            -- Inspect the audible signal on both sides of repeated joins.
+            -- Endpoint zeroes alone miss the old 150 ms fade-to-silence gap.
+            local window=math.floor(.02*synth.rate)
+            for _,first in ipairs({0,info.frames-window}) do
+                local square=0
+                for i=first,first+window-1 do square=square+pcm(wav,i)^2 end
+                local rms=math.sqrt(square/window)
+                assert(rms>info.rms*.5 and rms<info.rms*1.5,name.." volume dip/spike at wrap")
+            end
+            local variation=0
+            for i=1,info.frames-1 do variation=variation+(pcm(wav,i)-pcm(wav,i-1))^2 end
+            local typical=math.sqrt(variation/(info.frames-1))
+            local jump=math.abs(pcm(wav,0)-pcm(wav,info.frames-1))
+            assert(jump<typical*4,name.." discontinuity at wrap")
+        end
+    end
 end)
 test("loading budgets do not change samples; guns/variants differ and muffling removes high frequencies",function()
     local dry=bank["shot/rifle/1/dry"]

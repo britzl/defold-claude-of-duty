@@ -2410,6 +2410,10 @@ work. The matched macOS native runs took 25 ms median total, with a 2.1 ms peak
 update. Loading rate and sound variation never affect world generation,
 weapon spread or enemy random streams. There is no synthesis during combat.
 
+Wind and city ambience repeat continuously: their noise filters are primed with
+the repeating sequence, and modulation/hum complete whole cycles. Only one-shot
+effects fade to silence, avoiding a volume dip at each four-second ambience wrap.
+
 Twenty-two one-shot slots and two dedicated ambience loops bound playback to 24
 voices. Four one-shot slots are reserved for local shots, dry triggers and hurt
 cues. A 64-entry presentation queue drops overflow or events older than 150 ms;
@@ -2426,7 +2430,8 @@ replaying old combat sounds. Master, weapons, foley and ambience gains (0..1), p
 mute, are available through `audio.configure` and the pause menu's Audio tab.
 Browser playback starts after the first click on the game canvas.
 
-The ten Lua audio tests verify WAV format/amplitude, deterministic chunking,
+The Lua audio tests verify WAV format/amplitude, sustained ambience volume and
+sample continuity at loop boundaries, deterministic chunking,
 spectral muffling, spatial transforms, routing, cancellation, queue/voice limits,
 mix headroom, mute/focus/restart cleanup, resource release and RNG isolation.
 The native suite checks actual mixer output and stereo channels, real wall

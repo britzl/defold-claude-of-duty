@@ -7,6 +7,12 @@ parameters in `game/audio/synth.lua`, scheduling and playback in
 `game/systems/audio.lua`, and Defold resource ownership in `game/audio/defold.lua`.
 The original Lua generator remains the reference implementation.
 
+Wind and city ambience use periodic noise with primed filter state, periodic
+modulation and whole-cycle hum tones. They maintain their level across the loop
+boundary; only one-shots fade to silence. Filter priming discards whole periods
+(at least half a second) under the same per-call sample budget before packing the
+loop. The four-second WAV durations and playback voice count stay unchanged.
+
 Defold automatically discovers this extension and builds it for macOS and
 HTML5/Wasm. Rebuild the custom engine after C++ changes; hot reload cannot update
 native code. Arithmetic uses doubles with fast math and fused multiply-add

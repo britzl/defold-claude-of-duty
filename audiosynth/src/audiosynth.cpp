@@ -17,15 +17,15 @@ enum Treatment { DRY, ROOM, MUFFLED };
 struct Job {
     Kind kind;
     Treatment treatment;
-    uint32_t frames, cursor, random;
-    double duration, variant, p[8];
+    uint32_t frames, cursor, random, initial_random, warmup;
+    double duration, variant, p[8], hum_a, hum_b;
     double low, mid, muffle, dc, phase, peak, square;
     double history[ECHO_B + 1];
     bool wind, finished;
     dmArray<uint8_t> wav;
 
-    Job() : kind(SHOT), treatment(DRY), frames(0), cursor(0), random(1),
-        duration(0), variant(1), low(0), mid(0), muffle(0), dc(0), phase(0),
+    Job() : kind(SHOT), treatment(DRY), frames(0), cursor(0), random(1), initial_random(1), warmup(0),
+        duration(0), variant(1), hum_a(0), hum_b(0), low(0), mid(0), muffle(0), dc(0), phase(0),
         peak(0), square(0), wind(false), finished(false) {
         std::memset(p, 0, sizeof(p));
         std::memset(history, 0, sizeof(history));
@@ -115,6 +115,11 @@ static int New(lua_State* L) {
     for (size_t i = 0; i < stream_length; ++i)
         job->random = (uint32_t)(((uint64_t)job->random * 31 + (uint8_t)stream[i]) % MODULUS);
     if (job->random == 0) job->random = 1;
+    job->initial_random = job->random;
+    // Whole discarded periods prime the filters for continuous loop playback.
+    if (job->kind == AMBIENCE) job->warmup = (uint32_t)std::max(1.0, std::ceil(.5 * RATE / frames));
+    job->hum_a = std::floor(75.0 * frames / RATE + .5);
+    job->hum_b = std::floor(112.0 * frames / RATE + .5);
     job->wav.SetCapacity(44 + frames * 2); job->wav.SetSize(44 + frames * 2);
     uint8_t* bytes = job->wav.Begin();
     std::memcpy(bytes, "RIFF", 4); U32(bytes + 4, 36 + frames * 2);
@@ -169,10 +174,10 @@ static double Sample(Job& j, double t) {
         x = j.mid * .7 * std::pow(std::sin(PI * std::min(1.0, t / .32)), 2);
         break;
     case AMBIENCE: {
-        double mod = .7 + .3 * std::sin(2 * PI * t / j.duration);
+        double phase = 2 * PI * j.cursor / j.frames;
+        double mod = .7 + .3 * std::sin(phase);
         x = j.wind ? (j.low * 1.8 + j.mid * .05) * mod :
-            (j.low * .65 + std::sin(2 * PI * 75 * t) * .035 + std::sin(2 * PI * 112 * t) * .025) * mod;
-        x = x * std::min(std::min(1.0, t / .15), (j.duration - t) / .15);
+            (j.low * .65 + std::sin(phase * j.hum_a) * .035 + std::sin(phase * j.hum_b) * .025) * mod;
         break;
     }
     }
@@ -185,7 +190,9 @@ static double Sample(Job& j, double t) {
         j.muffle = j.muffle + .10 * (x - j.muffle); x = j.muffle;
     }
     j.dc = j.dc + .002 * (x - j.dc);
-    x = (x - j.dc) * std::min(std::min(1.0, t / .0005), (j.frames - 1.0 - j.cursor) / (RATE * .018));
+    x = x - j.dc;
+    if (j.kind != AMBIENCE)
+        x = x * std::min(std::min(1.0, t / .0005), (j.frames - 1.0 - j.cursor) / (RATE * .018));
     return std::max(-.92, std::min(.92, x * .9));
 }
 static void Field(lua_State* L, const char* name, double value) {
@@ -196,13 +203,19 @@ static int Step(lua_State* L) {
     luaL_argcheck(L, !job->finished, 1, "synthesis job is finished");
     double budget = luaL_checknumber(L, 2);
     luaL_argcheck(L, std::isfinite(budget) && budget >= 1 && budget <= 65536 && budget == std::floor(budget), 2, "budget must be 1..65536 samples");
-    uint32_t end = job->cursor + std::min((uint32_t)budget, job->frames - job->cursor);
-    while (job->cursor < end) {
+    for (uint32_t i = 0; i < (uint32_t)budget; ++i) {
         double x = Sample(*job, job->cursor / (double)RATE);
-        job->peak = std::max(job->peak, std::abs(x)); job->square = job->square + x * x;
-        int32_t pcm = (int32_t)std::floor(x * 32767 + .5);
-        U16(job->wav.Begin() + 44 + job->cursor * 2, (uint16_t)pcm);
+        if (job->warmup == 0) {
+            job->peak = std::max(job->peak, std::abs(x)); job->square = job->square + x * x;
+            int32_t pcm = (int32_t)std::floor(x * 32767 + .5);
+            U16(job->wav.Begin() + 44 + job->cursor * 2, (uint16_t)pcm);
+        }
         ++job->cursor;
+        if (job->cursor == job->frames) {
+            if (job->warmup == 0) break;
+            --job->warmup; job->cursor = 0;
+            job->random = job->initial_random;
+        }
     }
     if (job->cursor != job->frames) return 0;
     lua_pushlstring(L, (const char*)job->wav.Begin(), job->wav.Size());
