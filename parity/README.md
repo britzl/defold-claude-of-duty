@@ -26,6 +26,23 @@ The complete stress scenario remains unqualified while grenades and
 other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## AI perception and tactics increment — 2026-10-19
+
+Step 11 implements hearing/investigation/search, observed-position aim and
+suppressive fire, wounded retreat, variant magazine/burst/reload cycles,
+tall-cover side peeks, squad peek permissions, full-map flank/reposition choices
+and swept low-obstacle vault links. The versioned `ai-tactics` scenario records
+these behaviors and their source/adaptation limits. Seventeen extracted wall
+candidates increase cover metadata to 42 without changing collision or meshes.
+
+The shared native/release-browser fixture records thirteen behavior/resource
+checks and five captures per backend. Standalone tests cover evidence aging,
+reload/pause/death boundaries, cross-presentation-rate timing, blocked/friendly
+firing lanes, exclusive reservations and competing yielded route requests.
+See README.md for commands and reports. The source lock is refreshed without
+reusing old capture receipts. Controlled reference behavior/visual comparisons
+and sustained 60 FPS qualification remain open.
+
 ## Rigid dynamics increment — 2026-10-19
 
 Step 10 uses native Bullet for 18-body/17-joint soldier ragdolls and a 32-slot
@@ -54,7 +71,7 @@ contacts, palette consistency and frame-rate equivalence. See README.md for the
 resource account, commands and captured views.
 
 Reduced mesh detail, static-ground contacts and analytic pose layers are explicit
-adaptations. Reload/vault tactical decisions remain step 11. The refreshed source
+adaptations. Step 11 supplies reload/vault tactical decisions. The refreshed source
 lock contains no stale capture receipts, and no new controlled reference motion,
 Kaigen comparison or sustained-performance pass is claimed.
 

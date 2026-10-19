@@ -172,6 +172,22 @@ test("reload cancellation discards pending beats and stops the current mechanica
     assert(b.playing[5].stopped)
     runtime.final(ctx)
 end)
+test("enemy reloads remain spatial and cancellation is scoped to their actor",function()
+    local ctx,b=context()
+    emit(ctx,events.WEAPON_RELOAD,{source="enemy_1",phase="magout",position={x=4,y=1,z=-6}});present(ctx)
+    assert(ctx.audio.last.pan>0)
+    emit(ctx,events.WEAPON_RELOAD,{phase="magout"});present(ctx)
+    local enemy,player
+    for _,v in ipairs(ctx.audio.voices) do
+        if v.tag=="reload/enemy_1" then enemy=v.slot elseif v.tag=="reload" then player=v.slot end
+    end
+    assert(enemy and player)
+    emit(ctx,events.WEAPON_RELOAD,{source="enemy_2",phase="magin",position={x=-4,y=1,z=-6}})
+    emit(ctx,events.WEAPON_RELOAD,{source="enemy_1",phase="cancel"})
+    assert(b.playing[enemy].stopped and not b.playing[player].stopped)
+    assert(#ctx.audio.pending==1 and ctx.audio.pending[1].tag=="reload/enemy_2")
+    runtime.final(ctx)
+end)
 test("surface routes, alternating feet, dry fire, hurt and landing consume notifications without applying damage",function()
     local ctx,b=context()
     local health=ctx.player.actor.health

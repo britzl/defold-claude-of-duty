@@ -199,7 +199,8 @@ local function add(world, shape, faces)
             local floor=shape.cover.ground_y or shape.y-shape.h/2
             world.cover[#world.cover + 1] = { id = shape.id,
                 x = shape.x + nx*(shape.w/2+.4), z = shape.z + nz*(shape.d/2+.4),
-                y = floor, height = shape.y+shape.h/2-floor, normal_x = nx, normal_z = nz }
+                y = floor, height = shape.y+shape.h/2-floor, normal_x = nx, normal_z = nz,
+                half_width = math.abs(nx)*shape.d/2+math.abs(nz)*shape.w/2 }
         end
     end
     local stats = world.stats
@@ -252,6 +253,10 @@ function M.step(world, max_jobs, deadline, now)
             local i=world.mesh_index
             add(world,world.shapes[i],world.shape_faces[i])
             world.mesh_index=i+1
+        elseif (world.cover_index or 1)<=#world.colliders then
+            world.cover_index=world.cover_index or 1
+            require("game.world.cover").add(world,world.colliders[world.cover_index])
+            world.cover_index=world.cover_index+1
         else
             if profiler then profiler.scope_begin("loading.geometry.finish") end
             if world.native_builder then world.batches=worldmesh.finish(world.native_builder) end

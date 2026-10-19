@@ -57,7 +57,7 @@ end)
 test("reports stay within the squad, preserve last-seen position, expire without echo and freeze on pause",function()
     local ctx=context()
     ctx.player.position.x=3;ctx.player.position.z=4
-    combat.request(ctx.combat,{target="enemy_1",amount=1,source="player"});ticks(ctx,1)
+    tactics.alert(ctx,ctx.ai.actors.enemy_1,ctx.player.position);ticks(ctx,1)
     for i=1,3 do assert(ctx.ai.actors["enemy_"..i].memory>7.9) end
     for i=4,6 do assert(ctx.ai.actors["enemy_"..i].memory==0) end
     ctx.player.position.x=100

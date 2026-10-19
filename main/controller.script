@@ -189,6 +189,9 @@ function init(self)
     if sys.get_config_int("soldier_validation.enabled",0)==1 then
         self.soldier_validation=require("tests.soldier_scenario").new()
     end
+    if sys.get_config_int("ai_tactics_validation.enabled",0)==1 then
+        self.ai_tactics_validation=require("tests.ai_tactics_scenario").new()
+    end
     if sys.get_config_int("physics_validation.enabled",0)==1 then
         self.physics_validation=require("tests.physics_scenario").new()
     end
@@ -299,6 +302,7 @@ function init(self)
             end
             require("game.ai.tactics").release(self.ctx.ai,e)
             e.nav_job=nil
+            require("game.ai.perception").clear(e)
             e.patrol_points=points;e.patrol=1;e.route=nil;e.route_goal=nil;e.memory=0;e.notice=0;e.think=0
             return ai_system.snapshot(self.ctx)
         end)
@@ -523,6 +527,7 @@ function update(self, dt)
     if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
     if self.soldier_validation then require("tests.soldier_scenario").update(self.soldier_validation,self,dt,restart_encounter) end
+    if self.ai_tactics_validation then require("tests.ai_tactics_scenario").update(self.ai_tactics_validation,self,dt,restart_encounter) end
     if self.physics_validation then require("tests.physics_scenario").update(self.physics_validation,self,dt,restart_encounter) end
     if self.ballistics_validation then require("tests.ballistics_scenario").update(self.ballistics_validation,self,dt,restart_encounter) end
     if self.squad_validation then

@@ -113,6 +113,10 @@ test("cover ownership is rechecked after competing searches yield",function()
     local first,second=job(a),job(b)
     assert(coroutine.resume(first));assert(coroutine.resume(second))
     assert(coroutine.resume(first));assert(coroutine.resume(second))
+    for _=1,4 do
+        if coroutine.status(first)~="dead" then assert(coroutine.resume(first)) end
+        if coroutine.status(second)~="dead" then assert(coroutine.resume(second)) end
+    end
     assert(a.cover==cover and not b.cover and ctx.ai.cover_claims.safe=="a")
 end)
 print(count.." navigation tests passed")

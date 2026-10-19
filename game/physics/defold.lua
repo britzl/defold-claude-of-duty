@@ -137,7 +137,7 @@ function M.new(ctx)
     end)
     events.on(ctx.events,events.WEAPON_RELOAD,a,function(_,beat)
         if beat.phase=="magdrop" then
-            M.spawn(a,"magazine",player_origin(ctx,{x=-.16,y=-.38,z=-.38}),
+            M.spawn(a,"magazine",beat.position or player_origin(ctx,{x=-.16,y=-.38,z=-.38}),
                 V.rotate({x=-.35,y=-.2,z=-.2},0,ctx.player.motion.yaw,0),beat.weapon)
         end
     end)

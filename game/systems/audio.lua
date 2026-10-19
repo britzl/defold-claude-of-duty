@@ -21,9 +21,10 @@ local function stop(a,v)
         a.backend:stop(v.slot)
     end
 end
-local function cancel_reload(a)
-    for i=#a.pending,1,-1 do if a.pending[i].tag=="reload" then table.remove(a.pending,i) end end
-    for _,v in ipairs(a.voices) do if v.tag=="reload" then stop(a,v) end end
+local function cancel_reload(a,tag)
+    tag=tag or "reload"
+    for i=#a.pending,1,-1 do if a.pending[i].tag==tag then table.remove(a.pending,i) end end
+    for _,v in ipairs(a.voices) do if v.tag==tag then stop(a,v) end end
 end
 function M.init(ctx)
     local backend=ctx.services.audio and sys and sys.get_config_string("audio_synthesis.backend","native") or "lua"
@@ -48,9 +49,10 @@ function M.init(ctx)
         queue(a,{kind="dry",key="mechanic/dry",gain=.35,bus="foley",priority=3})
     end)
     events.on(ctx.events,events.WEAPON_RELOAD,a,function(_,hit)
-        if hit.phase=="cancel" then cancel_reload(a);return end
+        local tag=hit.source and hit.source~="player" and "reload/"..hit.source or "reload"
+        if hit.phase=="cancel" then cancel_reload(a,tag);return end
         if hit.phase=="end" then return end
-        queue(a,{kind="reload",tag="reload",key="mechanic/"..hit.phase,gain=.45,bus="foley",priority=2})
+        queue(a,{kind="reload",tag=tag,position=hit.position,key="mechanic/"..hit.phase,gain=.45,bus="foley",priority=2})
     end)
     events.on(ctx.events,events.PLAYER_FOOTSTEP,a,function(_,hit)
         local name=surface(hit.surface)

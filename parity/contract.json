@@ -174,8 +174,8 @@
     {
       "id": "bindings",
       "state": "reconcile",
-      "current": "1\u20133 inspection, 6\u20138 weapons, F inspect, held crouch/prone",
-      "reference": "1\u20133 weapons, I inspect, wheel switch, toggle crouch/prone",
+      "current": "1–3 inspection, 6–8 weapons, F inspect, held crouch/prone",
+      "reference": "1–3 weapons, I inspect, wheel switch, toggle crouch/prone",
       "gate": "input-settings"
     },
     {
@@ -315,7 +315,7 @@
         "tests/traversal_smoke.py",
         "tools/validate_traversal_browser.mjs"
       ],
-      "implementation_notes": "Automatic low thin-obstacle vaults, explicit high vaults and deep-ledge mantles. Clear landing and swept path checks before and during traversal; support rechecked on completion. AI automatic vaulting is deliberately disabled pending animation/tactics work. Cross-engine motion review remains open."
+      "implementation_notes": "Automatic low thin-obstacle vaults, explicit high vaults and deep-ledge mantles. Clear landing and swept path checks before and during traversal; support rechecked on completion. AI local vault links now reuse these swept low-obstacle checks in step 11. Cross-engine motion review remains open."
     },
     {
       "id": "camera-feel",
@@ -456,7 +456,7 @@
         "tools/validate_soldier_browser.mjs",
         "tests/temporal_smoke.py"
       ],
-      "implementation_notes": "Three shared variant meshes, source height/bulk and distinct gear/carbine/AK recipes. Fixed-tick run/crouch, turning, wounded/regional-hit, reload and vault layers; two ground probes, world stance anchors, pelvis/sole correction and rigid leg/hand IK. Same evaluator drives scaled Bullet volumes and current/previous render palettes. Physics joint frames reconstruct the animated skeleton. Reload ammunition cycles and AI vault routing remain step 11; step 10 supplies native Bullet ragdolls. Native/release-WebGL fixtures exercise posed volumes, uneven terrain, live stairs, pause and bounded resets. Reduced geometry/detail, static contacts and analytic poses are adaptations; reference appearance/motion and sustained cost remain open."
+      "implementation_notes": "Three shared variant meshes, source height/bulk and distinct gear/carbine/AK recipes. Fixed-tick run/crouch, turning, wounded/regional-hit, reload and vault layers; two ground probes, world stance anchors, pelvis/sole correction and rigid leg/hand IK. Same evaluator drives scaled Bullet volumes and current/previous render palettes. Physics joint frames reconstruct the animated skeleton. Step 11 supplies reload ammunition cycles and local AI vault routing; step 10 supplies native Bullet ragdolls. Native/release-WebGL fixtures exercise posed volumes, uneven terrain, live stairs, pause and bounded resets. Reduced geometry/detail, static contacts and analytic poses are adaptations; reference appearance/motion and sustained cost remain open."
     },
     {
       "id": "dynamics",
@@ -485,14 +485,20 @@
         "threejs:src/ai/agent.js",
         "kaigen:src/claude_of_duty/cod_ai_brain.c"
       ],
-      "current": "partial",
+      "current": "implemented; controlled reference comparison and sustained performance remain open",
       "procedure": "Approach unseen with noise, break visual contact, pin cover, wound an actor, hold position and obstruct a route.",
       "expect": "No omniscience; investigation/retreat, squad peek permissions, tall-cover peeks, burst/reload cycles and useful flanks.",
       "coverage": [
+        "tests/ai_tactics_test.lua",
         "tests/ai_test.lua",
-        "tests/squads_smoke.py",
-        "tests/suppression_smoke.py"
-      ]
+        "tests/squads_test.lua",
+        "tests/suppression_test.lua",
+        "tests/navigation_test.lua",
+        "tests/ai_tactics_scenario.lua",
+        "tests/ai_tactics_smoke.py",
+        "tools/validate_ai_tactics_browser.mjs"
+      ],
+      "implementation_notes": "Evidence snapshots separate visual/squad contact from heard locations. 58 m visual range, delayed acquisition, 90/11/24/120 m shot/walk/run/explosion hearing with 45% occluded reach; hearing never grants a firing target. Bounded search, reachable wounded retreat, 30-round magazines, 3–7-round bursts, source cyclic rates/reload durations, variant damage/spread/speed, actor-scoped reload beats and debris. Tall cover uses capsule-checked side positions; one peek permission per squad rotates and releases. Recent visual suppressive rounds expire after 2.2 seconds and retain muzzle/world/friendly checks. All five authored flank routes and lateral graph positions are available; failed routes release reservations. Local low thin-obstacle vaults reuse swept traversal and animation. Seventeen supported tall-wall candidates extend cover metadata to 42 without new geometry. Graph navigation, ray hearing, one squad permission, unlimited reserve magazines and port combat tuning are adaptations. Native/release-WebGL behavior fixtures and unit checks do not establish controlled source parity or sustained performance."
     },
     {
       "id": "grenades",

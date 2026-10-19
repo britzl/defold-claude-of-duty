@@ -27,7 +27,7 @@ test("loading yields within its job budget and respects the clock deadline", fun
     assert(generator.step(world, 10, 1, function() return 2 end) == 0)
     assert(world.stats.boxes == 0)
     local completed, frames = generate(1)
-    assert(frames > 100 and completed.stats.boxes*3 == frames - 3)
+    assert(frames > 100 and completed.stats.boxes*3+#completed.colliders == frames - 3)
 end)
 
 test("changing loading budget does not change meshes, bounds or collider placement", function()

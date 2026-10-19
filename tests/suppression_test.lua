@@ -130,7 +130,7 @@ test("cover alternates protected crouches and visible shots, preserves claims wh
     assert(e.suppressed and e.cover_phase=="hide" and e.shots==shots and e.cover.id=="wall")
     ticks(ctx,600);assert(e.shots>shots and not e.suppressed)
     -- Outdated cover cannot keep a claim after contact memory expires.
-    ctx.player.position.z=40;ticks(ctx,1100)
+    ctx.player.position.z=80;ticks(ctx,1100)
     assert(not e.cover and next(ctx.ai.cover_claims)==nil and e.cover_phase==nil)
     runtime.final(ctx)
 end)

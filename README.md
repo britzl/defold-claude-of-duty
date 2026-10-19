@@ -38,6 +38,84 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## AI perception, weapons and tactics (2026-10-19)
+
+Step 11 adds event-driven hearing, investigation/search, wounded retreat,
+finite magazines and coordinated cover behavior. Soldiers acquire visible targets
+inside a 58 m range and a 100-degree patrol cone, with a distance-dependent
+reaction delay; awareness widens the cone. Sight and squad reports copy both the
+observed feet and aiming point. Hidden player movement and damage notifications
+without a firing origin do not reveal a new position.
+
+Shots, walking/running footsteps and explosions have 90/11/24/120 m hearing
+radii. A blocked sound ray reduces reach to 45%. Hearing supplies a location to
+investigate, never a firing target. Soldiers approach the observation, scan for
+three seconds, then resume patrol; unheard movement cannot renew the evidence.
+Recent visual reports permit physical suppressive rounds for at most 2.2 seconds,
+with wider spread and the same muzzle/world/friendly-lane checks as aimed shots.
+Stronger suppression stops shooting and withdraws peeks; lighter pressure widens
+spread and lengthens pauses between bursts.
+
+All variants carry 30-round magazines and fire bursts of 3–7 rounds. Vanguard
+and breacher use 10.5 rounds/second and 2.35-second reloads; irregular uses 8.2
+rounds/second and 2.9-second reloads. Ammunition returns only when the simulation
+reload completes. The shared reload animation emits actor-positioned magazine,
+insertion and bolt beats for spatial audio and the existing debris pool. Pause
+freezes reloads; death cancels them; restart restores a full magazine. Damage,
+spread and projectile speed differ by variant. Enemy reserves are unlimited.
+
+Tall cover uses capsule-checked side positions and returns to its protected
+position between exposures. One peek permission per squad rotates among ready
+members and releases on hiding, suppression, reload, death or loss of contact.
+The generated market gains **17 supported tall-cover candidates (42 total)**
+from existing ground-floor walls. No visible geometry or collision shape changes.
+Wounded actors below 34 health choose reachable graph positions farther from the
+observed threat. Prolonged cover occupation can trigger repositioning; flanking
+uses all five authored routes plus reachable lateral graph positions. Failed
+routes release reservations and retry after a cooldown.
+
+Short local routes can cross thin obstacles up to the existing 0.72 m automatic
+vault limit. They reuse the player's complete swept ascent, crossing, landing
+and per-tick obstruction checks. Accepted traversal drives the soldier vault
+animation; blocked overhead space or unsupported landings reject the link.
+Navigation retains its shared 2 ms / 32-probe per-render-frame budget. Individual
+probes and bounded candidate scans can exceed the time allowance.
+
+`ai.snapshot` includes hearing, contact age, observed aim point, search/retreat/
+reposition/vault counters, magazine/reload/burst state, suppressive shots and
+cover/position/peek reservations. These changes add no render targets, atlas
+allocations, sample bank entries, actor meshes or native extension. The existing
+32-slot debris and 24-voice audio limits still apply.
+
+```sh
+lua tests/ai_tactics_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/ai_tactics_smoke.py
+# Bundle release wasm-web with tests/ai_tactics_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_ai_tactics_browser.mjs --bundle=/path/to/bundle
+```
+
+All **33 standalone Lua suites (314 checks)** and the **12 baseline-tool checks** pass.
+Mac Metal and release Chrome WebGL2/ANGLE Metal each pass **13 shared checks**.
+The shared native/release-browser fixture covers hearing through real walls,
+investigation/search, all three reload profiles, pause, expiring suppressive
+fire, tall-cover withdrawal, retreat, successful/rejected vaults, six-actor
+full-map engagement, contact loss and five death/restart cycles. Reports and
+five captures per backend are under `build/ai-tactics-native-validation` and
+`build/ai-tactics-browser-validation`; standalone results are under
+`build/ai-tactics-unit-validation`.
+The browser fixture allows up to 0.1 seconds of catch-up per rendered frame
+while retaining 120 Hz fixed steps. The default 1/30-second cap passed the ten
+behavior checks through full-map engagement but reached the 480-second runner
+limit before cleanup; that attempt is retained in
+`build/ai-tactics-browser-default-timestep`. This fixture setting is separate
+from production settings and does not qualify rendering performance.
+
+Adaptations include ray-based hearing attenuation, authored graph navigation,
+a single peek permission per squad, and retained port damage tuning (10/12/10)
+with distinct spread/speed profiles. These are implementation checks; controlled
+reference behavior, visual comparison and sustained 60 FPS qualification remain
+open. Enemy grenades are step 12.
+
 ## Rigid debris and ragdolls (2026-10-19)
 
 Step 10 replaces the authored death collapse with native Bullet ragdolls. Each
@@ -118,7 +196,7 @@ Step 9 adds **vanguard, irregular and breacher** to the two squads. Their shared
 pouches and knee pads distinguish their silhouettes. Vanguard and breacher carry
 carbines; irregular carries a longer AK-style rifle. Both weapon recipes use the
 same grip and bore sockets as their animated hands and gameplay muzzle.
-Enemy firing statistics remain the existing tuning until step 11.
+Step 11 supplies variant firing profiles, bursts and magazine/reload cycles.
 
 The fixed simulation owns run/crouch locomotion, turning steps, wounded posture,
 sided regional hit reactions, reload and vault clips. Movement drives stride;
