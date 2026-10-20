@@ -56,7 +56,7 @@ local function configure(a,item,spec,velocity,spin)
     item.spec=spec;item.active=true;item.sleeping=false;item.quiet=0
     -- A recycled slot is a new solid to rounds already tracking a penetration.
     local key="body/"..hash_to_hex(item.id).."/"..(item.serial or 0)
-    item.shape={id=key,surface=item.corpse and "flesh" or (spec.surface or "metal"),part=spec.name,
+    item.shape={id=key,dynamic=true,surface=item.corpse and "flesh" or (spec.surface or "metal"),part=spec.name,
         w=d.x,h=d.y,d=d.z,x=p.x,y=p.y,z=p.z,transform=spec.world}
     a.by_id[item.id]=item.shape;a.by_key[key]=item
 end

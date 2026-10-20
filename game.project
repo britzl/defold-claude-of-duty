@@ -34,10 +34,10 @@ clear_color_blue = 0.77
 clear_color_alpha = 1.0
 
 [mesh]
-max_count = 640
+max_count = 896
 
 [collection]
-max_instances = 2048
+max_instances = 3072
 
 [sound]
 max_component_count = 24

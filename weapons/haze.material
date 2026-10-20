@@ -1,0 +1,11 @@
+name: "combat_haze"
+tags: "combat_haze"
+vertex_program: "/weapons/particle.vp"
+fragment_program: "/weapons/haze.fp"
+vertex_space: VERTEX_SPACE_LOCAL
+vertex_constants { name: "view_proj" type: CONSTANT_TYPE_VIEWPROJ }
+vertex_constants { name: "world" type: CONSTANT_TYPE_WORLD }
+vertex_constants { name: "view" type: CONSTANT_TYPE_VIEW }
+fragment_constants { name: "particle" type: CONSTANT_TYPE_USER value { x: 16 y: 1 z: 0 w: 0 } }
+fragment_constants { name: "glass_screen" type: CONSTANT_TYPE_USER value { x: 0 y: 0 z: 0 w: 0 } }
+samplers { name: "depth_normal_texture" wrap_u: WRAP_MODE_CLAMP_TO_EDGE wrap_v: WRAP_MODE_CLAMP_TO_EDGE filter_min: FILTER_MODE_MIN_NEAREST filter_mag: FILTER_MODE_MAG_NEAREST }

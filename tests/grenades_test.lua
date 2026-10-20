@@ -169,7 +169,7 @@ end)
 test("explosion presentation uses bounded pools and expires",function()
     local s=fx.new();for i=1,30 do fx.explosion(s,{position={x=0,y=0,z=0}}) end
     assert(fx.snapshot(s).particles==fx.particle_limit)
-    fx.update(s,3);assert(fx.snapshot(s).particles==0)
+    for _=1,360 do fx.update(s,1/60) end;assert(fx.snapshot(s).particles==0 and #s.emitters==0)
 end)
 test("throw layer fades to the support socket without an end-of-clip hand jump",function()
     for _,variant in ipairs({"vanguard","irregular","breacher"}) do

@@ -94,7 +94,7 @@ function M.fixed_update(ctx, dt)
             combat.request(ctx.combat,{target="player",kind="fall",
                 amount=(motion.impact_speed-health_tuning.fall_speed)*health_tuning.fall_damage_per_speed})
         end
-        events.emit(ctx.events, events.PLAYER_LAND, { velocity = motion.impact_speed, surface = motion.surface })
+        events.emit(ctx.events, events.PLAYER_LAND, { position = {x=position.x,y=position.y,z=position.z}, velocity = motion.impact_speed, surface = motion.surface })
         player.footstep_distance = 0
         player.camera.phase = 0
     end

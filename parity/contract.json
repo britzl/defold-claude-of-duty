@@ -174,8 +174,8 @@
     {
       "id": "bindings",
       "state": "reconcile",
-      "current": "1–3 inspection, 6–8 weapons, F inspect, held crouch/prone",
-      "reference": "1–3 weapons, I inspect, wheel switch, toggle crouch/prone",
+      "current": "1\u20133 inspection, 6\u20138 weapons, F inspect, held crouch/prone",
+      "reference": "1\u20133 weapons, I inspect, wheel switch, toggle crouch/prone",
       "gate": "input-settings"
     },
     {
@@ -505,7 +505,7 @@
         "tests/ai_tactics_smoke.py",
         "tools/validate_ai_tactics_browser.mjs"
       ],
-      "implementation_notes": "Evidence snapshots separate visual/squad contact from heard locations. 58 m visual range, delayed acquisition, 90/11/24/120 m shot/walk/run/explosion hearing with 45% occluded reach; hearing never grants a firing target. Bounded search, reachable wounded retreat, 30-round magazines, 3–7-round bursts, source cyclic rates/reload durations, variant damage/spread/speed, actor-scoped reload beats and debris. Tall cover uses capsule-checked side positions; one peek permission per squad rotates and releases. Recent visual suppressive rounds expire after 2.2 seconds and retain muzzle/world/friendly checks. All five authored flank routes and lateral graph positions are available; failed routes release reservations. Local low thin-obstacle vaults reuse swept traversal and animation. Seventeen supported tall-wall candidates extend cover metadata to 42 without new geometry. Graph navigation, ray hearing, one squad permission, unlimited reserve magazines and port combat tuning are adaptations. Native/release-WebGL behavior fixtures and unit checks do not establish controlled source parity or sustained performance."
+      "implementation_notes": "Evidence snapshots separate visual/squad contact from heard locations. 58 m visual range, delayed acquisition, 90/11/24/120 m shot/walk/run/explosion hearing with 45% occluded reach; hearing never grants a firing target. Bounded search, reachable wounded retreat, 30-round magazines, 3\u20137-round bursts, source cyclic rates/reload durations, variant damage/spread/speed, actor-scoped reload beats and debris. Tall cover uses capsule-checked side positions; one peek permission per squad rotates and releases. Recent visual suppressive rounds expire after 2.2 seconds and retain muzzle/world/friendly checks. All five authored flank routes and lateral graph positions are available; failed routes release reservations. Local low thin-obstacle vaults reuse swept traversal and animation. Seventeen supported tall-wall candidates extend cover metadata to 42 without new geometry. Graph navigation, ray hearing, one squad permission, unlimited reserve magazines and port combat tuning are adaptations. Native/release-WebGL behavior fixtures and unit checks do not establish controlled source parity or sustained performance."
     },
     {
       "id": "grenades",
@@ -525,7 +525,7 @@
         "tests/physics_scenario.lua",
         "tests/audio_test.lua"
       ],
-      "implementation_notes": "One frag per enemy, 9–22 s initial actor and 6 s squad cooldowns, 8–26 m fresh-contact decisions and exclusive grants followed by 14–26 s squad cooldowns. Left-hand windup releases at .48 s; copied target, elevation-aware lob, swept arc and ally checks at decision/release. Six dedicated 5 cm / .42 kg Bullet spheres cannot be evicted by debris. Fixed 2.35 s fuse, 6.5 m / 120 damage blast, reference player/AI falloff, reverse world rays for cover/floors and one centralized damage request per actor including thrower. Existing bodies receive visibility-tested impulses; lethal damage carries impulse into ragdolls. Basic direction/height/distance/fuse warning, pressure, generated spatial blast audio and bounded flash/smoke/light are connected. Native and release-WebGL fixtures pass eleven checks and four captures each; 77 synthesized samples match Lua on both. Full reference presentation, sustained combat cost and Kaigen controlled capture remain open."
+      "implementation_notes": "One frag per enemy, 9\u201322 s initial actor and 6 s squad cooldowns, 8\u201326 m fresh-contact decisions and exclusive grants followed by 14\u201326 s squad cooldowns. Left-hand windup releases at .48 s; copied target, elevation-aware lob, swept arc and ally checks at decision/release. Six dedicated 5 cm / .42 kg Bullet spheres cannot be evicted by debris. Fixed 2.35 s fuse, 6.5 m / 120 damage blast, reference player/AI falloff, reverse world rays for cover/floors and one centralized damage request per actor including thrower. Existing bodies receive visibility-tested impulses; lethal damage carries impulse into ragdolls. Basic direction/height/distance/fuse warning, pressure, generated spatial blast audio and bounded flash/smoke/light are connected. Native and release-WebGL fixtures pass eleven checks and four captures each; 77 synthesized samples match Lua on both. Full reference presentation, sustained combat cost and Kaigen controlled capture remain open."
     },
     {
       "id": "effects",
@@ -534,13 +534,20 @@
         "threejs:src/fx/index.js",
         "kaigen:src/claude_of_duty/cod_fx.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Fire into each surface, kill actors, detonate grenades, walk/land and inspect smoke, motes and heat haze.",
       "expect": "Full effect catalogue, correct sorting/receivers and bounded pools during sustained fire.",
       "coverage": [
         "tests/combat_fx_test.lua",
-        "tests/combat_rendering_smoke.py"
-      ]
+        "tests/combat_rendering_smoke.py",
+        "tests/effects_scenario.lua",
+        "tests/effects_smoke.py",
+        "tools/validate_effects_browser.mjs",
+        "tests/effects_pixels.py",
+        "tests/renderer_test.lua",
+        "tests/ballistics_test.lua"
+      ],
+      "implementation_notes": "Twelve procedural surface recipes, swept/dragged visual fragments with bounded bounces, cooling aligned sparks, world-ray blood/scorch receivers and dynamic-body decal rejection. Grenades drive fire, shockwave, smoke columns, debris, existing light and heat refraction; movement/death events drive dust. Three authored wreck sources, camera motes and daytime ground shimmer. Fixed 60 Hz presentation with independent RNG, 128 combat/32 ambient/48 decal/12 haze slots and eight emitters; 220 meshes share a 144-byte quad. Sorted colour transparency follows TAA; Metal uses premultiplied linear HDR, while RGBA8 compands colour with coverage and correlated dithering (encoded-space overlap is approximate). Additive signed offsets use a half-resolution RGBA8 target and reuse resolved radiance for the warp. Native Metal and release WebGL pass 13 shared checks, 15 captures and eight within-backend pixel gates each. Fixed comparison captures disable temporal AA/adaptive photography. Accelerated 60-second pool pressure and three restarts validate bounds, not sustained performance. Reduced counts, procedural masks, point sweeps, clipped planar decals, authored sources and RGBA8 offsets are adaptations. Controlled reference motion/appearance and Kaigen comparison remain open."
     },
     {
       "id": "lighting-atmosphere",

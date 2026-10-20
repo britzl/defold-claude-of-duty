@@ -27,7 +27,7 @@ local function impact(ctx,sim,p,hit,point,exiting)
     events.emit(ctx.events,events.BULLET_IMPACT,{point=V.copy(point),normal=exiting and hit.exit_normal or hit.normal,
         surface=hit.surface or "concrete",effect=props.fx,audio=props.audio,exit=exiting,
         weapon=p.def.id,source=p.source,round=p.token,damage=damage(p),distance=p.travelled,collider=hit.id,
-        region=hit.region,part=hit.part,incident=V.normalize(p.velocity)})
+        dynamic=hit.dynamic or hit.actor~=nil,region=hit.region,part=hit.part,incident=V.normalize(p.velocity)})
     if not exiting and hit.actor and not p.hit_actors[hit.actor] then
         p.hit_actors[hit.actor]=true
         local scale=hit.damage_scale or (headshot and 4 or 1)

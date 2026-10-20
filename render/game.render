@@ -25,3 +25,4 @@ materials { name: "weapon_composite" material: "/render/weapon_composite.materia
 materials { name: "grade" material: "/render/grade.material" }
 materials { name: "exposure" material: "/render/exposure.material" }
 materials { name: "lens" material: "/render/lens.material" }
+materials { name: "haze_composite" material: "/render/haze_composite.material" }

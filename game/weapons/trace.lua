@@ -50,7 +50,7 @@ function M.box(shape, origin, direction, length)
     end
     if leave<=1e-7 or enter>length or leave-enter<1e-7 then return end
     return { id=shape.id, surface=shape.surface, actor=shape.actor, headshot=shape.headshot,
-        region=shape.region, part=shape.part, damage_scale=shape.damage_scale,
+        dynamic=shape.dynamic or shape.actor~=nil, region=shape.region, part=shape.part, damage_scale=shape.damage_scale,
         enter=math.max(0,enter), leave=leave,
         normal=shape.transform and T.direction(shape.transform,ni) or V.rotate(ni,angle,0,0),
         exit_normal=shape.transform and T.direction(shape.transform,no) or V.rotate(no,angle,0,0) }

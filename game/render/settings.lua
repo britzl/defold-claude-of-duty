@@ -18,7 +18,7 @@ function M.pipeline(adapter, half_float, requested)
         tone_mapper="agx_neutral",output="srgb",exposure_mode="fixed"}
 end
 function M.defaults()
-    return { shadow_cache = true, combat_materials = true, combat_effects = true, soft_particles = true, impact_decals = true, lighting = "daylight", clouds = true, volumetric_fog = true, fog_shadows = true, reflections = true, glass = true, local_shadows = true, muzzle_lights = true, temporal_aa = true, weapon_aa = true, ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
+    return { shadow_cache = true, combat_materials = true, combat_effects = true, heat_distortion = true, soft_particles = true, impact_decals = true, lighting = "daylight", clouds = true, volumetric_fog = true, fog_shadows = true, reflections = true, glass = true, local_shadows = true, muzzle_lights = true, temporal_aa = true, weapon_aa = true, ambient_occlusion = true, contact_shadows = true, shadows = true, normal_maps = true, local_lights = true, fog = true,
         interior_lighting = true, environment_filter = true, environment_level = 0,
         bloom = true, bloom_level = 0, weathering = true, micro_detail = true, parallax = true,
         photographic_quality = "high", auto_exposure = true, bloom_strength = .14, grade_strength = 1, sharpen = .25,
@@ -63,7 +63,7 @@ function M.target_bytes(w,h,hdr,baking,options)
     if not d then return 0 end
     -- HDR radiance, RGBA8 data maps, conservative 32-bit depth; no driver overhead.
     local colour=hdr and 8 or 4
-    return local_lights.shadow_width*local_lights.shadow_height*8+w*h*((colour+4)*2+44+colour*7) + d.occlusion_width*d.occlusion_height*(4+colour) + photo.bytes(w,h,hdr,options or M.defaults()) + shadows.atlas_size^2*8 + shadows.count*shadows.size^2*8
+    return local_lights.shadow_width*local_lights.shadow_height*8+w*h*((colour+4)*2+44+colour*7) + d.occlusion_width*d.occlusion_height*(8+colour) + photo.bytes(w,h,hdr,options or M.defaults()) + shadows.atlas_size^2*8 + shadows.count*shadows.size^2*8
         + atlas.width*atlas.height*4*3 + (baking and atlas.width*atlas.height*4+2*atlas.scratch_size^2*4 or 0) + (daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*colour
 end
 return M

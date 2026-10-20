@@ -8,6 +8,7 @@ local temporal=require "game.render.temporal"
 local local_lights=require "game.render.local_lights"
 local photographic=require "game.render.photographic"
 local photo_pass=require "game.render.photographic_pass"
+local combat_fx=require "game.render.combat_fx"
 local G=graphics
 local COLOR,DEPTH=G.BUFFER_TYPE_COLOR0_BIT,G.BUFFER_TYPE_DEPTH_BIT
 local MOTION,EXPECTED=G.BUFFER_TYPE_COLOR1_BIT,G.BUFFER_TYPE_COLOR2_BIT
@@ -66,11 +67,11 @@ local function resize(self)
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
             else self.targets[name]=colour_target(w,h,name=="scene" or name=="weapon",name=="fog_raw",false,self.radiance_format,name=="scene",name=="weapon") end
         end
-        for _,name in ipairs({"depth_normal","depth_previous","occlusion_raw","occlusion"}) do
-            local half=name=="occlusion_raw"
+        for _,name in ipairs({"depth_normal","depth_previous","occlusion_raw","occlusion","haze"}) do
+            local half=name=="occlusion_raw" or name=="haze"
             local w,h=half and d.occlusion_width or d.width,half and d.occlusion_height or d.height
             if self.targets[name] then render.set_render_target_size(self.targets[name],w,h)
-            else self.targets[name]=(name=="depth_normal" or name=="depth_previous") and prepass_target(w,h) or colour_target(w,h,false,true) end
+            else self.targets[name]=(name=="depth_normal" or name=="depth_previous") and prepass_target(w,h) or colour_target(w,h,false,name~="haze") end
         end
         photo_pass.resize(self,colour_target)
         self.gui_projection=vmath.matrix4_orthographic(0,d.width,0,d.height,-1,1)
@@ -242,7 +243,8 @@ local function report(self)
         local_shadow_lights=local_lights.shadow_count,local_shadow_size=local_lights.shadow_size,
         local_shadow_draw_passes=self.local_shadow_draw_passes or 0,
         glass_draw_passes=self.glass_draw_passes or 0,
-        combat_transparency="sorted_after_taa",combat_particle_limit=24,combat_decal_limit=32,
+        combat_transparency="sorted_after_taa",combat_particle_limit=combat_fx.particle_limit,combat_decal_limit=combat_fx.decal_limit,
+        haze_draw_passes=self.haze_draw_passes or 0,
         atmosphere_preset=self.options.lighting,environment_updates=self.environment_updates,
         sky_width=daylight.sky_width,sky_height=daylight.sky_height,
         atmosphere_draw_passes=self.atmosphere_draw_passes or 0,fog_steps=daylight.fog_steps,
@@ -270,6 +272,7 @@ function init(self)
     self.transparent_lab=render.predicate({"transparent_lab"})
     self.transparent=render.predicate({"transparent"})
     self.combat_particle=render.predicate({"combat_particle"})
+    self.combat_haze=render.predicate({"combat_haze"})
     self.weapon_flash=render.predicate({"viewmodel_flash"})
     self.glass=render.predicate({"glass"})
     self.glass_lab=render.predicate({"capture_glass"})
@@ -778,6 +781,25 @@ function update(self,dt)
             resolved_scene=o.view=="glass" and t.glass or t.glass_scene
             self.glass_draw_passes=2
         end
+        self.haze_draw_passes=0
+        if o.combat_effects and o.heat_distortion and photographic_view and (self.haze_count or 0)>0 then
+            render.set_render_target(t.haze)
+            render.set_viewport(0,0,self.occlusion_width,self.occlusion_height)
+            render.clear({[COLOR]=vmath.vector4()})
+            render.set_camera();render.set_view(view);render.set_projection(unjittered)
+            render.set_depth_mask(false);render.disable_state(G.STATE_DEPTH_TEST);render.disable_state(G.STATE_CULL_FACE)
+            render.enable_state(G.STATE_BLEND);render.set_blend_func(G.BLEND_FACTOR_ONE,G.BLEND_FACTOR_ONE)
+            self.lighting.glass_screen=vmath.vector4(1/self.occlusion_width,1/self.occlusion_height,jx/self.width,jy/self.height)
+            bind("depth_normal_texture",t.depth_normal)
+            render.draw(self.combat_haze,{constants=self.lighting,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=unjittered*view})
+            -- Reflected is no longer sampled after opaque/transparent resolve.
+            render.set_render_target(t.reflected);render.set_viewport(0,0,self.width,self.height)
+            bind("source_texture",resolved_scene);bind("haze_texture",t.haze)
+            self.lighting.glass_screen=vmath.vector4(1/self.width,1/self.height,jx/self.width,jy/self.height)
+            fullscreen(self,"haze_composite",self.lighting)
+            for _,name in ipairs({"source_texture","haze_texture","depth_normal_texture"}) do render.disable_texture(name) end
+            resolved_scene=t.reflected;self.haze_draw_passes=2
+        end
         local rotation=vmath.matrix4(inverse_view)
         rotation.m03,rotation.m13,rotation.m23=0,0,0
         local old_rotation=vmath.matrix4(previous_view)
@@ -862,6 +884,8 @@ function on_message(self,id,message)
         atmosphere_constants(self)
         temporal.reset(self.temporal,"settings")
         self.report=true
+    elseif id==hash("renderer_combat_state") then
+        self.haze_count=message.haze
     elseif id==hash("renderer_photographic_state") then
         self.photo_state=message
     elseif id==hash("renderer_volumes") then

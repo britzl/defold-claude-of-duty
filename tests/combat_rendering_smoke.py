@@ -72,14 +72,14 @@ def main():
         report['live_cost']={'scopes':[asdict(v) for v in sample.scopes()[:20]],'counters':[asdict(v) for v in sample.counters()],
             'scope':'90 native frames while firing into concrete, not a sustained GPU benchmark.'}
         engine.wait_until(lambda:cmd('weapons.result')['complete'],timeout=20)
-        state=cmd('combat_fx.snapshot');assert state['impacts']>3 and 0<state['decals']<=32 and state['shots']>0,state
+        state=cmd('combat_fx.snapshot');assert state['impacts']>3 and 0<state['decals']<=48 and state['shots']>0,state
         report['real_fire']=state
         cmd('ui.pause',{'paused':True});game.wait_frames(5)
         frozen=cmd('combat_fx.snapshot');game.wait_frames(35);assert frozen==cmd('combat_fx.snapshot')
         save('impact-decals')
         for _ in range(4):
             cmd('gameplay.restart');game.wait_frames(3)
-            s=cmd('combat_fx.snapshot');assert s['particles']==0 and s['decals']==0 and s['meshes']==56 and s['buffers']==1,s
+            s=cmd('combat_fx.snapshot');assert s['particles']==0 and s['decals']==0 and s['meshes']==220 and s['buffers']==1,s
         # Freeze a real skinned soldier close to the camera and compare its
         # bind-space surfaces; animation/health/hit volumes remain production.
         cmd('ai.configure',{'enabled':False});cmd('ai.reset',{'position':{'x':0,'y':.01,'z':7.5},'yaw':3.14159265})

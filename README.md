@@ -38,6 +38,86 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Combat and ambient effects (2026-10-20)
+
+Step 13 adds twelve surface recipes: concrete/plaster chips, cooling metal sparks,
+wood splinters, glinting glass, blood spray, dirt/sand clods, rubber chips, water
+splashes, leaves and fabric fibres. Small visual fragments integrate at 60 Hz,
+cast their complete travel segment against static world geometry and bounce at
+most twice. Existing Bullet casings, magazines, larger debris and ragdolls remain
+physical. Impact notifications now carry moving-body metadata, so loose debris
+cannot acquire stationary world decals.
+
+Wood, metal and masonry use distinct procedural mark masks. Blood spatter casts
+behind the hit, and blast scorch casts down to a real receiver. Both require
+static geometry; the shader further clips by depth and surface normal. All
+colour particles and glass retain the same back-to-front submission after world
+TAA, with soft depth intersections and no transparent colour in temporal history.
+The RGBA8 fallback uses coverage-weighted, fourth-root colour encoding with
+correlated byte dithering to preserve faint smoke and shockwave gradients. Its
+overlapping layers blend in encoded space, an explicit fallback approximation.
+Metal retains premultiplied linear floating-point blending. Bullet marks, blood and scorch last 24, 35 and 45 seconds.
+
+Grenade detonations now drive a brief core flash, expanding fire lobes, a subtle
+shockwave, chips/embers, rolling dust, a finite smoke column, heat refraction and
+ground scorch, alongside the existing blast light and audio. Player footsteps
+and landings emit supported surface dust; zero-speed settling emits nothing.
+Soldier deaths emit dust while the existing ragdoll service handles the body.
+
+Three persistent emitters use the authored wreck positions. Camera-local motes
+and ground shimmer use bounded emission; ground shimmer stops at sunset/night.
+Hot gas and shockwaves write signed offsets into a half-resolution RGBA8 target,
+using separate positive/negative channels for portable additive blending. The
+warp runs after transparency and before photographic treatment, reuses an idle
+radiance target, and rejects offsets across depth discontinuities. The
+`heat_distortion` renderer setting isolates it for comparisons. Both haze draws
+are skipped when no distortion sprites are active.
+
+The pools reserve **128 combat particles (48 ballistic fragments), 32 ambient
+particles, 48 decals, 12 haze sprites and eight emitters**. Combat cannot evict
+ambient particles, and explosion columns cannot evict persistent wreck sources.
+The 220 meshes share one 144-byte runtime quad buffer. This adds 164 objects and
+one half-resolution RGBA8 render target: **0.879 MiB at 1280×720**. Mesh and
+collection capacities rise to 896 and 3072. Pause/focus freezes effects, emitters
+and shader animation; restart removes transient particles, marks, heat and
+columns, restoring the three persistent sources. Finalization frees the mesh
+objects, shared buffer and render targets. `combat_fx.snapshot` reports pool
+occupancy, emissions, recycling, ray counts, collisions and fixed effect time.
+
+```sh
+lua tests/combat_fx_test.lua
+lua tests/renderer_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/effects_smoke.py
+# Bundle release wasm-web with tests/effects_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_effects_browser.mjs \
+  --bundle="/path/to/Claude of Duty" --browser="/path/to/Chrome"
+# Python with Pillow:
+python3 tests/effects_pixels.py build/effects-native-validation build/effects-browser-validation
+```
+
+All **34 standalone Lua suites / 341 checks** pass. Native Metal and release
+Chrome WebGL2/ANGLE Metal each pass **13 scenario checks, 15 captures and eight
+pixel gates**. These cover production bullet impacts, grenade detonation,
+fragment sweeps/bounces, blood/scorch receivers, glass sorting, soft intersections,
+hidden smoke/heat, actual landing/footstep/death events, pause/focus and reset.
+Effect and heat toggles restore exact pixels within each backend. Fixed pixel
+captures disable TAA, auto exposure, motion blur, grain and ADS depth of field;
+native renders at 1920×1280 and the browser at 960×640, so the suites do not
+assert cross-backend pixel equality. The browser retains the prior 0.1-second
+fixture timestep cap. A 60-second simulated combat sequence applies 600 impacts
+and 30 explosions before three restarts; this establishes bounded resources,
+not sustained wall-clock frame time. Reports live under `build/effects-*-validation`.
+The existing native combat-rendering regression also passes 15 photographic
+on/off/return checks, resize restoration, a seven-position motion sweep, live
+firing, pause and four restarts; its report is in
+`captures/rendering/combat-validation/report.json`. The 12 baseline-tool checks
+pass too.
+
+Reduced particle density, procedural masks, point-swept visual fragments,
+planar clipped decals, static wreck emitters and encoded offset accumulation are
+port adaptations. Controlled Three.js transient comparisons, Kaigen captures,
+exact presentation matching and sustained CPU/GPU budgets remain later gates.
+
 ## Enemy grenades (2026-10-20)
 
 Each enemy has one frag grenade. A fresh visual/squad contact younger than 1.5
@@ -67,9 +147,8 @@ carry an impulse into the newly created ragdoll.
 
 Throw/fuse/explosion notifications drive a generated spatial blast sample,
 bounded flash/smoke and light, and a nearest-danger HUD warning with direction,
-height, distance and fuse. Behind-camera warnings work too. These are basic
-connected cues; projected indicators, detailed fireballs/shockwaves/scorch marks,
-voice barks and richer blast audio remain in steps 13, 15 and 16.
+height, distance and fuse. Behind-camera warnings work too. Step 13 now supplies detailed fireballs, shockwaves, smoke, heat and scorch.
+Projected indicators, voice barks and richer blast audio remain in steps 15–16.
 
 Focus loss and pause freeze bodies, fuses, windup and squad cooldowns. Encounter
 restart cancels active/pending grenades, queued blast damage and warnings, stops

@@ -19,7 +19,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*8+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -183,7 +183,7 @@ test("recipes, padded mip chains and filtered environment finish before the worl
         assert(self.lighting.surface_infos[i].args[2]==s.size)
         assert(self.lighting.surface_parameters[i].args[1]==s.parallax)
     end
-    assert(#targets==46)
+    assert(#targets==47)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -247,9 +247,23 @@ test("flash resolves in linear light without target feedback and retains weapon 
     on_message(self,"renderer_weapon_flash",{active=false})
     on_message(self,"renderer_configure",{weapon_aa=true})
 end)
+test("heat distortion uses a separate offset target and skips work when disabled",function()
+    on_message(self,"renderer_combat_state",{haze=2})
+    draws={};update(self)
+    assert(self.haze_draw_passes==2)
+    local haze,warp
+    for i,d in ipairs(draws) do
+        if d.predicate=="combat_haze" then haze=i;assert(d.target==self.targets.haze) end
+        if d.material=="haze_composite" then warp=i;assert(d.target==self.targets.reflected) end
+    end
+    assert(haze and warp and haze<warp)
+    on_message(self,"renderer_configure",{heat_distortion=false});update(self);assert(self.haze_draw_passes==0)
+    on_message(self,"renderer_configure",{heat_distortion=true});on_message(self,"renderer_combat_state",{haze=0})
+    update(self);assert(self.haze_draw_passes==0)
+end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==46 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==47 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)

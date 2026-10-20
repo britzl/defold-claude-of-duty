@@ -191,6 +191,7 @@ function init(self)
     if sys.get_config_int("soldier_validation.enabled",0)==1 then
         self.soldier_validation=require("tests.soldier_scenario").new()
     end
+    if sys.get_config_int("effects_validation.enabled",0)==1 then self.effects_validation=require("tests.effects_scenario").new() end
     if sys.get_config_int("grenades_validation.enabled",0)==1 then
         self.grenades_validation=require("tests.grenades_scenario").new()
     end
@@ -533,6 +534,7 @@ function update(self, dt)
     if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
     if self.soldier_validation then require("tests.soldier_scenario").update(self.soldier_validation,self,dt,restart_encounter) end
+    if self.effects_validation then require("tests.effects_scenario").update(self.effects_validation,self,dt,restart_encounter) end
     if self.grenades_validation then require("tests.grenades_scenario").update(self.grenades_validation,self,dt,restart_encounter) end
     if self.ai_tactics_validation then require("tests.ai_tactics_scenario").update(self.ai_tactics_validation,self,dt,restart_encounter) end
     if self.physics_validation then require("tests.physics_scenario").update(self.physics_validation,self,dt,restart_encounter) end
@@ -673,7 +675,7 @@ function late_update(self, dt)
 
     if profiler then profiler.scope_begin("late.combat_fx") end
     combat_fx.update(self.combat_visuals,(self.ctx.paused or self.capture) and 0 or dt,go.get_rotation("/camera"),self.player_muzzle,
-        self.capture~=nil,self.renderer_settings.combat_effects)
+        self.capture~=nil,self.renderer_settings.combat_effects,self.camera_position,self.renderer_settings.lighting=="night" and 0 or self.renderer_settings.lighting=="sunset" and .25 or 1)
     if profiler then profiler.scope_end() end
 
     if profiler then profiler.scope_begin("late.lights") end

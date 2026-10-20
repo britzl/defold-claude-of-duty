@@ -227,4 +227,11 @@ test("eye-origin production fire hits cover before a protruding muzzle and ignor
     end
 end)
 
+test("moving-body metadata survives ray intervals and impact notifications",function()
+    local body=shape("body/test",-2,.01,"metal");body.dynamic=true
+    local ctx,sim,p,hits,_,_,q=launch({body})
+    step(ctx,sim,q)
+    assert(#hits>0)
+    for _,hit in ipairs(hits) do assert(hit.dynamic==true) end
+end)
 print(count.." ballistics tests passed")

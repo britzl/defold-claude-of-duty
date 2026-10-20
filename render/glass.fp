@@ -10,6 +10,7 @@ uniform highp vec4 surface;
 #include "/render/lighting.glsl"
 #include "/render/surface_sampling.glsl"
 #include "/render/depth_normal.glsl"
+#include "/render/transparency.glsl"
 void main() {
     vec2 screen_uv=gl_FragCoord.xy*glass_screen.xy+glass_screen.zw;
     vec4 depth=texture2D(depth_normal_texture,screen_uv);
@@ -41,6 +42,6 @@ void main() {
         vec3 ambient=environment_row(vec3(0,1,0),environment_layout.z+1.0)*interior_visibility(var_world);
         radiance=radiance*trans+ambient*(1.0-trans)*alpha*.55;
     }
-    // Transparent layers store premultiplied LINEAR light on both pipelines.
-    gl_FragColor=vec4(clamp(radiance/(colour_pipeline.x>.5?1.0:8.0),0.0,colour_pipeline.x>.5?65504.0:1.0),alpha);
+    // Linear HDR, or coverage-weighted companded colour in the byte fallback.
+    gl_FragColor=store_transparency(clamp(radiance,0.0,colour_pipeline.x>.5?65504.0:8.0),alpha);
 }
