@@ -1,4 +1,5 @@
 local M = {
+    PHYSICS_CONTACT = "physics:contact",
     WEAPON_FIRE = "weapon:fire",
     WEAPON_DRY = "weapon:dry",
     WEAPON_RELOAD = "weapon:reload",

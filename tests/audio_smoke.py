@@ -59,9 +59,9 @@ def main():
         command("ui.focus", dict(focused=True))
         command("ui.pause", dict(paused=False))
         command("ai.configure", dict(enabled=False))
-        assert state()["ready"] and state()["loaded"] == 77
+        assert state()["ready"] and state()["loaded"] == 234
         assert state()["synthesis_backend"] == "native"
-        assert state()["bytes"] == 1698124 and state()["voice_limit"] == 24
+        assert state()["bytes"] == 10611456 and state()["voice_limit"] == 24
         engine.wait_until(lambda: max(state()["meter"].values()) > .0001, timeout=4)
         print("PASS runtime bank and audible ambience", state()["work_ms"], state()["peak_job_ms"], flush=True)
         command("audio.configure", dict(ambience=0))
@@ -80,10 +80,10 @@ def main():
         print("PASS native stereo mixer channels and distance attenuation", flush=True)
 
         wall = preview(kind="shot", weapon="rifle", position=dict(x=-12, y=1.8, z=-6))
-        assert wall["last"]["occluded"] and wall["last"]["key"].endswith("muffled"), wall
+        assert wall["last"]["occluded"] and any(v["occlusion"] > 0 for v in wall["voices"]), wall
         command("world.view", dict(name="room"))
         room = preview(kind="shot", weapon="pistol")
-        assert room["indoor"] and room["last"]["key"].endswith("room"), room
+        assert room["indoor"] and any(v["wet"] > 0 for v in room["voices"]), room
         print("PASS real Bullet occlusion and room variant", flush=True)
 
         command("movement.reset", dict(x=0, y=.01, z=4, yaw=0))
@@ -123,7 +123,7 @@ def main():
             command("gameplay.restart")
             command("ai.configure", dict(enabled=False))
             settle()
-            assert state()["loaded"] == 77 and state()["bytes"] == 1698124 and state()["active"] == 2
+            assert state()["loaded"] == 234 and state()["bytes"] == 10611456 and state()["active"] == 2
         assert state()["peak_voices"] <= 24 and state()["completed"] > 20, state()
         print("PASS mute silence, completion callbacks and six restarts without bank growth", flush=True)
 

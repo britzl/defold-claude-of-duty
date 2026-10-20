@@ -66,10 +66,10 @@ try {
         assert(run.complete,'Audio browser fixture timed out');assert.deepEqual(run.errors,[]);
         const audio=run.result.audio;
         assert.equal(audio.synthesis_backend,config.backend);assert(audio.ready);
-        assert.equal(audio.loaded,77);assert.equal(audio.bytes,1698124);assert.equal(run.samples.length,77);
-        assert.equal(run.complete.samples,77);
+        assert.equal(audio.loaded,234);assert.equal(audio.bytes,10611456);assert.equal(run.samples.length,234);
+        assert.equal(run.complete.samples,234);
         assert.equal(run.result.world.vertices,413568);
-        if(config.verify) {assert(run.fixture_pass);assert.equal(audio.verified,77);}
+        if(config.verify) {assert(run.fixture_pass);assert.equal(audio.verified,234);}
         report.runs.push(run);delete report.active_run;
         console.log('PASS',config,'audio CPU',audio.work_ms,'timings',run.result.timings);
         await browser.close();browser=null;

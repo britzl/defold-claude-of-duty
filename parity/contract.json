@@ -195,7 +195,7 @@
     {
       "id": "audio-dsp",
       "state": "decision-open",
-      "current": "Panning and generated room/muffled variants",
+      "current": "24 logical / 72 physical voices with synchronized dry, muffled and sparse wet PCM; four continuous two-height emitter probes per frame, room blends, ducking and concussion. No HRTF or full convolution; proposed equivalent still requires listening acceptance.",
       "reference": "Three.js HRTF/convolution; Kaigen engine processing",
       "gate": "audio-spatial"
     },
@@ -360,7 +360,7 @@
         "tools/validate_health_browser.mjs",
         "tests/health_pixels.mjs"
       ],
-      "implementation_notes": "Fixed-tick 4.6 s regeneration delay, .55 s ramp to 34 HP/s, fall damage above 15 m/s at 7 HP/(m/s), real-segment/impact/hit suppression with cover and per-round maximum contributions, source-origin directional impulses, low-health desaturation/pulse and recovery/heartbeat events. Explosion notifications provide feedback; the step-12 grenade owner queues obstruction-aware damage separately. Heartbeat audio remains step 15. Uses the existing composite before AgX and after temporal resolve, without exposure-meter feedback. Native/WebGL shared fixtures pass; controlled reference visual comparison remains open."
+      "implementation_notes": "Fixed-tick 4.6 s regeneration delay, .55 s ramp to 34 HP/s, fall damage above 15 m/s at 7 HP/(m/s), real-segment/impact/hit suppression with cover and per-round maximum contributions, source-origin directional impulses, low-health desaturation/pulse and recovery/heartbeat events. Explosion notifications provide feedback; the step-12 grenade owner queues obstruction-aware damage separately. Heartbeat audio is connected in step 15. Uses the existing composite before AgX and after temporal resolve, without exposure-meter feedback. Native/WebGL shared fixtures pass; controlled reference visual comparison remains open."
     },
     {
       "id": "weapons",
@@ -597,13 +597,18 @@
         "threejs:src/audio/index.js",
         "kaigen:src/claude_of_duty/cod_audio_events.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Listen to every weapon/surface, enemy steps/barks, near misses, explosions, heartbeat and UI; repeat indoors/outdoors.",
       "expect": "Reference timbre and event timing with generated sounds, bounded voices and no stale cues.",
       "coverage": [
         "tests/audio_test.lua",
-        "tests/audio_smoke.py"
-      ]
+        "tests/audio_smoke.py",
+        "tests/audio_content_scenario.lua",
+        "tests/audio_content_smoke.py",
+        "tools/validate_audio_content_browser.mjs",
+        "tests/native_audio_test.lua"
+      ],
+      "implementation_notes": "Step 15: 234 generated PCM layers / 10,611,456 bytes, 24 logical / 72 physical voices, 64 pending cues with callback-safe priority replacement. Real casing/grenade/body contacts, one-per-travelled-projectile cracks/whizzes, soldier stride/bark observers, heartbeat/confirmations/UI and independent distant battle schedule. Four continuous two-height probes per presentation; 45 ms layer blends, 12 sparse reflection taps, ambience ducking and cover-reduced deafening/tinnitus. Pause freezes scene state; restart retains the bank. HRTF, full five-space convolution, exact timbre, propagation delay and listening acceptance remain open; proposed adaptation is not accepted parity."
     },
     {
       "id": "audio-spatial",
@@ -612,13 +617,18 @@
         "threejs:src/audio/mixer.js",
         "kaigen:src/claude_of_duty/cod_audio_reverb.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Move an audible source behind cover and across room boundaries; combine footsteps, automatic fire and a nearby blast.",
       "expect": "Continuous obstruction/reverb changes, spatial localization, ducking and concussion without clipping.",
       "coverage": [
         "tests/audio_test.lua",
-        "tests/audio_smoke.py"
-      ]
+        "tests/audio_smoke.py",
+        "tests/audio_content_scenario.lua",
+        "tests/audio_content_smoke.py",
+        "tools/validate_audio_content_browser.mjs",
+        "tests/native_audio_test.lua"
+      ],
+      "implementation_notes": "Step 15: 234 generated PCM layers / 10,611,456 bytes, 24 logical / 72 physical voices, 64 pending cues with callback-safe priority replacement. Real casing/grenade/body contacts, one-per-travelled-projectile cracks/whizzes, soldier stride/bark observers, heartbeat/confirmations/UI and independent distant battle schedule. Four continuous two-height probes per presentation; 45 ms layer blends, 12 sparse reflection taps, ambience ducking and cover-reduced deafening/tinnitus. Pause freezes scene state; restart retains the bank. HRTF, full five-space convolution, exact timbre, propagation delay and listening acceptance remain open; proposed adaptation is not accepted parity."
     },
     {
       "id": "hud",

@@ -78,7 +78,7 @@ local function deflect(sim,p,layer,speed)
 end
 local function segment(ctx,p,from,speed,distance)
     if distance<=0 then return end
-    events.emit(ctx.events,events.BULLET_SEGMENT,{from=from,to=V.copy(p.position),source=p.source,round=p.token})
+    events.emit(ctx.events,events.BULLET_SEGMENT,{from=from,to=V.copy(p.position),source=p.source,round=p.token,speed=V.length(p.velocity)})
     if p.tracer then
         events.emit(ctx.events,events.BULLET_TRACER,{from=from,to=V.copy(p.position),weapon=p.def.id,speed=speed})
     end

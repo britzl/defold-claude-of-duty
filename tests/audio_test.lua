@@ -28,7 +28,7 @@ test("every generated WAV is PCM16 mono, finite, audible and bounded; one-shots 
         for i=45,#wav,2 do local n=uint(i,2);if n>32767 then n=n-65536 end;assert(math.abs(n)<30500) end
         bank[recipe.key]={wav=wav,info=info,recipe=recipe};bytes=bytes+#wav
     end
-    assert(bytes==1698124);print("AUDIO BANK",#synth.catalog(),"samples",bytes,"bytes")
+    assert(bytes==10611456);print("AUDIO BANK",#synth.catalog(),"samples",bytes,"bytes")
 end)
 test("ambience wraps at sustained volume without a click, independent of loading budget",function()
     local function pcm(wav,frame)
@@ -36,7 +36,7 @@ test("ambience wraps at sustained volume without a click, independent of loading
         local n=a+b*256
         return (n>32767 and n-65536 or n)/32767
     end
-    for _,name in ipairs({"wind","city"}) do
+    for _,name in ipairs({"wind","city","wind/muffled","city/muffled","wind/room","city/room"}) do
         local item=bank["ambience/"..name]
         assert(render(item.recipe,97)==item.wav,name.." changes with loading budget")
         for _,seed in ipairs({1337,42,-31.75,2147483647}) do
@@ -77,11 +77,11 @@ end)
 local function backend()
     local b={loaded=0,playing={},blocked=false}
     function b:load(key,wav) self.loaded=self.loaded+1;assert(wav==bank[key].wav);return key end
-    function b:play(slot,key,gain,pan,speed,done)
+    function b:play(slot,keys,gain,pan,speed,done)
         assert(not self.playing[slot],"slot reused before completion")
-        self.playing[slot]={key=key,gain=gain,pan=pan,speed=speed,done=done}
+        self.playing[slot]={key=keys[1],keys=keys,gain=gain,pan=pan,speed=speed,done=done}
     end
-    function b:mix(slot,gain,pan) local v=assert(self.playing[slot]);v.gain=gain;v.pan=pan end
+    function b:mix(slot,gain,pan,weights) local v=assert(self.playing[slot]);v.gain=gain;v.pan=pan;v.weights=weights end
     function b:stop(slot) local v=self.playing[slot];if v then v.stopped=true end end
     function b:finish(slot) local v=self.playing[slot];self.playing[slot]=nil;if v then v.done() end end
     function b:finish_all() for i=1,24 do self:finish(i) end end
@@ -98,11 +98,11 @@ local function context(load)
     local b=backend()
     local ctx=runtime.new({audio=b})
     if load then
-        for i=1,2000 do
+        for i=1,20000 do
             audio.update(ctx,1/60)
             if ctx.audio.ready then break end
         end
-        assert(ctx.audio.ready and b.loaded==77)
+        assert(ctx.audio.ready and b.loaded==234)
     else
         for key,item in pairs(bank) do
             ctx.audio.resources[key]={handle=key,duration=item.info.duration,peak=item.info.peak}
@@ -119,11 +119,11 @@ test("incremental bank loading keeps gameplay gated until audio resources exist"
     ctx.world.phase="settle"
     input.button(ctx.input,"fire",{pressed=true})
     runtime.fixed_update(ctx,1/120);runtime.update(ctx,1/60)
-    assert(not ctx.world.ready and ctx.weapons.sim.fired==0 and b.loaded<77)
+    assert(not ctx.world.ready and ctx.weapons.sim.fired==0 and b.loaded<234)
     runtime.final(ctx)
     local loaded,adapter=context(true)
-    assert(loaded.audio.bytes==1698124)
-    runtime.final(loaded);assert(adapter.released==77)
+    assert(loaded.audio.bytes==10611456)
+    runtime.final(loaded);assert(adapter.released==234)
 end)
 test("listener yaw, distance and room height determine attenuation and stereo direction",function()
     local listener={position={x=0,y=1.66,z=0},yaw=0}
@@ -151,10 +151,10 @@ test("player and enemy fire use the same bank with copied positions, occlusion a
     assert(ctx.audio.last.pan>0 and ctx.audio.last.key=="shot/rifle/1/dry")
     b:finish_all();b.blocked=true
     emit(ctx,events.WEAPON_FIRE,{weapon="smg",source="enemy_1",position=point});present(ctx)
-    assert(ctx.audio.last.occluded and ctx.audio.last.key=="shot/smg/1/muffled")
+    assert(ctx.audio.last.occluded and ctx.audio.last.key=="shot/smg/1/dry")
     b:finish_all()
     emit(ctx,events.WEAPON_FIRE,{weapon="pistol",origin=point});present(ctx,{x=-12,y=1.8,z=0})
-    assert(not ctx.audio.last.occluded and ctx.audio.last.key=="shot/pistol/1/room")
+    assert(not ctx.audio.last.occluded and ctx.audio.last.key=="shot/pistol/1/dry" and ctx.audio.last.room)
     near(ctx.audio.last.pan,0)
     runtime.final(ctx)
 end)
@@ -218,13 +218,30 @@ test("event floods are bounded, reserve player voices, and keep the peak mix bel
     present(ctx)
     assert(audio.snapshot(ctx).active==24 and ctx.audio.by_kind.shot==4 and ctx.audio.dropped>0)
     local sum=0
-    for slot,v in pairs(b.playing) do sum=sum+v.gain*ctx.audio.voices[slot].sample.peak end
+    for slot,v in pairs(b.playing) do if not v.stopped then
+        for i,sample in ipairs(ctx.audio.voices[slot].samples) do sum=sum+v.gain*v.weights[i]*sample.peak end
+    end end
     assert(sum<=.850001)
     audio.reset(ctx)
     emit(ctx,events.WEAPON_FIRE,{weapon="rifle"});present(ctx)
     assert(ctx.audio.by_kind.shot==4) -- stopping slots cannot be reused yet
     b:finish_all();present(ctx)
-    assert(audio.snapshot(ctx).active==2)
+    assert(audio.snapshot(ctx).active==3 and ctx.audio.by_kind.shot==5) -- the fresh post-reset cue retries
+    runtime.final(ctx)
+end)
+test("priority sounds replace effect tails only after all layer callbacks release the slot",function()
+    local ctx,b=context()
+    for _=1,18 do emit(ctx,events.BULLET_IMPACT,{surface="metal",point={x=1,y=1,z=0}}) end
+    present(ctx)
+    for _=1,20 do emit(ctx,events.WEAPON_FIRE,{weapon="rifle"}) end
+    present(ctx)
+    assert(ctx.audio.by_kind.shot==4 and #ctx.audio.pending==16 and ctx.audio.preempted==16)
+    local key=ctx.audio.pending[1].key;local played=ctx.audio.played
+    present(ctx)
+    assert(ctx.audio.played==played and ctx.audio.pending[1].key==key)
+    for slot,v in pairs(b.playing) do if v.stopped then b:finish(slot) end end
+    present(ctx)
+    assert(ctx.audio.by_kind.shot==20 and #ctx.audio.pending==0 and audio.snapshot(ctx).active<=24)
     runtime.final(ctx)
 end)
 test("mute/focus/reset clear transient sounds, preserve the bank and never replay old events",function()
@@ -244,7 +261,7 @@ test("mute/focus/reset clear transient sounds, preserve the bank and never repla
     near(ctx.audio.settings.master,saved)
     assert(not pcall(audio.configure,ctx,{bad=1}))
     assert(not pcall(audio.preview,ctx,{kind="shot",weapon="rifle",position={x=0,y=0,z=math.huge}}))
-    runtime.final(ctx);assert(b.released==77)
+    runtime.final(ctx);assert(b.released==234)
     for _,listeners in pairs(ctx.events.listeners) do assert(#listeners==0) end
 end)
 test("audio variation cannot advance weapon or world random streams",function()
@@ -256,5 +273,81 @@ test("audio variation cannot advance weapon or world random streams",function()
         near(a.world.spawn_rng(),b.world.spawn_rng())
     end
     runtime.final(a);runtime.final(b)
+end)
+test("continuous filtering changes an active sound without restarting its waveform",function()
+    local ctx,b=context()
+    emit(ctx,events.WEAPON_FIRE,{weapon="rifle",source="enemy_1",position={x=5,y=1.66,z=0}});present(ctx)
+    local v=ctx.audio.voices[5];local serial=v.serial;local initial=v.dark
+    b.blocked=true
+    for _=1,20 do audio.update(ctx,.02);present(ctx) end
+    assert(v.occlusion>.95 and v.dark>initial+.5 and v.serial==serial)
+    b.blocked=false
+    for _=1,20 do audio.update(ctx,.02);present(ctx) end
+    assert(v.occlusion<.05 and v.serial==serial and ctx.audio.last_probes<=4)
+    runtime.final(ctx)
+end)
+test("only travelled hostile near passes sound once per projectile, with wall rejection",function()
+    local ctx,b=context();present(ctx)
+    local round={};local cue={source="enemy_1",round=round,from={x=1,y=1.66,z=-4},to={x=1,y=1.66,z=4},speed=500}
+    emit(ctx,events.BULLET_SEGMENT,cue);emit(ctx,events.BULLET_SEGMENT,cue);present(ctx)
+    assert(ctx.audio.by_kind.near_miss==1 and ctx.audio.last.key=="crack")
+    cue.round={};b.blocked=true;emit(ctx,events.BULLET_SEGMENT,cue);present(ctx)
+    assert(ctx.audio.by_kind.near_miss==1)
+    b.blocked=false;cue.source="player";emit(ctx,events.BULLET_SEGMENT,cue);present(ctx)
+    assert(ctx.audio.by_kind.near_miss==1)
+    cue.source="enemy_1";cue.round={};cue.from.z=-8;cue.to.z=-4
+    emit(ctx,events.BULLET_SEGMENT,cue);present(ctx);assert(ctx.audio.by_kind.near_miss==1)
+    runtime.final(ctx)
+end)
+test("casings sound on contacts, with resting-contact and multi-point rejection",function()
+    local contact=require "game.audio.contacts"
+    local item={spec={mass=.008},kind="casing"}
+    local n={x=0,y=1,z=0}
+    assert(not contact.accept(item,1,{x=0,y=-.17,z=0},n,.0014))
+    assert(contact.accept(item,1,{x=0,y=-3,z=0},n,.024))
+    assert(not contact.accept(item,1,{x=0,y=-3,z=0},n,.024))
+    local ctx,b=context()
+    emit(ctx,events.WEAPON_SHELL,{position={x=0,y=1,z=0}});present(ctx)
+    assert(not ctx.audio.by_kind.shell)
+    emit(ctx,events.PHYSICS_CONTACT,{kind="casing",position={x=1,y=0,z=0},speed=2});present(ctx)
+    assert(ctx.audio.by_kind.shell==1)
+    runtime.final(ctx)
+end)
+test("heartbeat, confirmations, grenade and death voices consume actual event contracts",function()
+    local ctx,b=context()
+    emit(ctx,events.PLAYER_HEARTBEAT,{strength=.8});present(ctx)
+    assert(ctx.audio.by_kind.heartbeat==1);b:finish_all()
+    emit(ctx,events.DAMAGE_DEALT,{source="player",target="fixture",amount=10,headshot=true});present(ctx)
+    assert(ctx.audio.last.key=="ui/headshot");b:finish_all()
+    emit(ctx,events.GRENADE_THROW,{source="enemy_1",position={x=2,y=1,z=0}});present(ctx)
+    assert(ctx.audio.by_kind.grenade==1 and ctx.audio.by_kind.bark==1)
+    ctx.time.frame_elapsed=1;audio.suspend(ctx,true);b:finish_all();audio.ui(ctx);present(ctx)
+    assert(ctx.audio.by_kind.ui==1 and audio.snapshot(ctx).active==1)
+    runtime.final(ctx)
+end)
+test("blast ducking/deafening recover, freeze on pause, and clear on encounter reset",function()
+    local ctx,b=context();present(ctx)
+    emit(ctx,events.EXPLOSION,{position={x=1,y=1,z=0},radius=8});present(ctx)
+    assert(ctx.audio.deafness>.8 and ctx.audio.duck>.8 and ctx.audio.by_kind.tinnitus==1)
+    local before=ctx.audio.deafness;runtime.set_paused(ctx,true)
+    runtime.fixed_update(ctx,1);audio.update(ctx,1);assert(ctx.audio.deafness==before)
+    runtime.set_paused(ctx,false);audio.fixed_update(ctx,1);assert(ctx.audio.deafness<before)
+    audio.reset(ctx);assert(ctx.audio.deafness==0 and ctx.audio.duck==0 and not ctx.audio.volley)
+    runtime.final(ctx)
+end)
+test("soldier stride/transition audio and distant battles use independent bounded schedules",function()
+    local ctx,b=context();present(ctx)
+    local e={id="enemy_1",actor={alive=true},position={x=2,y=0,z=-2},travel=0,visible=false,
+        motion={grounded=true,stance="stand",surface="wood"},state="patrol"}
+    ctx.ai.actors[e.id]=e;ctx.ai.order={e.id}
+    audio.fixed_update(ctx,.01);e.travel=2;e.visible=true;audio.fixed_update(ctx,.01);present(ctx)
+    assert(ctx.audio.by_kind.soldier_step==1 and ctx.audio.by_kind.bark==1)
+    b:finish_all();audio.fixed_update(ctx,.01);present(ctx)
+    assert(ctx.audio.by_kind.soldier_step==1 and ctx.audio.by_kind.bark==1)
+    local shots=ctx.weapons.sim.fired
+    ctx.audio.battle_due=0;audio.fixed_update(ctx,.01);present(ctx)
+    assert(ctx.audio.by_kind.battle==1 and ctx.weapons.sim.fired==shots)
+    audio.reset(ctx);assert(ctx.audio.scene_clock==0)
+    runtime.final(ctx)
 end)
 print(count.." audio tests passed")

@@ -38,6 +38,85 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Combat audio and continuous spatial processing (2026-10-20)
+
+Step 15 connects soldier stride footsteps and throttled formant barks, travelled
+hostile-round cracks/whizzes, grenade pin/bounce/blast sounds, ragdoll body
+impacts, low-health heartbeat, hit/headshot/kill confirmations, menu feedback and
+distant battle volleys. Casings sound at real Bullet contacts. Resting contacts,
+multi-point duplicates and repeated projectile segments stay silent. The enemy
+reload `bolt` beat now resolves to the existing bolt-release sample.
+
+The generated rifle/SMG/pistol recipes add sub and mid-body layers and bolt
+partials using the reference profiles. Eight synthetic bark patterns use voiced
+formants and aspiration; they are short approximations, not recorded speech.
+Distant battle scheduling has its own random stream and simulation clock; it
+never sends combat events or changes AI perception. Moving barks follow actors.
+
+Every logical voice owns synchronized dry, low-pass and wet-only PCM layers.
+Continuous two-height Bullet obstruction probes update four emitters per frame;
+45 ms blends change obstruction, distance darkening and room send without
+restarting playback. Twelve filtered reflection taps extend to 541 ms, with
+room/outdoor wet levels and a narrower wet pan. Gunfire ducks ambience; nearby
+blasts add cover-reduced deafening, tinnitus and gradual recovery. Heartbeat and
+confirmation sounds bypass that world muffling. Pause/focus stops world voices
+and freezes scene/concussion timers. Resume discards old cues; restart clears
+scene state while retaining the generated bank. Menu acknowledgements can play
+while paused. A conservative sum of layer peaks limits output to 0.85.
+
+**Processing choice and limits:** This uses ordinary Defold sound components on
+Mac and WebGL, plus the existing offline AudioSynth extension. There is no new
+real-time DSP extension. Stereo panning and a short sparse room response are
+implemented; Three.js HRTF/elevation/front-back localization, five full reference
+convolution spaces, exact source timbre, propagation delay and listening
+acceptance remain open. This alternative is recorded as a proposed adaptation,
+not an accepted parity equivalent. Full sustained frame-time/memory qualification
+remains steps 18–19.
+
+**Resources:** 78 source variations × three layers = 234 PCM16 mono WAVs at
+22,050 Hz, totalling 10,611,456 bytes (10.12 MiB). There are 24 logical voices,
+72 preallocated sound components, four reserved high-priority voices and two
+reserved ambience voices. Pending notifications are limited to 64, with priority
+admission. Higher-priority cues can stop lower-priority tails and retry after
+all layer callbacks, retaining their original age, variation and pitch. Sound
+instance/data limits are 96/256. The native synthesis job uses
+one 11,930-double reflection ring; jobs and WAVs are released after generation.
+There are no additional GPU resources or imported sound assets.
+
+```sh
+lua tests/audio_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/audio_content_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/audio_smoke.py
+# Bundle release wasm-web with tests/audio_content_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_audio_content_browser.mjs --bundle=/path/to/bundle
+```
+
+**Validation:** All 34 standalone Lua suites pass, including 19 audio tests,
+plus all 12 baseline-tool checks. Native Metal and release Chrome WebGL2/ANGLE
+Metal each pass the same 16 integration checks. All 234 generated WAVs match
+their Lua reference on each backend, including chunk-independent generation and
+job-lifetime checks. Actual mixer output verifies stereo, live obstruction/room
+transitions, real casing/grenade/ragdoll contacts, travelled near misses, AI
+strides, critical heartbeat, pause, three restarts, voice/probe bounds and master
+silence. Chrome's running AudioContext also produces measured nonzero output.
+The pressure fixture emits 120 fire events and 480 impacts; observed engine mix
+peaks were 0.620 native and 0.619 WebGL. That short event-pressure run is not the
+sustained frame-time qualification. The separate native gameplay regression
+passes all three actual weapons, reloads, footsteps, enemy fire and six restarts.
+Its verification-disabled bank generation records 202.482 ms total CPU work and
+2.235 ms peak loading update; this is one debug launch while browser validation
+was also running, not an isolated benchmark or a loading-budget pass.
+
+`audio.snapshot` adds physical voice capacity, processing mode, deafness/duck,
+scene time, obstruction-query and preemption counts, and per-voice
+obstruction/dark/wet weights.
+`audio_synthesis.verify=1` compares all 234 native/Wasm WAVs with Lua, checks
+chunk independence and tests native job lifetime; disable it for cost profiles.
+The native scenario extracts the fresh editor engine archive after compilation,
+avoiding an older Bob engine binary. Reports are under
+`build/audio-content-unit-validation`, `build/audio-content-native-validation`
+and `build/audio-content-browser-validation`.
+
 ## Animated atmosphere (2026-10-20)
 
 Step 14 adds a presentation clock for solar time, drifting cloud decks, moving
@@ -2689,7 +2768,11 @@ AVAudioPlayerNode audio-backend exception, recorded beside its incomplete launch
 match every RGB pixel across three successful independent launches**.
 
 
-## Generated audio
+## Generated audio — historical baseline
+
+This section records the pre-step-15 implementation and measurements. The current
+bank, processing, contact cues and validation are described under **Combat audio
+and continuous spatial processing** above.
 
 The AudioSynth native extension generates 77 mono PCM16 WAV samples at 22,050 Hz
 during loading, using the catalog and tuning from `game/audio/synth.lua`. That Lua

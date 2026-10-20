@@ -19,4 +19,20 @@ function M.mix(listener,position,near,range)
     local pan=horizontal>.001 and (dx*math.cos(listener.yaw)-dz*math.sin(listener.yaw))/horizontal or 0
     return attenuation*fade,pan*.9,d
 end
+function M.blocked(backend,from,to)
+    if not backend then return false end
+    local b=backend:occluded(from,to)
+    return b==true or (type(b)=="number" and b>0)
+end
+function M.closest(p,a,b)
+    if not a or not b then return end
+    local x,y,z=b.x-a.x,b.y-a.y,b.z-a.z
+    local n=x*x+y*y+z*z
+    if n<1e-12 then return end
+    local raw=((p.x-a.x)*x+(p.y-a.y)*y+(p.z-a.z)*z)/n
+    local t=math.max(0,math.min(1,raw))
+    local point={x=a.x+x*t,y=a.y+y*t,z=a.z+z*t}
+    local dx,dy,dz=p.x-point.x,p.y-point.y,p.z-point.z
+    return point,math.sqrt(dx*dx+dy*dy+dz*dz),raw
+end
 return M

@@ -25,7 +25,7 @@ function M.run()
         generator.equal(sliced,sliced_info,wav,info,recipe.key.." chunk independence")
         bytes=bytes+#wav
     end
-    assert(#recipes==77 and bytes==1698124)
+    assert(#recipes==234 and bytes==10611456)
     local single={key="single",kind="cloth",name="fabric",duration=1/synth.rate,variant=1,treatment="dry"}
     local single_wav,single_info=render(single,1337,"native",1)
     local single_reference,single_reference_info=render(single,1337,"lua",1)
@@ -68,6 +68,6 @@ function M.run()
     -- Untaken and partially generated buffers must also be reclaimed by GC.
     for _=1,64 do local abandoned=native(recipes[75],1337);audiosynth.step(abandoned,1) end
     collectgarbage("collect")
-    print("NATIVE_AUDIO_TEST PASS 77 exact WAVs, 39 seed/stream cases, chunk independence, ownership and cancellation")
+    print("NATIVE_AUDIO_TEST PASS 234 exact WAVs, 39 seed/stream cases, chunk independence, ownership and cancellation")
 end
 return M

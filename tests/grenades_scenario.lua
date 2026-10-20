@@ -57,7 +57,7 @@ function M.update(test,self,dt,restart)
         local a=ctx.services.dynamics
         local baseline=dynamics.snapshot(a)
         assert(baseline.bodies==0 and baseline.objects==76 and baseline.buffers==2,json.encode(baseline))
-        assert(ctx.audio.loaded==77 and ctx.audio.bytes==1698124 and ctx.audio.verified==77)
+        assert(ctx.audio.loaded==234 and ctx.audio.bytes==10611456 and ctx.audio.verified==234)
         check("reserved_pool_and_generated_blast_sample",{physics=baseline,audio_bytes=ctx.audio.bytes})
         local stage=world.new("#world_mesh","#world_collision")
         local shapes={

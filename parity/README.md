@@ -26,6 +26,25 @@ The complete stress scenario remains unqualified while the remaining combat
 effects and sustained full-map measurements are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Audio increment — 2026-10-20
+
+Step 15 adds generated combat, soldier and UI cues, contact-driven casing/body
+sounds, travelled near misses and independent distant battles. Synchronized dry,
+muffled and sparse wet PCM layers provide continuous obstruction/room changes,
+ducking and concussion in the ordinary Defold mixer. The bank has 234 WAVs /
+10,611,456 bytes, bounded by 24 logical voices and 72 sound components.
+
+Native Metal and release Chrome WebGL2 each pass 16 shared checks, actual output
+meters, all 234 native/Lua waveform comparisons, lifecycle and event-pressure
+bounds. All 34 standalone suites and 12 baseline-tool checks pass. See README.md
+for commands, the separate native gameplay regression and limited CPU sample.
+HRTF, five full convolution spaces, exact reference timbres, propagation delay
+and listening acceptance remain open; `audio-dsp` stays `decision-open`.
+
+The refreshed source lock includes both native extension directories and retains
+no stale visual receipts. These audio checks do not close cross-engine parity or
+sustained performance.
+
 ## Animated atmosphere increment — 2026-10-20
 
 Step 14 implements continuous solar/lunar time, cloud drift, shared surface cloud

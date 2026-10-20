@@ -7,6 +7,7 @@ local T=require "game.ai.transform"
 local V=require "game.weapons.math"
 local geometry=require "game.weapons.geometry"
 local grenade_rules=require "game.systems.grenades"
+local contacts=require "game.audio.contacts"
 local M={debris_limit=32,ragdoll_limit=6,grenade_limit=grenade_rules.limit}
 local C,B=bullet3d.collision_object,bullet3d.rigid_body
 local ZERO=vmath.vector3()
@@ -53,6 +54,7 @@ local function configure(a,item,spec,velocity,spin)
     C.set_deactivation_time(item.object,0)
     msg.post(item.url,"enable")
     item.position,item.rotation,item.previous,item.previous_rotation=p,q,p,q
+    item.sound_after=nil;item.sound_count=0
     item.spec=spec;item.active=true;item.sleeping=false;item.quiet=0
     -- A recycled slot is a new solid to rounds already tracking a penetration.
     local key="body/"..hash_to_hex(item.id).."/"..(item.serial or 0)
@@ -166,6 +168,23 @@ function M.new(ctx)
     events.on(ctx.events,events.ACTOR_DEATH,a,function(_,hit)
         local e=ctx.ai.actors[hit.actor]
         if e and not e.ragdoll then M.kill(a,e,hit) end
+    end)
+    physics.set_event_listener(function(_,batch)
+        if a.paused then return end
+        for _,event in ipairs(batch) do if event.type==hash("contact_point_event") then
+            local own,other=event.a,event.b
+            if not a.by_id[own.id] then own,other=other,own end
+            local shape=a.by_id[own.id];local item=shape and a.by_key[shape.id]
+            if item and item.active and not item.sleeping and other.group==hash("world") then
+                local speed=contacts.accept(item,ctx.time.elapsed,own.relative_velocity,own.normal,event.applied_impulse)
+                if speed then
+                    local world=ctx.world.adapter and ctx.world.adapter.by_id[other.id]
+                    events.emit(ctx.events,events.PHYSICS_CONTACT,{kind=item.corpse and "body" or item.kind,
+                        position={x=own.position.x,y=own.position.y,z=own.position.z},speed=speed,
+                        surface=world and world.surface or "concrete"})
+                end
+            end
+        end end
     end)
     return a
 end
@@ -381,6 +400,7 @@ function M.reset(a)
     for _,item in ipairs(a.items) do deactivate(a,item) end
 end
 function M.final(a)
+    physics.set_event_listener(nil)
     events.off_owner(a.ctx.events,a);M.reset(a)
     for _,item in ipairs(a.items) do go.delete(item.id);go.delete(item.visual) end
     resource.release(a.resource);resource.release(a.grenade_resource)

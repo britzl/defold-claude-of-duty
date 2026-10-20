@@ -5,7 +5,7 @@ restitution: 0.05
 group: "debris"
 mask: "world"
 event_collision: false
-event_contact: false
+event_contact: true
 embedded_collision_shape {
   shapes {
     shape_type: TYPE_BOX

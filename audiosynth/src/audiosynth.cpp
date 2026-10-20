@@ -8,25 +8,25 @@ namespace {
 const char* META = "audiosynth.job";
 const uint32_t RATE = 22050;
 const uint32_t MODULUS = 2147483647;
-const uint32_t ECHO_A = 815;  // floor(.037 * RATE)
-const uint32_t ECHO_B = 1565; // floor(.071 * RATE)
+const uint32_t HISTORY = 11930; // floor(.541 * RATE) + 1
+const double TAPS[][2]={{.013,.32},{.029,.27},{.043,.23},{.061,.19},{.089,.16},{.127,.13},{.173,.10},{.227,.08},{.293,.06},{.367,.045},{.443,.032},{.541,.022}};
 const double PI = 3.14159265358979323846;
-enum Kind { SHOT, IMPACT, STEP, MECHANIC, SHELL, HURT, CLOTH, AMBIENCE };
+enum Kind { SHOT, IMPACT, STEP, MECHANIC, SHELL, HURT, CLOTH, AMBIENCE, CUE };
 enum Treatment { DRY, ROOM, MUFFLED };
 
 struct Job {
     Kind kind;
     Treatment treatment;
-    uint32_t frames, cursor, random, initial_random, warmup;
+    uint32_t frames, cursor, history_cursor, random, initial_random, warmup;
     double duration, variant, p[8], hum_a, hum_b;
     double low, mid, muffle, dc, phase, peak, square;
-    double history[ECHO_B + 1];
-    bool wind, finished;
+    double history[HISTORY];
+    bool wind, dying, finished;
     dmArray<uint8_t> wav;
 
-    Job() : kind(SHOT), treatment(DRY), frames(0), cursor(0), random(1), initial_random(1), warmup(0),
+    Job() : kind(SHOT), treatment(DRY), frames(0), cursor(0), history_cursor(0), random(1), initial_random(1), warmup(0),
         duration(0), variant(1), hum_a(0), hum_b(0), low(0), mid(0), muffle(0), dc(0), phase(0),
-        peak(0), square(0), wind(false), finished(false) {
+        peak(0), square(0), wind(false), dying(false), finished(false) {
         std::memset(p, 0, sizeof(p));
         std::memset(history, 0, sizeof(history));
     }
@@ -70,10 +70,10 @@ static int New(lua_State* L) {
     luaL_checktype(L, 3, LUA_TTABLE);
     size_t stream_length;
     const char* stream = luaL_checklstring(L, 4, &stream_length);
-    const char* kinds[] = {"shot", "impact", "step", "mechanic", "shell", "hurt", "cloth", "ambience"};
+    const char* kinds[] = {"shot", "impact", "step", "mechanic", "shell", "hurt", "cloth", "ambience", "cue"};
     const char* kind_name = String(L, "kind");
     int kind = -1;
-    for (int i = 0; i < 8; ++i) if (std::strcmp(kind_name, kinds[i]) == 0) kind = i;
+    for (int i = 0; i < 9; ++i) if (std::strcmp(kind_name, kinds[i]) == 0) kind = i;
     luaL_argcheck(L, kind >= 0, 1, "invalid synthesis kind");
     const char* name = String(L, "name");
     bool wind = std::strcmp(name, "wind") == 0;
@@ -88,7 +88,7 @@ static int New(lua_State* L) {
     luaL_argcheck(L, variant >= 1 && variant <= 3 && variant == std::floor(variant), 1, "variant must be 1..3");
     uint32_t frames = (uint32_t)std::floor(duration * RATE);
     luaL_argcheck(L, frames > 0, 1, "empty sound");
-    int count = kind == SHOT ? 8 : (kind == IMPACT || kind == STEP) ? 4 :
+    int count = (kind == SHOT || kind == CUE) ? 8 : (kind == IMPACT || kind == STEP) ? 4 :
         (kind == MECHANIC || kind == SHELL) ? 1 : 0;
     luaL_argcheck(L, lua_objlen(L, 3) == (size_t)count, 3, "invalid tuning parameter count");
     double parameters[8] = {};
@@ -101,13 +101,14 @@ static int New(lua_State* L) {
     }
     luaL_argcheck(L, kind != SHOT || (parameters[2] > 0 && parameters[4] > 0 && parameters[5] > 0), 3, "invalid shot decay");
     luaL_argcheck(L, (kind != IMPACT && kind != STEP) || parameters[2] > 0, 3, "invalid surface decay");
+    luaL_argcheck(L, kind != CUE || (parameters[0]>=1 && parameters[0]<=6 && parameters[0]==std::floor(parameters[0]) && parameters[1]>0 && parameters[4]>0 && parameters[7]>0), 3, "invalid cue parameters");
     // All argument checks precede allocation: Lua errors longjmp, so C++
     // stack destructors cannot be relied on for ownership across Lua calls.
     Job** owner = (Job**)lua_newuserdata(L, sizeof(Job*)); *owner = 0;
     luaL_getmetatable(L, META); lua_setmetatable(L, -2);
     Job* job = new Job; *owner = job;
     job->kind = (Kind)kind; job->treatment = (Treatment)treatment;
-    job->duration = duration; job->variant = variant; job->frames = frames; job->wind = wind;
+    job->duration = duration; job->variant = variant; job->frames = frames; job->wind = wind; job->dying = std::strcmp(name,"bark/death")==0;
     std::memcpy(job->p, parameters, sizeof(parameters));
     double initial = std::fmod(std::floor(seed), MODULUS - 1.0);
     if (initial < 0) initial += MODULUS - 1.0;
@@ -142,12 +143,14 @@ static double Sample(Job& j, double t) {
         double f = p[1] + (p[0] - p[1]) * std::exp(-t / .035);
         j.phase = j.phase + 2 * PI * f * detune / RATE;
         double transient = (noise - j.mid) * .5 * std::exp(-t / .002);
-        double body = std::sin(j.phase) * .72 * std::exp(-t / p[2]);
+        double body = (std::sin(j.phase)*.62+std::sin(j.phase*.5)*.20)*std::exp(-t/p[2]);
+        double sub=std::sin(2*PI*p[1]*1.1*t)*.25*std::exp(-t/(p[2]*1.4));
+        double mid=j.mid*std::sin(2*PI*(p[3]*.32)*t)*.28*std::exp(-t/(p[4]*1.1));
         double crack = (noise - j.low) * std::sin(2 * PI * p[3] * t * detune) * .65 * std::exp(-t / p[4]);
         double tail = j.mid * .55 * std::exp(-t / p[5]);
         double mt = t - p[6];
-        double mech = mt >= 0 ? (.12 * std::sin(2 * PI * p[7] * mt) + .07 * noise) * std::exp(-mt / .022) : 0;
-        x = transient + body + crack + tail + mech;
+        double mech = mt >= 0 ? (.12*std::sin(2*PI*p[7]*mt)+.07*std::sin(2*PI*p[7]*1.734*mt)+.04*std::sin(2*PI*p[7]*2.872*mt)+.07*noise) * std::exp(-mt / .022) : 0;
+        x = transient + body + sub + mid + crack + tail + mech;
         x = x / (1 + std::abs(x) * .7);
         break;
     }
@@ -173,6 +176,31 @@ static double Sample(Job& j, double t) {
     case CLOTH:
         x = j.mid * .7 * std::pow(std::sin(PI * std::min(1.0, t / .32)), 2);
         break;
+    case CUE: {
+        if(t<p[7]) {
+            if(p[0]==1) {
+                double f=p[1]*detune*(1+.025*std::sin(t*71))*(j.dying ? (1-.55*t/p[7]) : 1);
+                j.phase=j.phase+f/RATE;
+                double pulse=j.phase-std::floor(j.phase);
+                double voice=std::exp(-pulse*5)*(std::sin(2*PI*p[2]*pulse/f)+.55*std::sin(2*PI*p[3]*pulse/f)+.24*std::sin(2*PI*p[4]*pulse/f));
+                double phase=t/p[7]*p[6], syllable=phase-std::floor(phase);
+                double envelope=std::pow(std::sin(PI*std::min(1.0,syllable/.88)),2);
+                x=(voice*.55+j.mid*p[5])*envelope;
+            } else if(p[0]==2) {
+                j.phase=j.phase+2*PI*(p[2]+(p[1]-p[2])*std::exp(-t/.045))/RATE;
+                x=((noise-j.low)*p[5]+std::sin(j.phase)*.2)*std::exp(-t/p[4])*std::min(1.0,t/.002);
+            } else if(p[0]==3) {
+                x=std::sin(2*PI*p[1]*t)*.65*std::exp(-t/p[4])*std::min(1.0,t/.008);
+                double b=t-.13;
+                if(b>0) x=x+std::sin(2*PI*p[2]*b)*.48*std::exp(-b/.045)*std::min(1.0,b/.008);
+            } else if(p[0]==4) {
+                x=(std::sin(2*PI*p[1]*t)*.24+std::sin(2*PI*p[2]*t)*.09)*std::min(1.0,t/.07)*std::exp(-t/p[4]);
+            } else {
+                x=(std::sin(2*PI*p[1]*t)*.42+std::sin(2*PI*p[2]*t)*.18+j.mid*p[5])*std::exp(-t/p[4]);
+            }
+        }
+        break;
+    }
     case AMBIENCE: {
         double phase = 2 * PI * j.cursor / j.frames;
         double mod = .7 + .3 * std::sin(phase);
@@ -182,10 +210,16 @@ static double Sample(Job& j, double t) {
     }
     }
     if (j.treatment == ROOM) {
-        double a = j.cursor >= ECHO_A ? j.history[(j.cursor - ECHO_A) % (ECHO_B + 1)] : 0;
-        double b = j.cursor >= ECHO_B ? j.history[(j.cursor - ECHO_B) % (ECHO_B + 1)] : 0;
-        j.history[j.cursor % (ECHO_B + 1)] = x;
-        x = (x + a * .32 + b * .18) * .82;
+        uint32_t cursor=j.history_cursor++;
+        j.history[cursor%HISTORY]=x;
+        double wet=0;
+        for (int k=0;k<12;++k) {
+            uint32_t delay=(uint32_t)std::floor(TAPS[k][0]*RATE);
+            // Previous loop history is retained during ambience priming.
+            double value=(cursor>=delay) ? j.history[(cursor+HISTORY-delay)%HISTORY] : 0;
+            wet=wet+value*TAPS[k][1];
+        }
+        j.muffle=j.muffle+.22*(wet-j.muffle);x=j.muffle;
     } else if (j.treatment == MUFFLED) {
         j.muffle = j.muffle + .10 * (x - j.muffle); x = j.muffle;
     }

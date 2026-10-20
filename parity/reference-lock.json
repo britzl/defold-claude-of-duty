@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "contract_sha256": "e19ef72a24aca2d3ab4b65381cdfdc3c94cf94a4c3ce612c3c17668d1bc1b37a",
+  "contract_sha256": "f4f754df50b664a11e5b6284284d4876a87a3c5ecae92e9b44f649291cbde721",
   "fingerprint_method": "Sorted relative UTF-8 path + NUL + decimal byte length + NUL + file bytes; SHA-256.",
   "sources": {
     "defold": {
-      "sha256": "f4c0806d065aa423f901d5fbb9038bb806b3060b89fb7c2b35c034a752c122a0",
-      "files": 284,
+      "sha256": "9c8df3bda880e1bc0a19b3211a55fc6ea82d51d1aac195993ffb9bd679d9d28a",
+      "files": 294,
       "scopes": [
         "game",
         "main",
@@ -15,10 +15,12 @@
         "soldiers",
         "physics",
         "audio",
+        "audiosynth",
+        "worldmesh",
         "input",
         "game.project"
       ],
-      "git_revision": "449086956340693527338e177abf145ded3296bb",
+      "git_revision": "96aba630911fdab83e019a336fbd99b44c9c4349",
       "revision_status": "Git commit plus working source hash"
     },
     "threejs": {
@@ -1421,7 +1423,7 @@
     },
     "world_seed": 1337
   },
-  "created_utc": "2026-10-20T09:18:19.246269+00:00",
+  "created_utc": "2026-10-20T13:02:23.133587+00:00",
   "evidence": [],
   "parity_qualified": false
 }

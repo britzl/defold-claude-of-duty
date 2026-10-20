@@ -24,6 +24,7 @@ function M.pause(self, paused)
     input.reset(self.ctx.input)
     runtime.set_paused(self.ctx, paused)
     window.set_mouse_lock(false)
+    if self.focused then audio.ui(self.ctx) end
     M.publish(self)
 end
 
@@ -37,6 +38,7 @@ function M.configure(self, data)
         end
     elseif data.kind == "input" and data.key == "sensitivity" then controls.configure(self.ui, data.value)
     else error("Unknown setting") end
+    audio.ui(self.ctx)
     M.publish(self)
     return M.snapshot(self)
 end

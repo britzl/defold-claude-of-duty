@@ -51,6 +51,7 @@ def summarize(capture):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--engine',type=Path,default=ROOT/'build/arm64-osx/dmengine',help='Custom engine binary matching the compiled extensions')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--uncapped', action='store_true', help='Diagnostic: launch with display.swap_interval=0')
     parser.add_argument('--material-quality', choices=('low','medium','high'), default='medium')
@@ -64,7 +65,7 @@ def main():
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False)
     with socket.socket() as reserved:
         reserved.bind(('127.0.0.1', 0)); profiler_port = reserved.getsockname()[1]
-    command = [str(ROOT/'build/arm64-osx/dmengine'), str(ROOT/'build/default/game.projectc'),
+    command = [str(args.engine.resolve()), str(ROOT/'build/default/game.projectc'),
         f'--config=profiler.remotery_port={profiler_port}', f'--config=world_mesh.backend={args.backend}',
         f'--config=render.material_quality={args.material_quality}',
         f'--config=world_mesh.verify={int(args.verify)}',
@@ -111,9 +112,9 @@ def main():
             assert all(report['markers'][-1][key]['ready'] for key in ('world','audio','renderer')), 'Loading timed out'
             audio = report['markers'][-1]['audio']
             assert audio['synthesis_backend']==args.audio_backend
-            assert audio['loaded']==77 and audio['bytes']==1698124
+            assert audio['loaded']==234 and audio['bytes']==10611456
             if args.verify_audio:
-                assert audio['verified']==77
+                assert audio['verified']==234
                 assert 'NATIVE_AUDIO_TEST PASS' in (out/'engine.log').read_text()
             game.wait_frames(3)
             capture = recording.stop(); recording = None

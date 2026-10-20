@@ -69,6 +69,12 @@ and sleep rules in `src/physics/ragdoll.js`. The 18-body Bullet articulation,
 box proxies, native body pooling, skeleton mapping and lifecycle are local
 implementations; the reference PBD solver is not copied.
 
+The weapon profile frequencies/decays, vocal formants and feedback concepts in
+`game/audio/synth.lua`, `content.lua` and `audiosynth/src/audiosynth.cpp` adapt
+`src/audio/weapons.js`, `vox.js`, `foley.js` and `mixer.js` from the same project.
+Offline PCM layers, the sparse reflection response, contact gating, callback-safe
+priority replacement and bounded Defold playback are local implementations.
+
 MIT License
 
 Copyright (c) 2026 mshumer

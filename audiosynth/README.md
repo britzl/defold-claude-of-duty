@@ -11,12 +11,12 @@ Wind and city ambience use periodic noise with primed filter state, periodic
 modulation and whole-cycle hum tones. They maintain their level across the loop
 boundary; only one-shots fade to silence. Filter priming discards whole periods
 (at least half a second) under the same per-call sample budget before packing the
-loop. The four-second WAV durations and playback voice count stay unchanged.
+loop. The four-second ambience layers remain periodic. Step 15 uses three aligned layers per logical voice and adds 560 ms of reflection tail to ordinary one-shots.
 
 Defold automatically discovers this extension and builds it for macOS and
 HTML5/Wasm. Rebuild the custom engine after C++ changes; hot reload cannot update
 native code. Arithmetic uses doubles with fast math and fused multiply-add
-disabled. A fixed ring buffer retains the two room-echo delays; a `dmArray`
+disabled. A fixed 11,930-double ring buffer retains twelve wet-only room-reflection taps; a `dmArray`
 owns the WAV. No per-sample data crosses the Lua/native boundary.
 
 ## Configuration
@@ -24,7 +24,7 @@ owns the WAV. No per-sample data crosses the Lua/native boundary.
 - `audio_synthesis.backend=native` is the engine default. Set it to `lua` for
   fallback and matched performance comparisons. Standalone Lua tests use Lua.
 - `audio_synthesis.verify=1` runs engine-only parity/ownership fixtures at startup
-  and compares all 77 generated native WAVs with Lua before resource creation.
+  and compares all 234 generated native WAVs with Lua before resource creation.
   WAV bytes, frame counts and durations must match exactly; peak/RMS tolerance
   is 1e-12. Verification must be off when profiling performance.
 - `audio_synthesis.fingerprints=1` adds WAV byte hashes and metadata to
