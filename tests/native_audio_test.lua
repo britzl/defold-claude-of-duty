@@ -25,13 +25,13 @@ function M.run()
         generator.equal(sliced,sliced_info,wav,info,recipe.key.." chunk independence")
         bytes=bytes+#wav
     end
-    assert(#recipes==76 and bytes==1627520)
+    assert(#recipes==77 and bytes==1698124)
     local single={key="single",kind="cloth",name="fabric",duration=1/synth.rate,variant=1,treatment="dry"}
     local single_wav,single_info=render(single,1337,"native",1)
     local single_reference,single_reference_info=render(single,1337,"lua",1)
     generator.equal(single_wav,single_info,single_reference,single_reference_info,"Single-sample boundary")
     local variants={recipes[1],recipes[2],recipes[3],recipes[28],recipes[29],recipes[64],
-        recipes[72],recipes[73],recipes[74],recipes[75],recipes[76],
+        recipes[72],recipes[73],recipes[74],recipes[75],recipes[76],recipes[77],
         {key="unicode",kind="mechanic",name="mécanique",duration=.18,variant=2,treatment="dry"}}
     for _,seed in ipairs({-31.75,2147483647,42.5}) do
         for _,recipe in ipairs(variants) do
@@ -68,6 +68,6 @@ function M.run()
     -- Untaken and partially generated buffers must also be reclaimed by GC.
     for _=1,64 do local abandoned=native(recipes[75],1337);audiosynth.step(abandoned,1) end
     collectgarbage("collect")
-    print("NATIVE_AUDIO_TEST PASS 76 exact WAVs, 36 seed/stream cases, chunk independence, ownership and cancellation")
+    print("NATIVE_AUDIO_TEST PASS 77 exact WAVs, 39 seed/stream cases, chunk independence, ownership and cancellation")
 end
 return M

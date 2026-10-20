@@ -111,9 +111,9 @@ def main():
             assert all(report['markers'][-1][key]['ready'] for key in ('world','audio','renderer')), 'Loading timed out'
             audio = report['markers'][-1]['audio']
             assert audio['synthesis_backend']==args.audio_backend
-            assert audio['loaded']==76 and audio['bytes']==1627520
+            assert audio['loaded']==77 and audio['bytes']==1698124
             if args.verify_audio:
-                assert audio['verified']==76
+                assert audio['verified']==77
                 assert 'NATIVE_AUDIO_TEST PASS' in (out/'engine.log').read_text()
             game.wait_frames(3)
             capture = recording.stop(); recording = None

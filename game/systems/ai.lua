@@ -16,6 +16,7 @@ local variants=require "game.ai.variants"
 local perception=require "game.ai.perception"
 local guns=require "game.ai.weapons"
 local traversal=require "game.ai.traversal"
+local grenades=require "game.ai.grenades"
 local M = {}
 local eye=suppression.eye
 local function angle(dx,dz) return math.atan2(-dx,-dz) end
@@ -44,6 +45,7 @@ local function spawn(ctx,point)
         patrol_points={V.copy(position),V.copy(point.patrol or {x=0,y=0,z=-5})}}
     e.variant=variants.get(point.variant or variants.order[(index-1)%#variants.order+1]).id
     e.run=0;animation.init(e);perception.init(e);guns.init(e);e.vaults=0;e.retreats=0;e.repositions=0
+    grenades.init(ctx,e)
     e.motion=capsule.new(e.position);e.motion.yaw=e.yaw
     suppression.init(e)
     e.previous_pose=sample(e)
@@ -51,7 +53,7 @@ local function spawn(ctx,point)
     ctx.ai.actors[e.id]=e
     ctx.ai.order[#ctx.ai.order+1]=e.id
     if e.squad then
-        local squad=ctx.ai.squads[e.squad] or {members={}}
+        local squad=ctx.ai.squads[e.squad] or {members={},grenade_cooldown=6}
         ctx.ai.squads[e.squad]=squad;squad.members[#squad.members+1]=e.id
     end
     local service=ctx.services.soldiers
@@ -79,11 +81,12 @@ function M.init(ctx)
     end)
     events.on(ctx.events,events.ACTOR_DEATH,ctx.ai,function(_,hit)
         local e=ctx.ai.actors[hit.actor]
-        if e then tactics.release(ctx.ai,e);guns.cancel(ctx,e);e.nav_job=nil end
+        if e then tactics.release(ctx.ai,e);guns.cancel(ctx,e);grenades.cancel(ctx,e);e.nav_job=nil end
         if hit.actor=="player" then
             for _,id in ipairs(ctx.ai.order) do
                 local ally=ctx.ai.actors[id]
                 tactics.release(ctx.ai,ally);perception.clear(ally);ally.nav_job=nil;ally.route=nil
+                grenades.cancel(ctx,ally)
             end
         end
     end)
@@ -167,7 +170,7 @@ end
 local function fire(ctx,e,query)
     if e.state~="fire" or e.suppressed or e.duck or e.crouch>.08 or e.motion.stance~="stand"
         or not guns.ready(e) or e.aim<.85 or e.motion.mantle
-        or e.animation.reload_time>=0 or e.animation.vault_time>=0 then return end
+        or e.animation.reload_time>=0 or e.animation.vault_time>=0 or e.animation.throw_time>=0 then return end
     local target=perception.target(e)
     if not target or math.abs(wrap(angle(target.x-e.position.x,target.z-e.position.z)-e.yaw))>.10 then return end
     local origin=muzzle(e)
@@ -194,6 +197,7 @@ function M.fixed_update(ctx,dt)
         ai.spawned=true
     end
     local started=os.clock()
+    if ai.enabled and ctx.player.enabled then grenades.squads(ctx,dt) end
     for _,id in ipairs(ai.order) do
         local e=ai.actors[id]
         e.previous=V.copy(e.position);e.previous_yaw=e.yaw;e.previous_pose=sample(e)
@@ -218,10 +222,11 @@ function M.fixed_update(ctx,dt)
                 end
                 suppression.tick(e,dt)
                 perception.tick(ctx,e,query,dt)
+                grenades.tick(ctx,e,dt)
                 guns.tick(ctx,e,dt,muzzle(e))
                 e.cooldown=math.max(0,e.cooldown-dt);e.route_age=e.route_age+dt
                 e.think=e.think-dt
-                if e.think<=0 and not e.nav_job and not e.motion.mantle then
+                if e.think<=0 and not e.nav_job and not e.motion.mantle and not e.throw_target then
                     e.nav_job=planner.add(ai.planner,e,function()
                         think(ctx,e,query,{checkpoint=function()
                             query:sync(e.position,e.motion.height);planner.checkpoint()
@@ -231,7 +236,7 @@ function M.fixed_update(ctx,dt)
                     end)
                 end
                 tactics.posture(e,dt,ai)
-                local waypoint=e.route and e.route[1]
+                local waypoint=not e.throw_target and e.route and e.route[1]
                 while waypoint and not waypoint.vault_goal and nav.distance(e.position,waypoint)<.18 do
                     table.remove(e.route,1);waypoint=e.route[1]
                 end
@@ -279,7 +284,7 @@ function M.fixed_update(ctx,dt)
                 local speed=e.motion.travel/dt
                 e.run=e.run+(V.clamp((speed-1.25)/.95,0,1)-e.run)*math.min(1,dt*9)
                 e.walk=e.walk+(math.min(1,speed/1.1)-e.walk)*math.min(1,dt*9)
-                local aiming=not e.duck and e.reload_left==0 and (e.state=="fire" or e.cover_phase=="peek")
+                local aiming=not e.duck and not e.throw_target and e.reload_left==0 and (e.state=="fire" or e.cover_phase=="peek")
                 e.aim=e.aim+((aiming and 1 or 0)-e.aim)*math.min(1,dt*8)
                 local target=e.target_point or {x=e.position.x-math.sin(e.yaw),y=e.position.y+1.4,z=e.position.z-math.cos(e.yaw)}
                 local d=math.sqrt((target.x-e.position.x)^2+(target.z-e.position.z)^2)
@@ -299,7 +304,7 @@ function M.fixed_update(ctx,dt)
             if profiler then profiler.scope_end() end
             if ai.enabled and ctx.player.enabled and ctx.player.actor.alive and e.actor.alive then
                 if profiler then profiler.scope_begin("ai.fire") end
-                fire(ctx,e,query)
+                if not grenades.act(ctx,e,query) then fire(ctx,e,query) end
                 if profiler then profiler.scope_end() end
             end
         end
@@ -335,6 +340,7 @@ function M.present(ctx)
     end
 end
 function M.reset(ctx,position,yaw)
+    if ctx.grenades then require("game.systems.grenades").reset(ctx) end
     local service=ctx.services.soldiers
     for id,e in pairs(ctx.ai.actors) do
         if ctx.services.dynamics then ctx.services.dynamics.api.remove_actor(ctx.services.dynamics,e) end
@@ -370,6 +376,7 @@ function M.snapshot(ctx)
             memory=e.memory,last_seen=e.last_seen,target_point=e.target_point,contact_age=e.contact_age,
             heard=e.heard,heard_age=e.heard_age,heard_count=e.heard_count,searches=e.searches,investigations=e.investigations,
             ammo=e.ammo,magazine=guns.profile(e).magazine,reload_left=e.reload_left,reloads=e.reloads,
+            has_grenade=e.has_grenade,grenade_cooldown=e.grenade_cooldown,grenades_thrown=e.grenades_thrown,throw_target=e.throw_target,
             burst_left=e.burst_left,burst_cooldown=e.burst_cooldown,suppressive_shots=e.suppressive_shots,
             retreat=e.reposition,retreats=e.retreats,repositions=e.repositions,vaults=e.vaults,vault_failures=e.vault_failures or 0,
             cover_peek=e.cover_peek,replans=e.replans,stuck=e.stuck}

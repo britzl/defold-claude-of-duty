@@ -59,9 +59,9 @@ def main():
         command("ui.focus", dict(focused=True))
         command("ui.pause", dict(paused=False))
         command("ai.configure", dict(enabled=False))
-        assert state()["ready"] and state()["loaded"] == 76
+        assert state()["ready"] and state()["loaded"] == 77
         assert state()["synthesis_backend"] == "native"
-        assert state()["bytes"] == 1627520 and state()["voice_limit"] == 24
+        assert state()["bytes"] == 1698124 and state()["voice_limit"] == 24
         engine.wait_until(lambda: max(state()["meter"].values()) > .0001, timeout=4)
         print("PASS runtime bank and audible ambience", state()["work_ms"], state()["peak_job_ms"], flush=True)
         command("audio.configure", dict(ambience=0))
@@ -123,7 +123,7 @@ def main():
             command("gameplay.restart")
             command("ai.configure", dict(enabled=False))
             settle()
-            assert state()["loaded"] == 76 and state()["bytes"] == 1627520 and state()["active"] == 2
+            assert state()["loaded"] == 77 and state()["bytes"] == 1698124 and state()["active"] == 2
         assert state()["peak_voices"] <= 24 and state()["completed"] > 20, state()
         print("PASS mute silence, completion callbacks and six restarts without bank growth", flush=True)
 

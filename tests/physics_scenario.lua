@@ -46,7 +46,7 @@ function M.update(test,self,dt,restart)
         restart(self);ctx.ai.enabled=false;frames(8)
         local a=ctx.services.dynamics
         local baseline=dynamics.snapshot(a)
-        assert(baseline.bodies==0 and baseline.objects==64 and baseline.buffers==1,json.encode(baseline))
+        assert(baseline.bodies==0 and baseline.objects==76 and baseline.buffers==2,json.encode(baseline))
         check("bounded_initial_resources",baseline)
         local stage=world.new("#world_mesh","#world_collision")
         local shapes={{id="physics_floor",x=70,y=-.1,z=0,w=15,h=.4,d=12,surface="concrete",material="concrete"},
@@ -150,7 +150,7 @@ function M.update(test,self,dt,restart)
         for i=1,80 do dynamics.spawn(a,i%3==0 and "magazine" or (i%3==1 and "casing" or "debris"),
             {x=69+(i%6)*.3,y=1.5,z=2+(i%4)*.2},{x=.4,y=.2,z=.3},"wood") end
         frames(8);snap=dynamics.snapshot(a)
-        assert(snap.debris==32 and snap.bodies==140 and snap.recycled>=48 and snap.objects==172,json.encode(snap))
+        assert(snap.debris==32 and snap.bodies==140 and snap.recycled>=48 and snap.objects==184,json.encode(snap))
         check("bounded_pool_recycling",snap)
         seconds(5)
         for _,b in ipairs(a.debris) do
@@ -166,14 +166,14 @@ function M.update(test,self,dt,restart)
         assert(vmath.length(bullet3d.rigid_body.get_linear_velocity(blocked.body)-velocity)<1e-7)
         check("world_occludes_blast_impulses")
         seconds(31)
-        snap=dynamics.snapshot(a);assert(snap.bodies==0 and snap.constraints==0 and snap.ragdolls==0 and snap.objects==64,json.encode(snap))
+        snap=dynamics.snapshot(a);assert(snap.bodies==0 and snap.constraints==0 and snap.ragdolls==0 and snap.objects==76,json.encode(snap))
         capture("cleanup");check("simulation_lifetime_cleanup",snap)
         for cycle=1,10 do
             restart(self);ctx.ai.enabled=false;frames(5)
             for _,id in ipairs(ctx.ai.order) do assert(combat.request(ctx.combat,{target=id,amount=200})) end
             seconds(.15);assert(dynamics.snapshot(a).constraints==102)
             restart(self);ctx.ai.enabled=false;frames(6)
-            snap=dynamics.snapshot(a);assert(snap.bodies==0 and snap.constraints==0 and snap.objects==64 and snap.registry_entries<=32 and snap.retired==0)
+            snap=dynamics.snapshot(a);assert(snap.bodies==0 and snap.constraints==0 and snap.objects==76 and snap.registry_entries<=32 and snap.retired==0)
             assert(ctx.services.soldiers.api.snapshot(ctx.services.soldiers).objects==78)
         end
         check("repeated_death_restart_resource_bounds",snap)

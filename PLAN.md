@@ -1,6 +1,6 @@
 # Defold port implementation plan
 
-Created: 2026-10-13. Updated: 2026-10-19. Target engine: Defold 1.14.0.
+Created: 2026-10-13. Updated: 2026-10-20. Target engine: Defold 1.14.0.
 
 Implement a runtime-generated Defold port of Claude of Duty, with Lua gameplay systems and a custom render pipeline. Introduce a portable native extension only where measured geometry, animation or audio requirements justify it. The current acceptance platforms are Mac native and desktop browser, targeting 60 FPS (user decision, 2026-10-15). Keep input and graphics adaptable; physical mobile qualification is deferred outside the current gate.
 
@@ -8,18 +8,18 @@ The target is feature and presentation parity with the local Three.js and Kaigen
 
 ## Current status and scope
 
-The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families. Step 6 adds player regeneration, fall damage, suppression and low-health feedback. Step 7 adds detailed weapon assemblies, shared articulated arms, hand tracks and fixed-tick first-person motion. Step 8 reconciles penetration loss/deflection and animated regional damage. Step 9 adds three soldier variants, layered animation, planted foot/hand IK and ragdoll joint frames. Step 10 adds bounded native Bullet debris, constrained ragdolls, regional/blast impulses, sleep and cleanup. Step 11 adds evidence-based hearing/search, wounded retreat, magazine/burst/reload cycles, tall-cover peeks, squad permissions, general flank/reposition choices and swept low-obstacle vaulting; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
+The 2026-10-15 source audit used Defold revision `8146e12` and the two local reference archives. The subsequent step-1 increment adds the [versioned parity contract and source lock](parity/README.md), reference capture fixes and shared laboratory geometry. Step 2 expands the market to its full reference extent and footprints. Step 3 adds the four remaining surface families and shared foliage coverage; step 4 implements detailed architecture and dressing. Step 5 implements vaulting and the reference camera motion families. Step 6 adds player regeneration, fall damage, suppression and low-health feedback. Step 7 adds detailed weapon assemblies, shared articulated arms, hand tracks and fixed-tick first-person motion. Step 8 reconciles penetration loss/deflection and animated regional damage. Step 9 adds three soldier variants, layered animation, planted foot/hand IK and ragdoll joint frames. Step 10 adds bounded native Bullet debris, constrained ragdolls, regional/blast impulses, sleep and cleanup. Step 11 adds evidence-based hearing/search, wounded retreat, magazine/burst/reload cycles, tall-cover peeks, squad permissions, general flank/reposition choices and swept low-obstacle vaulting. Step 12 adds squad-rationed animated enemy throws, reserved Bullet grenades, fixed-tick fuses, obstruction-aware blasts and basic connected warning/FX/audio; validation is recorded below. Historical rendering counts remain prior results. Cross-engine sustained performance comparisons have not been established. The hosted Kaigen demo runs, but the local archive lacks its engine and the published build/source relationship and controlled capture adapter remain unverified.
 
 **Status convention:** `[x]` means the stated implementation is complete in the current port; `[ ]` means work remains. Implementation completion does not imply full source fidelity, all-platform qualification or an agreed performance budget. The ordered backlog below is the current execution plan; the historical record at the end preserves earlier design and validation details.
 
 ### Already implemented
 
-- [x] Gameplay framework: six subsystem modules, 120 Hz fixed simulation, buffered input, independent random streams, gameplay events, centralized damage and interpolated presentation.
+- [x] Gameplay framework: seven subsystem modules, 120 Hz fixed simulation, buffered input, independent random streams, gameplay events, centralized damage and interpolated presentation.
 - [x] Generated full market layout: 104-metre road, all 20 reference footprints, five flank routes, far cross street, ruin yard and gate passage; connected W2/E1/E2 floors, ground-only E3, shared collision/navigation/cover/room metadata and a full-map minimap. Step 4 adds source-derived architecture, furnished rooms and street dressing.
 - [x] Core traversal: swept capsule, walking/sprinting/tactical sprint, jump buffering/coyote time, crouch/prone, steps/slopes, sliding, clearance-checked mantling/vaulting, collision-limited leaning and a fixed-tick camera rig.
 - [x] Core weapons: M4A1/MPX-9/P-19, fire modes, magazine/chamber state, reload/inspection/switching timelines, ADS, recoil, spread, projectile travel/drop and material penetration; generated weapon assemblies and articulated arm/hand IK in an independent render pass.
 - [x] Core soldiers/combat: three generated 25-bone soldier variants, terrain/hand IK, layered animation, animated hit volumes, patrol/detection/pursuit/fire/death, two squads of three, shared alerts, cover claims, low-cover peeking, suppression, friendly firing-lane checks and a west-loop flank.
-- [x] Core audio: 76 generated samples, budgeted loading, bounded spatial mixer, player/weapon/surface cues, ambience, initial occlusion and room variants, volume controls and lifecycle cleanup.
+- [x] Core audio: 77 generated samples, budgeted loading, bounded spatial mixer, player/weapon/surface cues, ambience, initial occlusion and room variants, volume controls and lifecycle cleanup.
 - [x] Core desktop UI: crosshair/hitmarkers, ammo/mode, health/basic damage direction, compass, geometry minimap, killfeed, pause/settings, focus handling and encounter restart.
 - [x] Rendering/capture infrastructure: the stages listed below, deterministic capture manifests, still/motion fixtures, a material laboratory and a Three.js capture adapter.
 
@@ -209,13 +209,18 @@ The previous excerpt capture receipts remain in `parity/excerpt-baseline-v1.json
 
 **Adaptations and remaining qualification:** One peek permission per squad, ray-attenuated hearing, authored graph routes/local vault links, unlimited reserve magazines and port-specific damage/accuracy/speed tuning are explicit. Controlled source behavior/motion comparisons and sustained CPU/GPU performance remain steps 18–19.
 
-### 12. Implement enemy grenades — NOT IMPLEMENTED
+### 12. Implement enemy grenades — IMPLEMENTED
 
-- [ ] Add squad grenade grants/cooldowns, throwing decisions and animated launch points.
-- [ ] Add ballistic throws, bouncing bodies, fuses, obstruction-aware blast damage and impulses using steps 6, 8 and 10.
-- [ ] Emit grenade/fuse/explosion events for effects, sound, player suppression and HUD warnings; finish their presentation in steps 13, 15 and 16.
+- [x] One grenade per actor, source-range/fresh-contact decisions, independent timing RNG, exclusive squad grants/cooldowns and a left-hand windup/release socket shared with animation.
+- [x] Elevation-aware ballistic lobs with preflight/release sphere clearance, six reserved bouncing Bullet spheres, 2.35-second fixed-tick fuses, 6.5-metre obstruction-aware blast damage and existing/new-ragdoll impulses.
+- [x] Throw/fuse/explosion events, player pressure, basic nearest-danger direction/height/fuse warnings, generated spatial blast sound, bounded flash/smoke and light. Full presentation matching remains steps 13, 15 and 16.
+- [x] Pause/focus freezes both motion and fuse time; death/interruption releases throw grants; restart removes active/pending bodies, queued blast damage, warning/FX/audio and restores inventory.
 
-**Completion check:** Enemies throw under the reference conditions; fuses pause/reset correctly, cover blocks blast damage appropriately and each actor receives at most one damage application per blast. The end-to-end gate stays open until warnings, FX and audio are connected.
+**Implementation check:** Normal AI launches through the same path exercised by fixtures. Every blast queues at most one combat-owned damage request per living actor (including the thrower); walls/floors block wounds while occluded blasts retain pressure. Connected cues close the basic end-to-end gate. Matched reference presentation and sustained performance remain steps 18–19.
+
+**2026-10-20 validation:** 330 standalone Lua checks passed, including 16 grenade-specific checks. Native Metal and release Chromium WebGL2/ANGLE Metal each passed eleven shared scenario checks with four captures: actual animated AI release, sphere/floor/wall bounce, arc rejection, focus/pause/resume, wall/upper-floor damage protection, one damage application per actor, blast death/impulse handoff and three pending/airborne restarts. All 77 native/Wasm audio samples match Lua; a trusted canvas click and analyser verify live Web Audio output. The thirteen-check native debris/ragdoll regression also passes. Browser fixtures retain step 11’s `engine.max_time_step=0.1` setting. Reports are under `build/grenades-unit-validation`, `build/grenades-native-validation` and `build/grenades-browser-validation`.
+
+**Resources/adaptations:** Six dedicated slots add twelve objects and one 12,000-byte generated mesh buffer; common dynamics now reserve 76 objects / two buffers / 13,440 vertex bytes, with up to 146 bodies including six full ragdolls. Audio grows to 77 samples / 1,698,124 WAV bytes; existing FX and light pools are reused. Hand animation, elevation correction, arc/friendly clearance, 0.02 linear grenade damping, no prop-to-prop collisions, nearest-threat text warning and compact blast synthesis/FX are explicit port adaptations.
 
 ### 13. Complete combat and ambient effects — PARTIAL
 

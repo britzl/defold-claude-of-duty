@@ -10,13 +10,18 @@ local function clone(value)
 end
 function M.init(e)
     e.animation={feet={},pelvis=0,turn_time=-1,turn_direction=1,reload_time=-1,reload_duration=2.4,
-        vault_time=-1,vault_duration=.85,hit_time=1,hit_region="torso",hit_side=1,hit_strength=0,
+        vault_time=-1,vault_duration=.85,throw_time=-1,throw_duration=.9,hit_time=1,hit_region="torso",hit_side=1,hit_strength=0,
         previous=V.copy(e.position),previous_yaw=e.yaw}
 end
 function M.reload(e,duration)
     if not e.actor.alive then return false end
-    local a=e.animation;if a.reload_time>=0 or a.vault_time>=0 then return false end
+    local a=e.animation;if a.reload_time>=0 or a.vault_time>=0 or a.throw_time>=0 then return false end
     a.reload_time=0;a.reload_duration=math.max(.1,duration or (e.variant=="irregular" and 2.9 or 2.35));return true
+end
+function M.throw(e,duration)
+    local a=e.animation
+    if not e.actor.alive or a.reload_time>=0 or a.vault_time>=0 or a.throw_time>=0 then return false end
+    a.throw_time=0;a.throw_duration=duration;return true
 end
 function M.vault(e,duration,hand)
     if not e.actor.alive then return false end
@@ -44,10 +49,11 @@ end
 function M.step(e,dt,query)
     local a=e.animation
     if not e.actor.alive then
-        a.feet={};a.reload_time=-1;a.vault_time=-1;a.turn_time=-1;return
+        a.feet={};a.reload_time=-1;a.vault_time=-1;a.turn_time=-1;a.throw_time=-1;return
     end
     a.hit_time=math.min(1,a.hit_time+dt)
     advance(a,"reload_time",a.reload_duration,dt);advance(a,"vault_time",a.vault_duration,dt);advance(a,"turn_time",.42,dt)
+    advance(a,"throw_time",a.throw_duration,dt)
     local definition=variants.get(e.variant);local scale=definition.scale
     local displacement={x=e.position.x-a.previous.x,y=e.position.y-a.previous.y,z=e.position.z-a.previous.z}
     local planar=math.sqrt(displacement.x^2+displacement.z^2)
@@ -118,6 +124,7 @@ function M.sample(e)
         aim_yaw=e.aim_yaw or 0,feet=clone(a.targets),pelvis=a.pelvis,hit=hit,hit_region=a.hit_region,hit_side=a.hit_side,
         turn=math.max(0,a.turn_time)/.42,turn_weight=a.turn_time>=0 and 1 or 0,turn_direction=a.turn_direction,
         reload=math.max(0,a.reload_time)/a.reload_duration,reload_weight=a.reload_time>=0 and 1 or 0,
+        throw=math.max(0,a.throw_time)/a.throw_duration,throw_weight=a.throw_time>=0 and 1 or 0,
         vault=math.max(0,a.vault_time)/a.vault_duration,vault_weight=a.vault_time>=0 and 1 or 0,vault_hand=clone(a.vault_hand)}
 end
 function M.interpolate(previous,current,alpha)
@@ -129,7 +136,7 @@ function M.interpolate(previous,current,alpha)
         else out[key]=value end
     end
     -- A completed one-shot blends toward its end, never backwards to frame 0.
-    for _,clip in ipairs({"turn","reload","vault"}) do
+    for _,clip in ipairs({"turn","reload","vault","throw"}) do
         if previous and previous[clip.."_weight"]==1 and current[clip.."_weight"]==0 then
             out[clip]=V.lerp(previous[clip],1,alpha)
         end

@@ -3,6 +3,11 @@ local M = {}
 
 function M.init(ctx)
     ctx.fx = { hitmarker = 0, damage_flash = 0, flashes = {} }
+    events.on(ctx.events,events.EXPLOSION,ctx.fx,function(state,blast)
+        table.insert(state.flashes,1,{source="blast/"..tostring(blast.id or "fixture"),life=.22,
+            radius=8,power=65,position={x=blast.position.x,y=blast.position.y+.1,z=blast.position.z}})
+        while #state.flashes>2 do table.remove(state.flashes) end
+    end)
     events.on(ctx.events,events.WEAPON_FIRE,ctx.fx,function(state,shot)
         local origin=shot.position or shot.origin
         if not origin then return end

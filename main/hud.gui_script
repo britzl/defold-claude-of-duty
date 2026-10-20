@@ -62,6 +62,7 @@ function init(self)
     self.ammo=W.text("ammo",936,64,"",1,W.white,gui.PIVOT_E,"hud",BR)
     self.ammo_hint=W.text(nil,936,40,"R  RELOAD   /   6  7  8  WEAPONS",.72,W.muted,gui.PIVOT_E,"hud",BR)
     self.weapon_status=W.text("weapon_status",480,132,"",.9,W.accent,nil,"hud",BOTTOM)
+    self.grenade_warning=W.text("grenade_warning",480,173,"",1,W.red,nil,"hud",BOTTOM)
     self.hint=W.text("input_hint",480,17,"CLICK TO CAPTURE MOUSE  /  ESC MENU",.73,W.white,nil,"hud",BOTTOM)
     self.crosshair={}
     for i=1,4 do self.crosshair[i]=W.box("crosshair_"..i,480,320,i<3 and 5 or 1,i<3 and 1 or 5,W.white) end
@@ -95,6 +96,8 @@ local function update_hud(self,state)
     end
     if state.ammo~=previous.ammo then gui.set_text(self.ammo,state.ammo) end
     if state.weapon_status~=previous.weapon_status then gui.set_text(self.weapon_status,state.weapon_status) end
+    if state.grenade_warning~=previous.grenade_warning then gui.set_text(self.grenade_warning,state.grenade_warning or "") end
+    gui.set_enabled(self.grenade_warning,state.alive and not state.inspecting and not state.diagnostic)
     if state.inspecting~=previous.inspecting or state.title~=previous.title then
         gui.set_text(self.title,state.inspecting and state.title or "MARKET STREET")
         gui.set_text(self.stance,state.inspecting and "INSPECTION" or state.title)

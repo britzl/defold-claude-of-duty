@@ -26,6 +26,7 @@ local ui_controls = require "game.ui.controls"
 local hud_model = require "game.ui.hud"
 local touch = require "game.touch"
 local dynamics = require "game.physics.defold"
+local grenades = require "game.systems.grenades"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
@@ -74,6 +75,7 @@ local function restart_encounter(self)
     weapon_system.init(self.ctx)
     combat_fx.reset(self.combat_visuals)
     weapon_adapter.reset(self.weapon_visuals)
+    grenades.reset(self.ctx)
     dynamics.reset(self.ctx.services.dynamics)
     self.ctx.ai.enabled=true
     self.ctx.ai.damage_scale=1
@@ -188,6 +190,9 @@ function init(self)
     end
     if sys.get_config_int("soldier_validation.enabled",0)==1 then
         self.soldier_validation=require("tests.soldier_scenario").new()
+    end
+    if sys.get_config_int("grenades_validation.enabled",0)==1 then
+        self.grenades_validation=require("tests.grenades_scenario").new()
     end
     if sys.get_config_int("ai_tactics_validation.enabled",0)==1 then
         self.ai_tactics_validation=require("tests.ai_tactics_scenario").new()
@@ -325,6 +330,7 @@ function init(self)
             automation_bridge.describe("command",name,{description=description,input_schema={type="object"},output_schema={type="object"}})
         end
         automation_bridge.command("combat_fx.snapshot",function() return combat_fx.snapshot(self.combat_visuals) end)
+        automation_bridge.command("grenades.snapshot",function() return grenades.snapshot(self.ctx) end)
         automation_bridge.command("physics.snapshot",function() return dynamics.snapshot(self.ctx.services.dynamics) end)
         automation_bridge.command("weapons.snapshot", function() return weapon_system.snapshot(self.ctx) end)
         automation_bridge.command("weapons.drive", function(data)
@@ -527,6 +533,7 @@ function update(self, dt)
     if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
     if self.soldier_validation then require("tests.soldier_scenario").update(self.soldier_validation,self,dt,restart_encounter) end
+    if self.grenades_validation then require("tests.grenades_scenario").update(self.grenades_validation,self,dt,restart_encounter) end
     if self.ai_tactics_validation then require("tests.ai_tactics_scenario").update(self.ai_tactics_validation,self,dt,restart_encounter) end
     if self.physics_validation then require("tests.physics_scenario").update(self.physics_validation,self,dt,restart_encounter) end
     if self.ballistics_validation then require("tests.ballistics_scenario").update(self.ballistics_validation,self,dt,restart_encounter) end
@@ -593,8 +600,8 @@ local function update_lights(self,camera,dt)
     for i=1,2 do
         local flash=not self.capture and self.ctx.fx.flashes[i]
         local position=flash and (flash.source=="player" and self.player_muzzle or flash.position)
-        positions[i]=position and vmath.vector4(position.x,position.y,position.z,4) or vmath.vector4()
-        local power=flash and 28*math.min(1,flash.life/.025) or 0
+        positions[i]=position and vmath.vector4(position.x,position.y,position.z,flash.radius or 4) or vmath.vector4()
+        local power=flash and (flash.power or 28)*math.min(1,flash.life/.025) or 0
         colours[i]=vmath.vector4(power,power*.58,power*.22,0)
     end
     msg.post("@render:","renderer_flashes",{positions=positions,colours=colours})
@@ -803,6 +810,7 @@ function final(self)
     msg.post(".", "release_input_focus")
     -- Automation Bridge clears callbacks with the Lua application lifecycle.
     combat_fx.final(self.combat_visuals,self.ctx)
+    grenades.reset(self.ctx)
     dynamics.final(self.ctx.services.dynamics)
     weapon_adapter.final(self.weapon_visuals, self.ctx)
     if self.range then firing_range.final(self.ctx, self.range) end

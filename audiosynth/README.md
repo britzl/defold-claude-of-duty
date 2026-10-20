@@ -24,7 +24,7 @@ owns the WAV. No per-sample data crosses the Lua/native boundary.
 - `audio_synthesis.backend=native` is the engine default. Set it to `lua` for
   fallback and matched performance comparisons. Standalone Lua tests use Lua.
 - `audio_synthesis.verify=1` runs engine-only parity/ownership fixtures at startup
-  and compares all 76 generated native WAVs with Lua before resource creation.
+  and compares all 77 generated native WAVs with Lua before resource creation.
   WAV bytes, frame counts and durations must match exactly; peak/RMS tolerance
   is 1e-12. Verification must be off when profiling performance.
 - `audio_synthesis.fingerprints=1` adds WAV byte hashes and metadata to

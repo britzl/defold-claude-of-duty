@@ -39,6 +39,12 @@ function M.init(ctx)
         by_kind={},last={},suspended=false,listener={position=copy(ctx.player.position),yaw=0}}
     ctx.audio=a
     for i=1,M.voice_limit do a.voices[i]={slot=i,serial=0,active=false} end
+    events.on(ctx.events,events.GRENADE_THROW,a,function(_,cue)
+        queue(a,{kind="grenade",key="mechanic/magout",position=cue.position,gain=.4,bus="foley",priority=2,near=6,range=25})
+    end)
+    events.on(ctx.events,events.EXPLOSION,a,function(_,cue)
+        queue(a,{kind="explosion",key="explosion",position=cue.position,gain=1,bus="weapons",priority=3,near=12,range=140})
+    end)
     events.on(ctx.events,events.WEAPON_FIRE,a,function(_,hit)
         local first=not hit.source or hit.source=="player"
         local name=(hit.weapon=="smg" or hit.weapon=="pistol") and hit.weapon or "rifle"

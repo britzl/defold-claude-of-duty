@@ -2,7 +2,7 @@
 
 [contract.json](contract.json) is the acceptance matrix: 24 feature scenarios with
 reference source paths, expected behavior, a verification procedure, existing
-coverage, and twelve recorded adaptation decisions. `implemented-core` describes
+coverage, and thirteen recorded adaptation decisions. `implemented-core` describes
 existing code; it does not mean the scenario has passed parity review.
 [reference-lock.json](reference-lock.json) pins the runtime source snapshots and
 all 71 production camera requests, including FOV, lighting and fixture intent.
@@ -22,9 +22,25 @@ These thresholds are engineering proposals, not measured results. The contract
 requires three release runs, each with 60 seconds of warmup and 300 seconds of
 full-map combat sampling. Report actual framebuffer/internal resolution,
 backend, device/OS/browser, dropped samples, CPU/GPU timing and memory scope.
-The complete stress scenario remains unqualified while grenades and
-other combat effects are missing. Frozen capture frames and an FPS overlay do not satisfy
+The complete stress scenario remains unqualified while the remaining combat
+effects and sustained full-map measurements are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
+
+## Enemy grenade increment — 2026-10-20
+
+Step 12 implements squad grants/cooldowns, one grenade per actor, an animated
+hand release, clearance-tested ballistic throws, six reserved Bullet spheres,
+fixed fuses, cover/floor-aware centralized blast damage and impulses. Basic
+warning, pressure, generated blast sound, flash/smoke and light are connected.
+The grenade scenario records adaptations separately from full presentation parity.
+
+Native Metal and release WebGL pass the same eleven checks and four captures,
+including real AI release, bounce/obstruction, focus/pause, damage uniqueness and
+three pending/airborne restarts. All 77 native/Wasm samples match Lua. The 330-check
+standalone matrix includes 16 grenade tests. See README.md for commands, resource
+costs and `build/grenades-*-validation` reports. The source lock carries no stale
+visual comparison receipts; controlled reference and sustained performance gates
+remain open.
 
 ## AI perception and tactics increment — 2026-10-19
 

@@ -13,7 +13,7 @@ This project is a Defold take on the Call of Duty clone "Claude of Duty". This i
 
 Runtime-generated port targeting Defold 1.14.0. See [PLAN.md](PLAN.md).
 
-The first plan step is implemented: a gameplay controller, six subsystem modules,
+The first plan step is implemented: a gameplay controller, seven subsystem modules,
 120 Hz fixed simulation, metre-based 3D physics with gravity -20.6 m/s², buffered
 input, gameplay notifications, centralized damage, and separate camera/HUD
 presentation. The full market layout is generated at runtime: a 104-metre
@@ -37,6 +37,74 @@ audio mixer.
 The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
+
+## Enemy grenades (2026-10-20)
+
+Each enemy has one frag grenade. A fresh visual/squad contact younger than 1.5
+seconds at 8–26 metres can trigger a throw after an initial 9–22-second actor
+cooldown and 6-second squad cooldown. One squad grant covers the windup and
+release; a successful throw starts a 14–26-second squad cooldown. Suppression,
+reloads, traversal, nearby allies and obstructed arcs prevent unsafe throws.
+Death or interrupted windup releases the grant without spending the grenade.
+Grenade timing uses its own random stream.
+
+The left hand winds up and releases at 0.48 seconds into a 0.9-second clip while
+the right hand retains the rifle. Simulation, skinning and the release socket
+use the same pose. The target is copied at windup, and a 20-segment swept-sphere
+arc check runs before windup and again at release. The reference lob is adapted
+to target elevation and capped at 18 m/s horizontally. It may bounce beyond its
+aim point; it never tracks a moving player after launch.
+
+Six reserved Bullet spheres (5 cm radius, 0.42 kg, restitution 0.28) share the
+existing interpolation, sleep, pause and teardown service. Bullet advances their
+motion; a separate 120 Hz grenade subsystem owns the 2.35-second fuse, starting
+when the body activates. Casings and debris cannot evict live grenades. A
+6.5-metre blast queues at most one combat-owned damage request per living actor,
+including the thrower. Damage starts at 120 with the reference player/AI falloffs;
+world walls and floors block wounds. Covered blasts still produce player pressure.
+Existing debris/ragdolls receive visibility-tested radial impulses; blast deaths
+carry an impulse into the newly created ragdoll.
+
+Throw/fuse/explosion notifications drive a generated spatial blast sample,
+bounded flash/smoke and light, and a nearest-danger HUD warning with direction,
+height, distance and fuse. Behind-camera warnings work too. These are basic
+connected cues; projected indicators, detailed fireballs/shockwaves/scorch marks,
+voice barks and richer blast audio remain in steps 13, 15 and 16.
+
+Focus loss and pause freeze bodies, fuses, windup and squad cooldowns. Encounter
+restart cancels active/pending grenades, queued blast damage and warnings, stops
+sound/FX, and restores actor inventories. `grenades.snapshot` reports active
+positions/fuses, launches, detonations, rejected launches and damage requests.
+`ai.snapshot` includes inventory, throw targets and cooldowns; `physics.snapshot`
+reports the reserved pool separately from debris. The diagnostic AI damage scale
+also applies to grenade wounds, while leaving movement, FX and impulses active.
+
+The pool adds twelve objects and one generated 12,000-byte mesh buffer; shared
+dynamics now preallocate 76 objects, two buffers and 13,440 vertex bytes, with a
+maximum of 146 active bodies including six complete ragdolls. It adds no render
+targets or FX slots. The sound bank grows to 77 samples / 1,698,124 WAV bytes.
+
+```sh
+lua tests/grenades_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/grenades_smoke.py
+# Bundle release wasm-web with tests/grenades_browser.project, then:
+node tools/validate_grenades_browser.mjs --bundle="build/grenades-web/Claude of Duty"
+```
+
+The standalone regression matrix passes 330 checks, including 16 grenade tests.
+The shared native Metal and release Chromium WebGL2/ANGLE Metal fixtures each
+pass eleven behavior/resource checks and four captures, and verify all 77
+native/Wasm synthesized samples against Lua. They cover
+an actual AI release, bouncing against floor/wall geometry, wall/upper-floor blast
+protection, focus/pause/resume, one hit per actor, ragdoll handoff and three
+pending/airborne restart cycles. Reports are under `build/grenades-unit-validation`
+and `build/grenades-native-validation` / `build/grenades-browser-validation`.
+The browser fixture uses `engine.max_time_step=0.1`, as in step 11, to keep
+engine physics and fixed scripts aligned during slow debug captures. This is
+fixture configuration, not sustained browser performance qualification.
+A trusted canvas click starts Web Audio, and an analyser verifies nonzero engine
+output. The existing thirteen-check native debris/ragdoll regression also passes.
+Controlled reference captures and sustained performance qualification remain open.
 
 ## AI perception, weapons and tactics (2026-10-19)
 
@@ -114,7 +182,7 @@ Adaptations include ray-based hearing attenuation, authored graph navigation,
 a single peek permission per squad, and retained port damage tuning (10/12/10)
 with distinct spread/speed profiles. These are implementation checks; controlled
 reference behavior, visual comparison and sustained 60 FPS qualification remain
-open. Enemy grenades are step 12.
+open. Enemy grenades are implemented in the step-12 increment above.
 
 ## Rigid debris and ragdolls (2026-10-19)
 
@@ -2461,10 +2529,10 @@ match every RGB pixel across three successful independent launches**.
 
 ## Generated audio
 
-The AudioSynth native extension generates 76 mono PCM16 WAV samples at 22,050 Hz
+The AudioSynth native extension generates 77 mono PCM16 WAV samples at 22,050 Hz
 during loading, using the catalog and tuning from `game/audio/synth.lua`. That Lua
 module remains the fallback and verification reference. The bank occupies
-1,627,520 bytes (about 1.55 MiB), excluding engine
+1,698,124 bytes (about 1.62 MiB), excluding engine
 resource overhead and temporary synthesis buffers. The only bundled WAV is a
 32-frame silent placeholder required by Defold sound components. Audible samples
 are created with [`resource.create_sound_data`](https://defold.com/ref/resource/#resource.create_sound_data)

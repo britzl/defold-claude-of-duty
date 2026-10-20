@@ -7,6 +7,7 @@ local guns = {
     rifle = {148,56,.085,2450,.055,.30,.028,1880},
     smg = {172,72,.060,3050,.040,.19,.021,2200},
     pistol = {186,84,.050,2750,.035,.16,.038,2450},
+    explosion = {82,32,.32,1200,.075,.65,.09,350},
 }
 local surfaces = {
     concrete={180,2600,.075,0}, plaster={220,1900,.050,0},
@@ -50,6 +51,9 @@ function M.catalog()
     add("shell","shell","metal",.22)
     add("hurt","hurt","flesh",.3)
     add("cloth","cloth","fabric",.32)
+    -- Reuse the portable pressure/body/noise synthesizer with a low, long blast
+    -- recipe; both Lua and native backends consume these same parameters.
+    add("explosion","shot","explosion",1.6)
     add("ambience/wind","ambience","wind",4)
     add("ambience/city","ambience","city",4)
     return out

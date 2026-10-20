@@ -44,9 +44,32 @@ function M.heading(yaw)
     return (-math.deg(yaw)) % 360
 end
 
+-- Bounded nearest-danger warning, including grenades behind the camera. Full
+-- projected marker styling is part of the later HUD parity increment.
+function M.grenade_warning(ctx)
+    local nearest,distance,count=nil,math.huge,0
+    local out=ctx.presentation
+    for _,g in ipairs(ctx.grenades and ctx.grenades.live or {}) do
+        local p=g.position
+        local d=math.sqrt((p.x-out.position.x)^2+(p.y-out.position.y)^2+(p.z-out.position.z)^2)
+        if d<10 then
+            count=count+1
+            if d<distance then nearest,distance=g,d end
+        end
+    end
+    if not nearest or not ctx.player.actor.alive then return "",0 end
+    local p=nearest.position;local dx,dz=p.x-out.position.x,p.z-out.position.z
+    local c,s=math.cos(out.yaw),math.sin(out.yaw)
+    local right,forward=dx*c-dz*s,-dx*s-dz*c
+    local direction=math.abs(right)>math.abs(forward) and (right>0 and "RIGHT" or "LEFT") or (forward>=0 and "AHEAD" or "BEHIND")
+    local floor=p.y-out.position.y>2 and " ABOVE" or p.y-out.position.y< -2 and " BELOW" or ""
+    return string.format("GRENADE %s%s  %.1fs  %dm%s",direction,floor,nearest.fuse,math.floor(distance+.5),count>1 and "  +"..(count-1) or ""),count
+end
+
 function M.snapshot(ctx)
     local state, out = ctx.hud, ctx.presentation
     local hp = health.snapshot(ctx)
+    local grenade_warning,grenade_count=M.grenade_warning(ctx)
     local lines = {}
     for i, entry in ipairs(state.feed) do lines[i] = entry.text end
     local direction = ""
@@ -59,6 +82,7 @@ function M.snapshot(ctx)
     end
     return { feed = table.concat(lines, "\n"), feed_count = #lines, damage = state.damage,
         damage_direction = direction, headshot = state.headshot or false,
+        grenade_warning=grenade_warning,grenade_count=grenade_count,
         heading = M.heading(out.yaw), x = out.position.x, y = out.position.y, z = out.position.z,
         yaw = out.yaw, alive = ctx.player.actor.alive,
         low_health=hp.low,critical=hp.critical,regenerating=hp.regenerating,

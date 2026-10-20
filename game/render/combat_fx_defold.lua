@@ -23,6 +23,7 @@ function M.new(ctx)
         go.set(part.url,"vertices",a.resource);visible(part,false);a.parts[i]=part
     end
     events.on(ctx.events,events.BULLET_IMPACT,a,function(_,hit) fx.impact(a.state,hit) end)
+    events.on(ctx.events,events.EXPLOSION,a,function(_,blast) fx.explosion(a.state,blast) end)
     events.on(ctx.events,events.WEAPON_FIRE,a,function(_,shot)
         if shot.position then fx.fire(a.state,shot.position,shot.direction,true)
         else

@@ -28,7 +28,7 @@ test("every generated WAV is PCM16 mono, finite, audible and bounded; one-shots 
         for i=45,#wav,2 do local n=uint(i,2);if n>32767 then n=n-65536 end;assert(math.abs(n)<30500) end
         bank[recipe.key]={wav=wav,info=info,recipe=recipe};bytes=bytes+#wav
     end
-    assert(bytes==1627520);print("AUDIO BANK",#synth.catalog(),"samples",bytes,"bytes")
+    assert(bytes==1698124);print("AUDIO BANK",#synth.catalog(),"samples",bytes,"bytes")
 end)
 test("ambience wraps at sustained volume without a click, independent of loading budget",function()
     local function pcm(wav,frame)
@@ -102,7 +102,7 @@ local function context(load)
             audio.update(ctx,1/60)
             if ctx.audio.ready then break end
         end
-        assert(ctx.audio.ready and b.loaded==76)
+        assert(ctx.audio.ready and b.loaded==77)
     else
         for key,item in pairs(bank) do
             ctx.audio.resources[key]={handle=key,duration=item.info.duration,peak=item.info.peak}
@@ -119,11 +119,11 @@ test("incremental bank loading keeps gameplay gated until audio resources exist"
     ctx.world.phase="settle"
     input.button(ctx.input,"fire",{pressed=true})
     runtime.fixed_update(ctx,1/120);runtime.update(ctx,1/60)
-    assert(not ctx.world.ready and ctx.weapons.sim.fired==0 and b.loaded<76)
+    assert(not ctx.world.ready and ctx.weapons.sim.fired==0 and b.loaded<77)
     runtime.final(ctx)
     local loaded,adapter=context(true)
-    assert(loaded.audio.bytes==1627520)
-    runtime.final(loaded);assert(adapter.released==76)
+    assert(loaded.audio.bytes==1698124)
+    runtime.final(loaded);assert(adapter.released==77)
 end)
 test("listener yaw, distance and room height determine attenuation and stereo direction",function()
     local listener={position={x=0,y=1.66,z=0},yaw=0}
@@ -244,7 +244,7 @@ test("mute/focus/reset clear transient sounds, preserve the bank and never repla
     near(ctx.audio.settings.master,saved)
     assert(not pcall(audio.configure,ctx,{bad=1}))
     assert(not pcall(audio.preview,ctx,{kind="shot",weapon="rifle",position={x=0,y=0,z=math.huge}}))
-    runtime.final(ctx);assert(b.released==76)
+    runtime.final(ctx);assert(b.released==77)
     for _,listeners in pairs(ctx.events.listeners) do assert(#listeners==0) end
 end)
 test("audio variation cannot advance weapon or world random streams",function()

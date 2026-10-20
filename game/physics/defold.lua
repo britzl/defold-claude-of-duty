@@ -6,7 +6,8 @@ local rig=require "game.ai.rig"
 local T=require "game.ai.transform"
 local V=require "game.weapons.math"
 local geometry=require "game.weapons.geometry"
-local M={debris_limit=32,ragdoll_limit=6}
+local grenade_rules=require "game.systems.grenades"
+local M={debris_limit=32,ragdoll_limit=6,grenade_limit=grenade_rules.limit}
 local C,B=bullet3d.collision_object,bullet3d.rigid_body
 local ZERO=vmath.vector3()
 local function vector(p) return vmath.vector3(p.x,p.y,p.z) end
@@ -26,8 +27,8 @@ local function visible(item,enabled)
     msg.post(item.mesh,enabled and "enable" or "disable")
     msg.post(item.prepass,enabled and "enable" or "disable");item.visible=enabled
 end
-local function body(a,world)
-    local id=factory.create("#physics_body",vector(T.origin(world)),vmath.quat_matrix4(matrix(world)))
+local function body(a,world,grenade)
+    local id=factory.create(grenade and "#grenade_body" or "#physics_body",vector(T.origin(world)),vmath.quat_matrix4(matrix(world)))
     local item={id=id,url=msg.url(nil,id,"collision"),born=a.ctx.time.frame}
     msg.post(item.url,"disable")
     return item
@@ -35,12 +36,12 @@ end
 local function configure(a,item,spec,velocity,spin)
     item.object=assert(bullet3d.get_collision_object(item.url))
     item.body=assert(bullet3d.get_rigid_body(item.url))
-    physics.set_shape(item.url,"box",{type=physics.SHAPE_TYPE_BOX,dimensions=vector(spec.dimensions)})
+    if not spec.sphere then physics.set_shape(item.url,"box",{type=physics.SHAPE_TYPE_BOX,dimensions=vector(spec.dimensions)}) end
     B.set_mass(item.body,spec.mass)
     B.clear_forces(item.body)
-    B.set_damping(item.body,.18,item.corpse and .7 or .45)
+    B.set_damping(item.body,spec.sphere and .02 or .18,item.corpse and .7 or .45)
     B.set_sleeping_thresholds(item.body,.16,.35)
-    C.set_friction(item.object,.8);C.set_restitution(item.object,item.corpse and .02 or .18)
+    C.set_friction(item.object,spec.sphere and .7 or .8);C.set_restitution(item.object,spec.sphere and .28 or item.corpse and .02 or .18)
     local d=spec.dimensions;local radius=math.min(d.x,d.y,d.z)*.4
     C.set_ccd_motion_threshold(item.object,radius)
     C.set_ccd_swept_sphere_radius(item.object,radius)
@@ -110,21 +111,31 @@ local function player_origin(ctx,offset)
     return {x=p.x+local_offset.x,y=p.y+motion.height*.93+local_offset.y,z=p.z+local_offset.z}
 end
 function M.new(ctx)
-    local a={api=M,ctx=ctx,debris={},ragdolls={},by_id={},by_key={},retired={},serial=0,spawned=0,recycled=0,impulses=0,
+    local a={api=M,ctx=ctx,debris={},grenades={},items={},ragdolls={},by_id={},by_key={},retired={},serial=0,spawned=0,recycled=0,impulses=0,
         peak_bodies=0,work_seconds=0,ticks=0,peak_tick=0,paused=false}
-    local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,0})
-    local data=buffer.create(cube.vertex_count,{{name=hash("position"),type=buffer.VALUE_TYPE_FLOAT32,count=3},
-        {name=hash("normal"),type=buffer.VALUE_TYPE_FLOAT32,count=3},{name=hash("color"),type=buffer.VALUE_TYPE_FLOAT32,count=4}})
-    for name,values in pairs({position=cube.positions,normal=cube.normals,color=cube.colors}) do
-        local stream=buffer.get_stream(data,hash(name));for i,v in ipairs(values) do stream[i]=v end
+    local function resource_for(batch,path)
+        local data=buffer.create(batch.vertex_count,{{name=hash("position"),type=buffer.VALUE_TYPE_FLOAT32,count=3},
+            {name=hash("normal"),type=buffer.VALUE_TYPE_FLOAT32,count=3},{name=hash("color"),type=buffer.VALUE_TYPE_FLOAT32,count=4}})
+        for name,values in pairs({position=batch.positions,normal=batch.normals,color=batch.colors}) do
+            local stream=buffer.get_stream(data,hash(name));for i,v in ipairs(values) do stream[i]=v end
+        end
+        buffer.set_metadata(data,"AABB",batch.bounds,buffer.VALUE_TYPE_FLOAT32)
+        a.mesh_bytes=(a.mesh_bytes or 0)+batch.vertex_count*10*4
+        return resource.create_buffer(path,{buffer=data})
     end
-    buffer.set_metadata(data,"AABB",cube.bounds,buffer.VALUE_TYPE_FLOAT32)
-    a.resource=resource.create_buffer("/generated/debris.bufferc",{buffer=data})
-    for i=1,M.debris_limit do
-        local item=body(a,T.identity(0,-1000,0));item.visual=factory.create("#weapon_effect")
+    local cube=geometry.batch();geometry.box(cube,0,0,0,1,1,1,{1,1,1,0})
+    a.resource=resource_for(cube,"/generated/debris.bufferc")
+    local ball=geometry.batch()
+    geometry.profile(ball,{{-.5,.08,.08},{-.35,.35,.35},{0,.5,.5},{.35,.35,.35},{.5,.08,.08}},{1,1,1,0},10)
+    a.grenade_resource=resource_for(ball,"/generated/grenade.bufferc")
+    for i=1,M.debris_limit+M.grenade_limit do
+        local is_grenade=i>M.debris_limit
+        local item=body(a,T.identity(0,-1000,0),is_grenade);item.visual=factory.create("#weapon_effect")
         item.mesh=msg.url(nil,item.visual,"mesh");item.prepass=msg.url(nil,item.visual,"prepass")
-        go.set(item.mesh,"vertices",a.resource);go.set(item.prepass,"vertices",a.resource)
-        visible(item,false);a.debris[i]=item
+        local res=is_grenade and a.grenade_resource or a.resource
+        go.set(item.mesh,"vertices",res);go.set(item.prepass,"vertices",res)
+        visible(item,false);a.items[#a.items+1]=item
+        local pool=is_grenade and a.grenades or a.debris;pool[#pool+1]=item
     end
     events.on(ctx.events,events.WEAPON_SHELL,a,function(_,shell)
         M.spawn(a,"casing",player_origin(ctx,{x=.22,y=-.18,z=-.32}),shell.velocity,shell.weapon)
@@ -177,6 +188,18 @@ function M.spawn(a,kind,position,velocity,material)
         velocity=velocity,spin={x=4,y=(a.serial%7)-3,z=7}}
     return item
 end
+function M.grenade(a,position,velocity)
+    if a.paused then return end
+    for _,item in ipairs(a.grenades) do if not item.active and not item.pending then
+        a.serial=a.serial+1;a.spawned=a.spawned+1
+        item.serial=a.serial;item.age=0;item.kind="grenade";item.life=math.huge
+        item.colour={.17,.22,.08,0};item.previous_world=nil
+        item.pending={world=T.root(position,0),dimensions={x=.1,y=.1,z=.1},mass=grenade_rules.mass,
+            surface="metal",sphere=true,velocity=V.copy(velocity),spin={x=5,y=2,z=7}}
+        return item
+    end end
+end
+function M.remove_grenade(a,item) deactivate(a,item) end
 function M.kill(a,e,hit)
     if #a.ragdolls>=M.ragdoll_limit then M.remove_ragdoll(a,a.ragdolls[1]) end
     local worlds=e.joints
@@ -223,7 +246,7 @@ function M.fixed_update(a,dt)
         local id=a.retired[i]
         if not go.exists(id) then a.by_id[id]=nil;table.remove(a.retired,i) end
     end
-    for _,item in ipairs(a.debris) do
+    for _,item in ipairs(a.items) do
         if item.pending and a.ctx.time.frame>item.born then
             local spec=item.pending;configure(a,item,spec,spec.velocity,spec.spin);item.pending=nil
         end
@@ -281,7 +304,7 @@ function M.palette(doll,alpha)
     return doll.presentation,doll.render_position
 end
 function M.present(a,alpha,hidden)
-    for _,item in ipairs(a.debris) do
+    for _,item in ipairs(a.items) do
         visible(item,item.active and not hidden)
         if item.visible then
             local p=vmath.lerp(alpha,item.previous,item.position)
@@ -309,7 +332,7 @@ function M.suspend(a,paused)
             C.force_activation_state(item.object,item.saved_state or C.ACTIVE_TAG);item.saved_state=nil
         end
     end
-    for _,item in ipairs(a.debris) do freeze(item) end
+    for _,item in ipairs(a.items) do freeze(item) end
     for _,doll in ipairs(a.ragdolls) do for _,item in ipairs(doll.bodies) do freeze(item) end end
 end
 function M.blast(a,blast)
@@ -327,12 +350,12 @@ function M.blast(a,blast)
         impulse(item,V.point({x=0,y=0,z=0},direction,(blast.impulse or 8)*(1-distance/radius)*item.spec.mass))
         a.impulses=a.impulses+1
     end
-    for _,item in ipairs(a.debris) do push(item) end
+    for _,item in ipairs(a.items) do push(item) end
     for _,doll in ipairs(a.ragdolls) do for _,item in ipairs(doll.bodies) do push(item) end end
 end
 function M.snapshot(a)
-    local out={debris=0,ragdolls=#a.ragdolls,bodies=0,awake=0,constraints=0,pending=0,
-        debris_limit=M.debris_limit,ragdoll_limit=M.ragdoll_limit,objects=M.debris_limit*2,buffers=1,mesh_bytes=36*10*4,
+    local out={debris=0,grenades=0,grenade_limit=M.grenade_limit,ragdolls=#a.ragdolls,bodies=0,awake=0,constraints=0,pending=0,
+        debris_limit=M.debris_limit,ragdoll_limit=M.ragdoll_limit,objects=(M.debris_limit+M.grenade_limit)*2,buffers=2,mesh_bytes=a.mesh_bytes,
         spawned=a.spawned,recycled=a.recycled,impulses=a.impulses,peak_bodies=a.peak_bodies,paused=a.paused,
         mean_tick_ms=a.work_seconds*1000/math.max(1,a.ticks),peak_tick_ms=a.peak_tick*1000,max_linear_speed=0,max_angular_speed=0,
         registry_entries=0,retired=#a.retired,states={},articulations={}}
@@ -345,7 +368,7 @@ function M.snapshot(a)
         end
         if item.pending then out.pending=out.pending+1 end
     end
-    for _,item in ipairs(a.debris) do count(item);if item.active then out.debris=out.debris+1 end end
+    for _,item in ipairs(a.items) do count(item);if item.active then if item.kind=="grenade" then out.grenades=out.grenades+1 else out.debris=out.debris+1 end end end
     for _,doll in ipairs(a.ragdolls) do
         out.objects=out.objects+#doll.bodies;out.constraints=out.constraints+#doll.constraints
         out.articulations[#out.articulations+1]={actor=doll.actor.id,quiet=doll.quiet or 0,sleeping=doll.sleeping or false}
@@ -355,11 +378,11 @@ function M.snapshot(a)
 end
 function M.reset(a)
     while #a.ragdolls>0 do M.remove_ragdoll(a,a.ragdolls[#a.ragdolls]) end
-    for _,item in ipairs(a.debris) do deactivate(a,item) end
+    for _,item in ipairs(a.items) do deactivate(a,item) end
 end
 function M.final(a)
     events.off_owner(a.ctx.events,a);M.reset(a)
-    for _,item in ipairs(a.debris) do go.delete(item.id);go.delete(item.visual) end
-    resource.release(a.resource)
+    for _,item in ipairs(a.items) do go.delete(item.id);go.delete(item.visual) end
+    resource.release(a.resource);resource.release(a.grenade_resource)
 end
 return M

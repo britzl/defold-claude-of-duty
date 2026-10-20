@@ -16,6 +16,8 @@ local M = {
     PLAYER_HEARTBEAT = "player:heartbeat",
     CAMERA_IMPULSE = "camera:impulse",
     EXPLOSION = "explosion",
+    GRENADE_THROW = "grenade:throw",
+    GRENADE_FUSE = "grenade:fuse",
 }
 
 function M.new()

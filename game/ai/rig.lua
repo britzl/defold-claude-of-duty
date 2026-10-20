@@ -186,6 +186,23 @@ function M.pose(state,scratch)
         local plant=state.vault_hand or {x=shoulder.x-.10,y=shoulder.y-.35,z=shoulder.z-.18}
         support={x=V.lerp(support.x,plant.x,vault),y=V.lerp(support.y,plant.y,vault),z=V.lerp(support.z,plant.z,vault)}
     end
+    -- Off-hand lob leaves the weapon in the right hand. The grenade release
+    -- socket is this same solved hand in simulation and interpolated skinning.
+    if (state.throw_weight or 0)>0 then
+        local t=state.throw or 0
+        local shoulder=T.origin(worlds[M.index.UpperArmL])
+        local windup={x=shoulder.x-.12,y=shoulder.y+.24,z=shoulder.z+.20}
+        local release={x=shoulder.x-.10,y=shoulder.y+.18,z=shoulder.z-.40}
+        local from,to,w
+        if t<.35 then from,to,w=support,windup,t/.35
+        elseif t<.54 then from,to,w=windup,release,(t-.35)/.19
+        else from,to,w=release,support,(t-.54)/.46 end
+        w=V.smooth(w)
+        local weight=(state.throw_weight or 0)*live
+        support={x=V.lerp(support.x,V.lerp(from.x,to.x,w),weight),
+            y=V.lerp(support.y,V.lerp(from.y,to.y,w),weight),
+            z=V.lerp(support.z,V.lerp(from.z,to.z,w),weight)}
+    end
     IK.solve(worlds,M.bones,M.index.UpperArmL,M.index.ForearmL,M.index.HandL,support,{x=-.55,y=-1,z=.2})
     IK.orient(worlds,M.bones,M.index.HandL,gun)
     scratch.support_error=V.length({x=worlds[M.index.HandL][4]-support.x,y=worlds[M.index.HandL][8]-support.y,z=worlds[M.index.HandL][12]-support.z})

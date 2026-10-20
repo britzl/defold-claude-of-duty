@@ -12,10 +12,11 @@ local systems = {
     require "game.systems.player",
     require "game.systems.weapons",
     require "game.systems.ai",
+    require "game.systems.grenades",
     require "game.systems.fx",
     (require "game.systems.audio"),
 }
-local fixed_scopes={"fixed.world","fixed.player","fixed.weapons","fixed.ai","fixed.fx","fixed.audio"}
+local fixed_scopes={"fixed.world","fixed.player","fixed.weapons","fixed.ai","fixed.grenades","fixed.fx","fixed.audio"}
 local M = {}
 
 function M.new(services)

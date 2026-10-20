@@ -41,6 +41,16 @@ function M.fire(state,position,direction,world_flash)
     e.velocity=V.point({x=0,y=.12,z=0},direction,.28)
     if world_flash then spawn(state,state.particles,1,position,direction,.22,.055,{1,.55,.12}) end
 end
+function M.explosion(state,blast)
+    local p=blast.position
+    spawn(state,state.particles,1,p,{x=0,y=1,z=0},2.6,.32,{1,.38,.06})
+    for i=1,5 do
+        local angle=i*2.399
+        local e=spawn(state,state.particles,0,{x=p.x+math.cos(angle)*.3,y=p.y+.1,z=p.z+math.sin(angle)*.3},
+            nil,.65,2.4,{.24,.22,.19})
+        e.velocity={x=math.cos(angle)*.55,y=.45+i*.06,z=math.sin(angle)*.55}
+    end
+end
 function M.update(state,dt)
     for _,items in ipairs({state.particles,state.decals}) do for _,e in ipairs(items) do
         if e.life>0 then
