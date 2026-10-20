@@ -130,27 +130,31 @@ local function furnish(layout,b,detail,seed)
     end
 end
 
-local function wall_anchor(id,point,supports)
-    local best,normal,distance
+local function wall_anchor(id,point,supports,mount)
+    local best,normal,distance,mounting_wall
     local axes,sizes={"x","y","z"},{"w","h","d"}
     for _,wall in ipairs(supports) do
         for face=1,3 do for _,side in ipairs({-1,1}) do
-            local p={}
-            for i,key in ipairs(axes) do
-                local half=wall[sizes[i]]/2
-                p[i]=i==face and wall[key]+side*half
-                    or math.max(wall[key]-half+.03,math.min(wall[key]+half-.03,point[i]))
-            end
-            local d=(p[1]-point[1])^2+(p[2]-point[2])^2+(p[3]-point[3])^2
-            if not distance or d<distance then
-                best,normal,distance=p,{0,0,0},d
-                normal[face]=side
+            -- Laundry runs parallel to the street facade. Corner faces and
+            -- ruin wall tops would pull its hanging span back into masonry.
+            if not mount or (face==1 and side==mount.side) then
+                local p={}
+                for i,key in ipairs(axes) do
+                    local half=wall[sizes[i]]/2
+                    p[i]=i==face and wall[key]+side*half
+                        or math.max(wall[key]-half+.03,math.min(wall[key]+half-.03,point[i]))
+                end
+                local d=(p[1]-point[1])^2+(p[2]-point[2])^2+(p[3]-point[3])^2
+                if not distance or d<distance then
+                    best,normal,distance,mounting_wall=p,{0,0,0},d,wall
+                    normal[face]=side
+                end
             end
         end end
     end
     assert(best,"Suspended dressing needs a structural wall anchor")
-    -- A visible fixing bridges the wall to an exterior endpoint. Keeping the
-    -- cord itself outside the wall also keeps its hanging cloth out of plaster.
+    -- Keep the wall fixing separate from the arm so both attachment points
+    -- remain visible. Laundry needs room for trim, balconies and shop awnings.
     local center,size={},{}
     for i=1,3 do
         center[i]=best[i]+normal[i]*.025
@@ -158,6 +162,20 @@ local function wall_anchor(id,point,supports)
         best[i]=best[i]+normal[i]*.06
     end
     box(id,"metal_rust",center[1],center[2],center[3],size[1],size[2],size[3],nil,nil,{unclipped=true})
+    if mount then
+        local tip={best[1]+mount.side*(mount.offset-.06),best[2],best[3]}
+        kit.beam(id.."/arm","metal_rust",best,tip,.045)
+        if mount.offset>.6 then
+            local brace_z=best[3]+(best[3]<mounting_wall.z and .25 or -.25)
+            brace_z=math.max(mounting_wall.z-mounting_wall.d/2+.03,
+                math.min(mounting_wall.z+mounting_wall.d/2-.03,brace_z))
+            kit.beam(id.."/brace","metal_rust",{best[1],best[2],brace_z},
+                {tip[1]-mount.side*.15,tip[2],tip[3]},.035)
+            box(id.."/brace_mount","metal_rust",center[1],center[2],brace_z,
+                size[1],size[2],size[3],nil,nil,{unclipped=true})
+        end
+        return tip
+    end
     return best
 end
 
@@ -220,8 +238,9 @@ function M.generate(layout,detail,seed,supports)
     end
     for i,p in ipairs(d.laundry or {}) do
         local id="dressing/laundry/"..i
-        local a=wall_anchor(id.."/anchor/start",{p[1],p[2],p[3]},supports)
-        local b=wall_anchor(id.."/anchor/end",{p[4],p[5],p[6]},supports)
+        local mount={side=p[1]<0 and 1 or -1,offset=p.stand_off or .4}
+        local a=wall_anchor(id.."/anchor/start",{p[1],p[2],p[3]},supports,mount)
+        local b=wall_anchor(id.."/anchor/end",{p[4],p[5],p[6]},supports,mount)
         kit.cable(id,a,b,.18)
         local yaw=math.atan2(b[1]-a[1],b[3]-a[3])
         for j=1,4 do

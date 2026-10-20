@@ -128,7 +128,7 @@ def attachment_probes(shapes):
     for s in shapes:
         name = s['id']
         building = name.split('/')[0]+'/'
-        if '/pipe/mount/' in name or '/anchor/' in name:
+        if '/pipe/mount/' in name or ('/anchor/' in name and not name.endswith(('/arm', '/brace'))):
             # Find the wall immediately behind the fixing, in any orientation.
             start = point(s)
             candidates = []
@@ -184,8 +184,34 @@ def attachment_probes(shapes):
                 beam = by_id[f'{prefix}/{segment}']
                 a = point(beam, (0, sign*beam['h']/2, 0))
                 anchor = by_id[f'{prefix}/anchor/{edge}']
-                assert ray_box(a, a, anchor) is not None, 'Cable misses its fixing: '+prefix+'/'+edge
+                arm = by_id.get(anchor['id']+'/arm')
+                if arm:
+                    root = point(arm, (0, -arm['h']/2, 0))
+                    tip = point(arm, (0, arm['h']/2, 0))
+                    assert ray_box(root, root, anchor) is not None, 'Laundry arm misses its wall fixing: '+anchor['id']
+                    assert math.dist(a, tip) < 1e-8, 'Laundry misses its support arm: '+anchor['id']
+                else:
+                    assert ray_box(a, a, anchor) is not None, 'Cable misses its fixing: '+prefix+'/'+edge
     return probes
+
+
+def laundry_clearance(shapes):
+    architecture = [(s, bounds(s)) for s in shapes
+                    if s['id'].split('/')[0].startswith(('W', 'E', 'B'))]
+    cloths = [s for s in shapes if s['id'].startswith('dressing/laundry/') and '/cloth/' in s['id']]
+    for cloth in cloths:
+        a = bounds(cloth)
+        for structure, b in architecture:
+            assert not all(a[i] < b[i+3]-1e-6 and b[i] < a[i+3]-1e-6 for i in range(3)), (
+                'Laundry intersects architecture: '+cloth['id']+' / '+structure['id'])
+
+    # The reported E2 span belongs in the masonry band between window rows.
+    # A stand-off alone would stop clipping but still drape cloth over the opening.
+    window = next(s for s in shapes if s['id'] == 'E2/window/1/-3.25/lintel')
+    for cloth in cloths:
+        if cloth['id'].startswith('dressing/laundry/4/'):
+            assert bounds(cloth)[1] > bounds(window)[4]+.1, 'Laundry hangs across the E2 window'
+    return len(cloths)
 
 
 def main():
@@ -198,6 +224,8 @@ def main():
     print(f'PASS no disconnected decoration groups among {len(shapes)} generated shapes')
     probes = attachment_probes(shapes)
     print(f'PASS {len(probes)} structural attachment probes and all cable/laundry endpoints')
+    count = laundry_clearance(shapes)
+    print(f'PASS all {count} laundry cloths clear architecture and the E2 window opening')
     if args.probes:
         args.probes.parent.mkdir(parents=True, exist_ok=True)
         args.probes.write_text(json.dumps(probes, indent=2)+'\n')
