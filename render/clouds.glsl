@@ -1,24 +1,10 @@
-// Two static shell decks adapted from src/sky/clouds.js (MIT).
-#include "/render/sky_noise.glsl"
-float cloud_density(vec2 p) {
-    float macro=clamp(.5+.5*(.42*sin(p.x*.09064+.7)*cos(p.y*.07282-.4)
-        +.36*sin(p.x*.03806-p.y*.04598+1.9)+.30*cos(p.x*.019162+p.y*.024706-.6)),0.0,1.0);
-    float coverage=.46*(.34+1.30*macro);
-    vec2 warp=vec2(skVal2(p*.42),skVal2(p*.42+19.7))-.5;
-    float n=skFbm2(p*.75+warp*1.6,4);
-    float d=smoothstep(1.0-coverage,1.05-coverage*.34,n);
-    return clamp(d-(1.0-d)*(.50-.50*skRidge2(p*3.2+warp*2.0,2)),0.0,1.0);
-}
-float cloud_shadow(vec2 p,vec3 key) {
-    if(atmo_options.z<.5 || key.y<=0.0) return 1.0;
-    vec2 deck=p*.001+key.xz*(1.5/max(.05,key.y));
-    return exp(-cloud_density(deck)*1.9*2.1);
-}
+// Two drifting shell decks adapted from src/sky/clouds.js (MIT).
+#include "/render/cloud_density.glsl"
 vec4 at_clouds(vec3 d,vec3 ambient) {
     if(d.y<-.008 || atmo_options.z<.5) return vec4(0);
     vec3 key=atmo_key.xyz;float c=dot(d,key);
     float high=at_sphere(AT_VIEW,d,6.3678);
-    vec2 p=d.xz*high*1000.0;
+    vec2 p=d.xz*high*1000.0+weather_data.xy*1.4;
     // Decorrelated, bounded bearings and broken fibres avoid a radial starburst.
     float angle=.24+(skVal2(p*.135)-.5)*1.1;
     mat2 turn=mat2(cos(angle),sin(angle),-sin(angle),cos(angle));
@@ -31,7 +17,7 @@ vec4 at_clouds(vec3 d,vec3 ambient) {
     vec3 high_light=at_transmittance(vec3(0,6.3678,0),key)*atmo_irradiance.rgb;
     vec3 high_colour=high_light*(at_hg(c,.74)*3.2+.60)/AT_PI+ambient*.85;
     float low=at_sphere(AT_VIEW,d,6.3615);
-    p=d.xz*low*1000.0;
+    p=d.xz*low*1000.0+weather_data.xy;
     float footprint=max(length(dFdx(p)),length(dFdy(p)));
     float base=cloud_density(p);
     p+=d.xz*(.85*base/max(.10,d.y));

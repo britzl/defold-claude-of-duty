@@ -21,7 +21,10 @@ function M.bytes(w,h,hdr,o)
     for _,r in pairs(M.resources(w,h,o)) do bytes=bytes+r[1]*r[2]*(r[3] and hdr and 8 or 4);count=count+1 end
     return bytes,count
 end
-function M.exposure_limits(lighting) return lighting=="night" and .8 or .65,lighting=="night" and 1.3 or 1.8 end
+function M.exposure_limits(lighting)
+    local night=type(lighting)=="number" and math.max(0,math.min(1,lighting)) or lighting=="night" and 1 or 0
+    return .65+.15*night,1.8-.5*night
+end
 -- Seconds are capped after stalls; a paused or frozen capture never evolves.
 function M.delta(dt,paused,capture) return (paused or capture) and 0 or math.max(0,math.min(dt or 0,.1)) end
 return M

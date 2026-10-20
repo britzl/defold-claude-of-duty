@@ -1,5 +1,6 @@
 #include "/render/radiance.glsl"
 #include "/render/daylight.glsl"
+#include "/render/cloud_density.glsl"
 #include "/render/environment_sampling.glsl"
 #include "/render/ggx.glsl"
 uniform highp vec4 eye_position;
@@ -62,7 +63,7 @@ vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec
 #ifdef WORLD_SCREEN_OCCLUSION
     screen_visibility=mix(vec2(1.0),texture2D(occlusion_texture,gl_FragCoord.xy*screen_effects.xy).rg,screen_effects.zw);
 #endif
-    visibility=min(visibility,screen_visibility.y);
+    visibility=min(visibility,screen_visibility.y)*cloud_shadow(p.xz,sun_direction.xyz);
     vec3 v=normalize(eye_position.xyz-p);
     vec3 sun=normalize(sun_direction.xyz);
     vec3 result=brdf(albedo,roughness,metal,n,v,sun)*sun_radiance.rgb*visibility;

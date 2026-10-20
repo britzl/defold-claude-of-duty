@@ -1,4 +1,5 @@
 varying highp vec2 var_uv;
+uniform highp vec4 bake_region; // normalized y offset, height
 #include "/render/radiance.glsl"
 #include "/render/sky.glsl"
 #include "/render/environment_sampling.glsl"
@@ -10,7 +11,7 @@ vec2 sample_point(int index) {
     return vec2((float(index)+.5)/128.0,r);
 }
 void main() {
-    vec2 pixel=var_uv*environment_layout.y*vec2(6,environment_layout.w);
+    vec2 pixel=vec2(var_uv.x,bake_region.x+var_uv.y*bake_region.y)*environment_layout.y*vec2(6,environment_layout.w);
     vec2 tile=floor(pixel/environment_layout.y);
     vec2 uv=(pixel-tile*environment_layout.y-1.0)/environment_layout.x;
     float row=tile.y;

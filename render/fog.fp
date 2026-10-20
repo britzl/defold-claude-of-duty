@@ -1,6 +1,6 @@
 varying highp vec2 var_uv;
 #include "/render/fog.glsl"
-#include "/render/clouds.glsl"
+#include "/render/cloud_density.glsl"
 #include "/render/shadows.glsl"
 // Four bilinear comparisons, no surface bias/PCSS in empty air.
 float fog_cascade(int c,vec3 p) {
@@ -34,7 +34,9 @@ void main() {
         // Every segment integrates its FULL length; jitter moves only the sample.
         float t=mix(start,end,.15+.70*jitter),dt=end-start;
         vec3 p=eye+dir*t;
-        float density=exp(clamp(-p.y*fog_data.y,-40.0,8.0));
+        // Low-frequency advected density preserves broad shafts without crawling noise.
+        float flow=sin(p.x*.045+weather_data.z*.08)*cos(p.z*.038-weather_data.z*.055);
+        float density=exp(clamp(-p.y*fog_data.y,-40.0,8.0))*(1.0+.16*flow);
         float visible=fog_visibility(p)*mix(cloud_near,cloud_far,t/max(distance_to_end,.001));
         vec3 ext=fog_tint.rgb*fog_data.w*density;
         vec3 segment=exp(-ext*dt);

@@ -32,6 +32,9 @@ function M.configure(self, data)
     elseif data.kind == "renderer" then
         self.renderer_settings = renderer.configure(self.renderer_settings, { [data.key]=data.value })
         msg.post("@render:", "renderer_configure", self.renderer_settings)
+        if data.key=="hour" or data.key=="lighting" then
+            msg.post("@render:", "renderer_atmosphere_seek", {hour=self.renderer_settings.hour})
+        end
     elseif data.kind == "input" and data.key == "sensitivity" then controls.configure(self.ui, data.value)
     else error("Unknown setting") end
     M.publish(self)

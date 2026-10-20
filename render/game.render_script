@@ -3,6 +3,7 @@
 local settings=require "game.render.settings"
 local atlas=require "game.render.surface_atlas"
 local daylight=require "game.render.daylight"
+local atmosphere=require "game.render.atmosphere"
 local shadows=require "game.render.shadows"
 local temporal=require "game.render.temporal"
 local local_lights=require "game.render.local_lights"
@@ -111,15 +112,22 @@ local function release_bake_scratch(self)
         render.delete_render_target(self.targets[name]);self.targets[name]=nil
     end
 end
+local function set_atmosphere(constants,rig,options,time)
+    local values=daylight.constants(vmath.vector4,rig,options.clouds)
+    values.daylight_data[7]=atmosphere.weather(vmath.vector4,time,options)
+    for name,value in pairs(values) do constants[name]=value end
+end
 local function atmosphere_constants(self)
-    self.rig=daylight.rig(self.options.lighting)
-    for _,constants in ipairs({self.lighting,self.bake_constants,self.sky_constants,self.post_constants,self.reflection_constants,self.fog_constants}) do
-        for name,value in pairs(daylight.constants(vmath.vector4,self.options.lighting,self.options.clouds)) do constants[name]=value end
+    self.rig=self.weather.rig
+    for _,constants in ipairs({self.lighting,self.sky_constants,self.post_constants,self.reflection_constants,self.fog_constants}) do
+        set_atmosphere(constants,self.rig,{clouds=self.weather.clouds,cloud_shadows=self.options.cloud_shadows},self.weather.shown_time)
     end
 end
 local function bake_environment(self)
-    -- Complete both targets before world draws. Preset changes cannot expose a
-    -- new key light with the previous sky/reflections, even on discard-on-load GPUs.
+    -- Initial loading/context rebakes complete both targets before world draws.
+    -- Runtime changes use the staged path below.
+    set_atmosphere(self.bake_constants,self.weather.rig,self.options,self.weather.shown_time)
+    self.bake_constants.bake_region=vmath.vector4(0,1,0,0)
     render.set_render_target(self.targets.sky)
     render.set_viewport(0,0,daylight.sky_width,daylight.sky_height)
     fullscreen(self,"atmosphere",self.bake_constants)
@@ -130,6 +138,57 @@ local function bake_environment(self)
     render.disable_texture("sky_texture")
     self.environment_updates=self.environment_updates+1
     self.environment_dirty=false
+    self.report=true
+end
+local function atmosphere_copy(self,target,source,w,h,next_target,blend,environment)
+    render.set_render_target(target)
+    render.set_viewport(0,0,w,h)
+    bind("source_texture",source);bind("next_texture",next_target or source)
+    self.mix_constants.atmosphere_mix=vmath.vector4(blend or 0,next_target and 0 or 1,environment and 1 or 0,8/9)
+    fullscreen(self,"atmosphere_mix",self.mix_constants)
+    render.disable_texture("source_texture");render.disable_texture("next_texture")
+    self.weather_draws=self.weather_draws+1
+end
+local function animate_atmosphere(self,dt)
+    local s,t=self.weather,self.targets
+    self.weather_draws=0
+    local forced=s.forced
+    local phase,index,committed=atmosphere.step(s,self.options,dt,self.photo_state.paused or not self.shadow_cache_ready,self.capture.active)
+    if not phase then return end
+    if phase=="begin" then
+        -- Hold the current complete pair while the new pair is built in strips.
+        for _,name in ipairs({"sky","environment"}) do
+            local w,h=name=="sky" and daylight.sky_width or daylight.environment_width,name=="sky" and daylight.sky_height or daylight.environment_height
+            atmosphere_copy(self,t[name.."_previous"],t[name],w,h)
+        end
+        set_atmosphere(self.bake_constants,s.pending,self.options,s.pending_time)
+    elseif phase=="sky" or phase=="environment" then
+        local count=phase=="sky" and atmosphere.sky_slices or atmosphere.environment_slices
+        local w,h=phase=="sky" and daylight.sky_width or daylight.environment_width,phase=="sky" and daylight.sky_height or daylight.environment_height
+        local pending,scratch=phase.."_pending",phase.."_scratch"
+        -- A complete preservation draw and one strip share a render pass;
+        -- Metal's DONT_CARE load action cannot discard earlier strips.
+        atmosphere_copy(self,t[scratch],index==1 and t[phase.."_previous"] or t[pending],w,h)
+        render.set_viewport(0,(index-1)*h/count,w,h/count)
+        self.bake_constants.bake_region=vmath.vector4((index-1)/count,1/count,0,0)
+        if phase=="environment" then bind("sky_texture",t.sky_pending) end
+        fullscreen(self,phase=="sky" and "atmosphere" or "environment",self.bake_constants)
+        if phase=="environment" then render.disable_texture("sky_texture") end
+        t[pending],t[scratch]=t[scratch],t[pending]
+        self.weather_draws=self.weather_draws+1
+    else
+        for _,name in ipairs({"sky","environment"}) do
+            local w,h=name=="sky" and daylight.sky_width or daylight.environment_width,name=="sky" and daylight.sky_height or daylight.environment_height
+            -- At an endpoint copy raw values to retain exact RGBA8 pixels.
+            atmosphere_copy(self,t[name],committed and t[name.."_pending"] or t[name.."_previous"],w,h,
+                not committed and t[name.."_pending"] or nil,index,name=="environment")
+        end
+        atmosphere_constants(self)
+        if committed then
+            self.environment_updates=self.environment_updates+1
+            if forced then temporal.reset(self.temporal,"atmosphere_seek");self.exposure_valid=false end
+        end
+    end
     self.report=true
 end
 -- Defold 1.14 has 1024 render-script commands per update. Reserve 128 for
@@ -251,11 +310,16 @@ local function report(self)
         fog_width=self.occlusion_width,fog_height=self.occlusion_height })
     -- Keep settings separate: WebGL's message payload is limited to 2040 bytes.
     msg.post("main:/controller#script","renderer_configuration",{settings=self.options,pipeline=self.pipeline})
+    msg.post("main:/controller#script","renderer_atmosphere",{
+        solar_hour=self.weather.rig.hour,requested_hour=self.weather.hour,weather_time=self.weather.shown_time,
+        requested_weather_time=self.weather.time,atmosphere_stage=self.weather.stage,atmosphere_blend=self.weather.blend or 0,
+        atmosphere_update_draws=self.weather_draws or 0,atmosphere_update_slices=atmosphere.sky_slices+atmosphere.environment_slices,
+        sun_direction=self.rig.sun_direction,solar_direction=self.rig.solar_direction,night_amount=self.rig.night})
     msg.post("main:/controller#script","renderer_photographic",{
         bloom_levels=photographic.quality(self.options.photographic_quality).levels,bloom_draw_passes=self.bloom_draw_passes or 0,
         exposure_draw_passes=self.exposure_draw_passes or 0,lens_draw_passes=self.lens_draw_passes or 0,
         photographic_target_bytes=photographic.bytes(self.width,self.height,self.pipeline.hdr,self.options),
-        exposure_limits={photographic.exposure_limits(self.options.lighting)},ads_dof_amount=self.photo_state.ads*self.options.ads_dof,
+        exposure_limits={photographic.exposure_limits(self.rig.night)},ads_dof_amount=self.photo_state.ads*self.options.ads_dof,
         grade_size=photographic.grade_size,grade_space="display_srgb",photographic_quality=self.options.photographic_quality,
         grain_time=self.capture.active and 0 or self.grain_time })
 end
@@ -293,6 +357,9 @@ function init(self)
     self.bake_frames,self.bake_peak_commands=0,0
     self.bake_jobs=atlas.jobs()
     self.light_count=0
+    self.weather=atmosphere.new(self.options)
+    self.mix_constants=render.constant_buffer()
+    self.mix_constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
     self.environment_updates=0
     self.environment_dirty=true
     self.volume_count=0
@@ -349,11 +416,16 @@ function init(self)
     bake_scratch(self)
     self.targets.environment=colour_target(daylight.environment_width,daylight.environment_height,false,false,false,self.radiance_format)
     self.targets.sky=colour_target(daylight.sky_width,daylight.sky_height,false,false,false,self.radiance_format)
+    for _,suffix in ipairs({"_previous","_pending","_scratch"}) do
+        self.targets["sky"..suffix]=colour_target(daylight.sky_width,daylight.sky_height,false,false,false,self.radiance_format)
+        self.targets["environment"..suffix]=colour_target(daylight.environment_width,daylight.environment_height,false,false,false,self.radiance_format)
+    end
     resize(self)
     render.set_listener(function(_,event)
         if event==render.CONTEXT_EVENT_CONTEXT_RESTORED then
             -- Runtime render-target contents are transient across context loss.
             self.bake_step=0
+            self.weather.stage=0;self.weather.pending=nil;self.weather.forced=true
             self.shadow_cached_fits=nil
             self.grade_ready=false;self.exposure_valid=false
             temporal.reset(self.temporal,"context_restored")
@@ -378,6 +450,7 @@ function update(self,dt)
     local t,o=self.targets,self.options
     if not baking then
         if self.environment_dirty then bake_environment(self) end
+        animate_atmosphere(self,dt)
         -- Capture the same interpolated camera used by the world and weapon.
         local view=camera.get_view(WORLD_CAMERA)
         local projection=camera.get_projection(WORLD_CAMERA)
@@ -868,14 +941,18 @@ function on_message(self,id,message)
     elseif id==hash("capture_configure") then
         self.shadow_cached_fits=nil
         self.capture=message
+        if message.active then
+            atmosphere.seek(self.weather,self.options.hour,self.options.weather_time)
+        end
         self.exposure_valid=false
         temporal.reset(self.temporal,"capture")
+    elseif id==hash("renderer_atmosphere_seek") then
+        atmosphere.seek(self.weather,message.hour,message.time)
+        self.report=true
     elseif id==hash("renderer_configure") then
         self.shadow_cached_fits=nil
         local next_options=settings.configure(self.options,message)
-        if next_options.lighting~=self.options.lighting or next_options.clouds~=self.options.clouds then
-            self.environment_dirty=true
-        end
+        atmosphere.configure(self.weather,self.options,next_options)
         local reallocate=next_options.photographic_quality~=self.options.photographic_quality or
             next_options.ads_dof~=self.options.ads_dof or next_options.motion_blur~=self.options.motion_blur
         self.options=next_options

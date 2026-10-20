@@ -32,7 +32,7 @@ def main():
         engine.wait_until(lambda:cmd('world.snapshot')['ready'] and stats()['ready'],timeout=90)
         game.resize(640,360);game.wait_frames(35)
         s=stats();game.resize(round(1280*640/s['width']),round(720*360/s['height']));game.wait_frames(35)
-        assert stats()['target_count']==43
+        assert stats()['target_count']==50
         original=stats()['settings'];initial_bakes=stats()['bake_draws']
         for name in ['street','interior','sunset','night','sky_daylight','sky_sunset','sky_night','window_shafts','moon','weapon','ads']:
             shot(name);first=save(name)

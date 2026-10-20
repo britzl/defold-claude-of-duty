@@ -19,7 +19,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4*4)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -29,7 +29,7 @@ test("HDR requires a qualified backend and format; compatibility remains explici
     assert(not settings.pipeline({family="metal"},nil,"auto").hdr)
     assert(not settings.pipeline({family="metal"},1,"rgba8").hdr)
     assert(not pcall(settings.pipeline,{family="metal"},1,"unknown"))
-    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==36680544-320*180*8+photo.bytes(1280,720,true,settings.defaults())-photo.bytes(1280,720,false,settings.defaults()))
+    assert(settings.target_bytes(1280,720,true)-settings.target_bytes(1280,720,false)==36680544-320*180*8+3*(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4+photo.bytes(1280,720,true,settings.defaults())-photo.bytes(1280,720,false,settings.defaults()))
 end)
 
 test("camera light selection covers all enterable buildings and floors within four slots",function()
@@ -183,7 +183,7 @@ test("recipes, padded mip chains and filtered environment finish before the worl
         assert(self.lighting.surface_infos[i].args[2]==s.size)
         assert(self.lighting.surface_parameters[i].args[1]==s.parallax)
     end
-    assert(#targets==47)
+    assert(#targets==53)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -263,7 +263,7 @@ test("heat distortion uses a separate offset target and skips work when disabled
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==47 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==53 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -299,6 +299,7 @@ test("occlusion toggles skip work, diagnostics retain depth, and weapon never sa
 end)
 test("capture isolates the laboratory, hides HUD/actors, and restores ordinary passes",function()
     on_message(self,"capture_configure",{active=true,laboratory=true})
+    for _=1,19 do update(self) end
     draws={};update(self)
     assert(draws[1].predicate=="capture_lab_shadow" and draws[9].predicate=="capture_lab")
     for _,draw in ipairs(draws) do
@@ -331,7 +332,7 @@ end)
 test("capture history converges, holds and invalidates without retaining stale targets",function()
     on_message(self,"renderer_configure",{temporal_aa=true,weapon_aa=true,view="scene"})
     on_message(self,"capture_configure",{active=true,laboratory=false})
-    for _=1,40 do update(self) end
+    for _=1,60 do update(self) end
     assert(self.temporal.age==32 and self.temporal_draw_passes==0)
     local held=self.targets.history_b
     update(self);assert(self.targets.history_b==held)
@@ -340,7 +341,7 @@ test("capture history converges, holds and invalidates without retaining stale t
     assert(self.targets.history_b~=held)
     on_message(self,"capture_configure",{active=true,laboratory=false,temporal_live=true})
     for _=1,40 do update(self) end
-    assert(self.temporal.age==38 and self.temporal_draw_passes==1)
+    assert(self.temporal.age==20 and self.temporal_draw_passes==1)
     on_message(self,"capture_configure",{active=false,laboratory=false})
 end)
 test("world and weapon antialiasing can be toggled independently",function()
@@ -363,19 +364,25 @@ test("temporal diagnostics have their own output and never replace radiance hist
     on_message(self,"renderer_configure",{view="scene"});update(self)
     assert(self.temporal_constants.temporal_params.args[4]==0 and self.temporal_draw_passes==1)
 end)
-test("lighting and cloud changes replace sky and IBL together without rebaking surfaces",function()
+test("lighting and cloud changes stage complete pairs within the command budget",function()
     local previous=self.environment_updates
-    on_message(self,"renderer_configure",{lighting="sunset"})
-    draws={};update(self)
-    assert(self.environment_updates==previous+1 and self.bake_draws==atlas.draw_count)
-    assert(draws[1].material=="atmosphere" and draws[2].material=="environment")
-    assert(self.rig.name=="sunset" and self.temporal.reason=="settings")
+    local function seek(changes)
+        on_message(self,"renderer_configure",changes)
+        local before=self.environment_updates
+        for i=1,18 do
+            draws={};update(self,1/60)
+            assert(self.environment_updates==before and self.weather_draws<=2)
+        end
+        update(self,1/60)
+        assert(self.environment_updates==before+1 and self.bake_draws==atlas.draw_count)
+    end
+    seek({lighting="sunset"})
+    assert(self.rig.hour==19.2 and self.temporal.reason=="atmosphere_seek")
     local sun=daylight.rig("sunset").sun_direction
     assert(self.lighting.daylight_data[1].args[2]==sun[2])
-    update(self);assert(self.environment_updates==previous+1)
-    on_message(self,"renderer_configure",{clouds=false});update(self)
-    assert(self.environment_updates==previous+2 and self.bake_constants.atmosphere_data[3].args[3]==0)
-    on_message(self,"renderer_configure",{lighting="daylight",clouds=true});update(self)
+    seek({clouds=false})
+    assert(self.bake_constants.atmosphere_data[3].args[3]==0)
+    seek({lighting="daylight",clouds=true})
     assert(self.environment_updates==previous+3)
 end)
 test("fog uses world depth, supports analytic fallback, and skips all work when disabled",function()
@@ -440,6 +447,21 @@ test("static shadow caching copies depth and redraws animated casters every fram
     on_message(self,"renderer_configure",{shadows=true});update(self)
     assert(self.shadow_static_draw_passes==4)
     on_message(self,"capture_configure",{active=false,laboratory=false})
+end)
+test("continuous weather fits command capacity and retains history and allocations",function()
+    on_message(self,"capture_configure",{active=false,laboratory=false})
+    on_message(self,"renderer_photographic_state",{ads=0,paused=false})
+    on_message(self,"renderer_world_ready",{})
+    on_message(self,"renderer_configure",{weather_speed=10,time_rate=.1,view="scene",temporal_aa=true})
+    for _=1,30 do update(self,1/60) end
+    local resets,count,previous=self.temporal.resets,#targets,self.environment_updates
+    for _=1,120 do update(self,1/60);assert(self.temporal.resets==resets and #targets==count and self.weather_draws<=2) end
+    assert(self.environment_updates>previous+2)
+    on_message(self,"renderer_photographic_state",{ads=0,paused=true})
+    local hour,time,stage=self.weather.hour,self.weather.time,self.weather.stage
+    for _=1,30 do update(self,1) end
+    assert(self.weather.hour==hour and self.weather.time==time and self.weather.stage==stage)
+    on_message(self,"renderer_configure",{weather_speed=0,time_rate=0})
 end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     listener(nil,"restored");assert(self.bake_step==0)

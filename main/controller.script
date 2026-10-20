@@ -191,6 +191,7 @@ function init(self)
     if sys.get_config_int("soldier_validation.enabled",0)==1 then
         self.soldier_validation=require("tests.soldier_scenario").new()
     end
+    if sys.get_config_int("animated_atmosphere_validation.enabled",0)==1 then self.animated_atmosphere_validation=require("tests.animated_atmosphere_scenario").new() end
     if sys.get_config_int("effects_validation.enabled",0)==1 then self.effects_validation=require("tests.effects_scenario").new() end
     if sys.get_config_int("grenades_validation.enabled",0)==1 then
         self.grenades_validation=require("tests.grenades_scenario").new()
@@ -229,6 +230,13 @@ function init(self)
         automation_bridge.command("renderer.configure",function(data)
             self.renderer_settings=renderer_settings.configure(self.renderer_settings,data)
             msg.post("@render:","renderer_configure",self.renderer_settings)
+            -- An explicit address must work even when it equals the original
+            -- setting but the live clock has since advanced.
+            if data.hour~=nil or data.lighting~=nil or data.weather_time~=nil then
+                msg.post("@render:","renderer_atmosphere_seek",{
+                    hour=(data.hour~=nil or data.lighting~=nil) and self.renderer_settings.hour or nil,
+                    time=data.weather_time})
+            end
             ui.publish(self)
             return self.renderer_settings
         end)
@@ -236,7 +244,7 @@ function init(self)
             description="Read GPU bake progress, target sizes/budget, shadow frames and active renderer settings.",
             output_schema={type="object"}})
         automation_bridge.describe("command","renderer.configure",{
-            description="Set lighting daylight/sunset/night, clouds/volumetric_fog/fog_shadows/temporal_aa/weapon_aa/ambient_occlusion/contact_shadows/shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
+            description="Set lighting daylight/sunset/night, hour 0..24, time_rate -1..1 hours/second, weather_speed 0..10, weather_time 0..86400 seconds, cloud_shadows boolean, clouds/volumetric_fog/fog_shadows/temporal_aa/weapon_aa/ambient_occlusion/contact_shadows/shadows/normal_maps/local_lights/fog/bloom/weathering/micro_detail/parallax/interior_lighting/environment_filter booleans, exposure 0.25..4, or view scene/albedo/normals/material/shadow/environment/environment_atlas/hdr_probe; environment_level 0..7. Presentation only.",
             input_schema={type="object"},output_schema={type="object"}})
         automation_bridge.command("ai.snapshot",function() return ai_system.snapshot(self.ctx) end)
         automation_bridge.command("ai.validate_suppression",function()
@@ -515,6 +523,7 @@ function fixed_update(self, dt)
 end
 
 function update(self, dt)
+    if self.animated_atmosphere_validation then require("tests.animated_atmosphere_scenario").update(self.animated_atmosphere_validation,self,dt,restart_encounter) end
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then ui.sync_touch(self);return end
     runtime.update(self.ctx, dt)
@@ -675,7 +684,7 @@ function late_update(self, dt)
 
     if profiler then profiler.scope_begin("late.combat_fx") end
     combat_fx.update(self.combat_visuals,(self.ctx.paused or self.capture) and 0 or dt,go.get_rotation("/camera"),self.player_muzzle,
-        self.capture~=nil,self.renderer_settings.combat_effects,self.camera_position,self.renderer_settings.lighting=="night" and 0 or self.renderer_settings.lighting=="sunset" and .25 or 1)
+        self.capture~=nil,self.renderer_settings.combat_effects,self.camera_position,1-(self.renderer_stats.night_amount or 0))
     if profiler then profiler.scope_end() end
 
     if profiler then profiler.scope_begin("late.lights") end
@@ -799,7 +808,7 @@ end
 
 function on_message(self, message_id, message, sender)
     if message_id == hash("ui_action") then ui.action(self, message) end
-    if message_id == hash("renderer_stats") or message_id == hash("renderer_details") or message_id == hash("renderer_photographic") or message_id == hash("renderer_configuration") then
+    if message_id == hash("renderer_stats") or message_id == hash("renderer_atmosphere") or message_id == hash("renderer_details") or message_id == hash("renderer_photographic") or message_id == hash("renderer_configuration") then
         for k,v in pairs(message) do self.renderer_stats[k]=v end
     end
     if message_id == APPLY_DAMAGE then combat.request(self.ctx.combat, message) end

@@ -11,7 +11,7 @@ function M.snapshot(self)
         weapon=c.shot.weapon or "hidden",laboratory=c.shot.laboratory or false,
         simulation_tick=self.ctx.time.tick,lab_meshes=self.capture_lab and #self.capture_lab.objects or 0,
         lab_vertices=self.capture_lab and self.capture_lab.vertices or 0,
-        lighting={mode="fixed_presets",rig=require("game.render.daylight").snapshot(self.renderer_settings.lighting),clouds=self.renderer_settings.clouds,exposure=self.renderer_settings.exposure},catalog_version=shots.version}
+        lighting={mode="fixed_presets",rig=require("game.render.daylight").snapshot(self.renderer_settings.hour),clouds=self.renderer_settings.clouds,exposure=self.renderer_settings.exposure},catalog_version=shots.version}
 end
 function M.finish(self)
     if not self.capture then return M.snapshot(self) end
@@ -42,7 +42,7 @@ function M.select(self,data)
     self.ctx.capture_active=true
     local dynamics=self.ctx.services.dynamics
     if dynamics then dynamics.api.suspend(dynamics,true) end
-    self.renderer_settings=settings.configure(settings.defaults(),{lighting=shot.lighting or "daylight",clouds=shot.clouds~=false,auto_exposure=false})
+    self.renderer_settings=settings.configure(settings.defaults(),{lighting=shot.lighting or "daylight",clouds=shot.clouds~=false,auto_exposure=false,weather_speed=0,weather_time=0,time_rate=0})
     self.active_lights=nil
     input.reset(self.ctx.input)
     window.set_mouse_lock(false)

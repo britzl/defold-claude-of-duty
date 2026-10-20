@@ -556,14 +556,20 @@
         "threejs:src/sky/index.js",
         "kaigen:src/claude_of_duty/cod_look_sky.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Capture fixed day/sunset/night indoors/outdoors, then animate time and cloud cover across a full transition.",
       "expect": "Consistent light/environment/shadows, moving cloud influence and no stale reflection or temporal trails.",
       "coverage": [
         "tests/atmosphere_test.lua",
         "tests/atmosphere_smoke.py",
-        "tests/lighting_smoke.py"
-      ]
+        "tests/lighting_smoke.py",
+        "tests/animated_atmosphere_scenario.lua",
+        "tests/animated_atmosphere_smoke.py",
+        "tests/animated_atmosphere_pixels.py",
+        "tools/validate_animated_atmosphere_browser.mjs",
+        "tests/renderer_test.lua"
+      ],
+      "implementation_notes": "Continuous solar/lunar time with twilight/horizon fade and midnight wrap; independent presentation weather clock drives reference-speed cloud decks, surface cloud shadows and advected volumetric density. Eight sky strips and nine filtered-environment rows build behind a complete displayed pair, at most two update draws per frame, then radiance/direct-light/shadow/weather inputs blend over 0.2 seconds without TAA resets. Explicit seeks publish after 19 updates and reset history; capture, pause and focus freeze clocks. Six staging targets add 12.134 MiB HDR / 6.067 MiB RGBA8; weather occupies the existing lighting constant array. Native Metal and release Chrome WebGL each pass eight checks, 18 captures and 13 pixel gates, including an eight-hour sunset/midnight transition and three restarts. Existing fixed native suite passes eleven exact view returns. The 61-degree map rotation, delayed sampled blending, single shadowed key, approximate scattering/night radiometry and mean-density fog extinction remain adaptations. Aligned reference lighting, controlled Kaigen, GPU cost and sustained 60 FPS qualification remain open."
     },
     {
       "id": "render-pipeline",

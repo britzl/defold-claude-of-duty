@@ -65,7 +65,7 @@ function M.draw(self,scene,weapon,dt,context,draw,bind)
             c.meter=vmath.vector4(1,1/(n*4),1/(n*4),0)
             pass("exposure",t["meter_"..i],n,n)
         end
-        local lo,hi=photo.exposure_limits(o.lighting)
+        local lo,hi=photo.exposure_limits(self.rig.night)
         c.adaptation=vmath.vector4(elapsed,(not self.exposure_valid or capture_fixed) and 1 or 0,lo,hi)
         c.meter=vmath.vector4(2,0,0,0)
         render.set_render_target(t.exposure_a)

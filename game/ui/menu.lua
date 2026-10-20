@@ -27,7 +27,11 @@ local specs = {
     },
     atmosphere = {
         {key="lighting",label="LIGHTING",kind="renderer",choices={"daylight","sunset","night"}},
+        {key="hour",label="SOLAR HOUR",kind="renderer",min=0,max=24,step=.25},
+        {key="time_rate",label="HOURS PER SECOND",kind="renderer",min=0,max=1,step=.05},
+        {key="weather_speed",label="WEATHER SPEED",kind="renderer",min=0,max=10,step=.5},
         {key="clouds",label="CLOUD LAYERS",kind="renderer"},
+        {key="cloud_shadows",label="CLOUD SHADOWS",kind="renderer"},
         {key="fog",label="FOG",kind="renderer"},
         {key="volumetric_fog",label="VOLUMETRIC FOG",kind="renderer"},
         {key="fog_shadows",label="SHADOWED LIGHT SHAFTS",kind="renderer"},

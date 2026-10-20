@@ -26,6 +26,22 @@ The complete stress scenario remains unqualified while the remaining combat
 effects and sustained full-map measurements are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Animated atmosphere increment — 2026-10-20
+
+Step 14 implements continuous solar/lunar time, cloud drift, shared surface cloud
+shadows, advected fog and staged sky/environment updates. Complete endpoints
+blend with the direct-light/shadow rig; fixed capture poses remain reproducible.
+Native Metal and release Chrome WebGL pass eight shared checks, 18 captures and
+13 pixel gates each, including an eight-hour sunset/midnight sweep, pause/focus
+and three restarts. The 345-check standalone matrix covers scheduling, resources,
+clock wrapping, settings and temporal history; the native fixed-atmosphere suite
+also passes eleven exact view returns. See README.md for commands and limits.
+
+The source lock is refreshed without stale visual receipts. The existing map
+rotation, approximate scattering/night radiometry, delayed sampled blending and
+mean-density fog extinction are documented adaptations. Exact reference lighting,
+controlled Kaigen, GPU cost and sustained performance remain open.
+
 ## Enemy grenade increment — 2026-10-20
 
 Step 12 implements squad grants/cooldowns, one grenade per actor, an animated

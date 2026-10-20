@@ -38,6 +38,86 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Animated atmosphere (2026-10-20)
+
+Step 14 adds a presentation clock for solar time, drifting cloud decks, moving
+cloud shadows on world/soldier/weapon/glass lighting and advected volumetric fog.
+**Escape → Atmosphere** provides a solar-hour anchor, hours-per-second rate,
+weather speed and cloud-shadow toggle. Default solar time stays at 16:30 while
+clouds and fog move at normal speed. Pause and focus loss freeze both clocks and
+an update already in progress. These clocks never advance gameplay or consume
+its random streams. Encounter restart keeps the session's weather settings.
+
+`renderer.configure` accepts `hour` (0..24), `time_rate` (-1..1 solar hours per
+second), `weather_speed` (0..10), `weather_time` (0..86400 seconds for an addressed
+weather pose), and `cloud_shadows`. Selecting `lighting="daylight"|"sunset"|"night"`
+sets the hour anchor to 16.5/19.2/1.5. `renderer.snapshot` reports the actual
+`solar_hour`, `requested_hour`, displayed/requested weather time,
+`atmosphere_stage`, blend fraction and update draw count. Catalogue captures pin
+the clocks, including temporal camera sweeps; fixed weather poses return exactly.
+
+The reference's solar/lunar trajectories now work across all hours and midnight.
+Direct light fades through the horizon before its shadowed key changes between
+sun and moon. Both astronomical directions contribute atmospheric scattering
+through twilight; the visible discs remain at their own directions. Exposure
+limits and daytime heat follow the displayed transition. The existing 61-degree
+map rotation and approximate scattering/night radiometry remain adaptations.
+
+After loading, updates build a complete new sky and environment behind the
+currently displayed pair: eight 48-pixel sky strips, then nine environment rows,
+with at most two atmosphere-update draws per frame. Each strip shares a pass with
+a complete preservation copy, respecting Metal's discard-on-load targets.
+Continuous updates blend the complete radiance maps and their direct-light,
+shadow, cloud and fog inputs over 0.2 seconds. Temporal history is retained.
+Explicit seeks publish atomically after 19 render updates and reset history once
+at publication. Initial loading retains its bounded loading pipeline. This is a
+sampled, delayed weather update with smooth blends, not an every-frame sky bake.
+The linear BRDF lookup row and cloud alpha retain their own interpolation rules;
+RGBA8 endpoint copies preserve exact bytes. No additional surface sampler or
+uniform binding is needed: weather values occupy the existing lighting array,
+avoiding the Metal buffer-binding limit found during validation.
+
+Six persistent staging targets add **12.134 MiB on Metal HDR / 6.067 MiB on the
+encoded WebGL path**, independent of window size. Default high photographic
+settings now own 50 steady / 53 loading targets. Animation allocates no targets,
+does not regenerate material atlases, and finalization frees each target once.
+The environment keeps six reflection levels, 128 filter samples and its diffuse
+and BRDF rows. Cloud shading uses the same procedural deck as the visible sky;
+fog varies scattering density at low spatial frequencies while retaining the
+analytic mean-density extinction approximation.
+
+Validation commands:
+
+```sh
+lua tests/atmosphere_test.lua
+lua tests/renderer_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/atmosphere_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/animated_atmosphere_smoke.py
+# Build release wasm-web with tests/animated_atmosphere_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_animated_atmosphere_browser.mjs --bundle=/path/to/bundle
+python3 tests/animated_atmosphere_pixels.py build/animated_atmosphere-native-validation
+python3 tests/animated_atmosphere_pixels.py build/animated_atmosphere-browser-validation
+```
+
+The 34 standalone Lua suites pass **345 checks**. Native Metal passes all eleven
+fixed-view return comparisons, fog/shaft toggles, resize and camera-history checks.
+Native and release Chrome WebGL2/ANGLE Metal each exercise the shared eight-check,
+18-capture fixture and 13 pixel gates: drifting sky/reflections/fog, visible cloud
+shadow contribution, exact addressed returns, six full-market solar states,
+continuous sunset-to-midnight motion, pause/focus and three resource-stable
+restarts. The native framebuffer is 1920×1280 (captures saved at 960×640); WebGL
+renders at 960×640. Fixed comparisons disable adaptive photography and TAA; the
+live transition retains TAA and exposure adaptation. Reports and source/bundle
+fingerprints are under `build/animated_atmosphere-*-validation` and
+`captures/rendering/atmosphere-validation`.
+
+The full-map views establish this increment's behavior. Exact reference
+radiometry/cloud coverage, aligned source lighting, controlled Kaigen comparisons,
+GPU cost and sustained 60 FPS qualification remain open. A 1920×1280 native diagnostic recorded median renderer-script CPU time of
+0.266 ms fixed / 0.492 ms animated (p95 0.388 / 0.638 ms; 49 / 46 samples).
+These short CPU submission windows are not GPU timings or sustained-combat
+performance results.
+
 ## Combat and ambient effects (2026-10-20)
 
 Step 13 adds twelve surface recipes: concrete/plaster chips, cooling metal sparks,
@@ -2518,7 +2598,10 @@ recovery and sustained combat performance remain unqualified. Source geometry,
 matched time-of-day lighting and missing Kaigen captures still prevent claiming
 complete cross-engine visual parity or the final agreed-performance gate.
 
-## Atmosphere (rendering step 10)
+## Atmosphere (historical rendering step 10)
+
+The fixed-state implementation below predates step 14; the animated-atmosphere
+section above supersedes its update scheduling and resource counts.
 
 **Escape → Atmosphere** selects **Daylight**, **Sunset** or **Night** and toggles
 cloud layers, fog, volumetric integration and shadowed shafts. The existing
@@ -2589,7 +2672,7 @@ budgets. See `atmosphere-review/costs.json` for measurement scope and provenance
 
 This is a bounded adaptation of the reference atmosphere, not its full LUT and
 multiple-scattering implementation. Cloud detail is lookup-resolution limited;
-surface sunlight does not receive moving cloud shadows. Forced browser context
+surface sunlight originally did not receive moving cloud shadows; step 14 adds them. Forced browser context
 recovery, floating-point WebGL HDR, other native backends and physical mobile
 remain separate qualification gates. The local Kaigen engine remains unavailable.
 

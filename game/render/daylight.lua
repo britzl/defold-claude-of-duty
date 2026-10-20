@@ -1,4 +1,4 @@
--- Fixed reference celestial states. No simulation clocks or random streams.
+-- Shared fixed and continuous celestial states. No gameplay clocks or RNG.
 -- The reference's summer-solstice site is rotated 61 degrees into this map.
 local M={environment_size=64,environment_rows=9,reflection_levels=6,max_volumes=8,
     sky_width=768,sky_height=384,fog_steps=40}
@@ -38,27 +38,61 @@ function M.transmittance(mu,altitude,mie)
     end
     return {exp(-od[1]),exp(-od[2]),exp(-od[3])}
 end
-local states={}
-for _,preset in ipairs({{"daylight",16.5},{"sunset",19.2},{"night",1.5}}) do
-    local name,hour=preset[1],preset[2]
+M.hours={daylight=16.5,sunset=19.2,night=1.5}
+local function smooth(a,b,x)
+    local t=math.max(0,math.min(1,(x-a)/(b-a)));return t*t*(3-2*t)
+end
+function M.rig(name)
+    local hour=type(name)=="number" and name or M.hours[name or "daylight"]
+    assert(type(hour)=="number" and hour==hour and math.abs(hour)<math.huge,"Unknown lighting preset or invalid hour")
+    hour=hour%24
     local sun=direction(hour,23.44*math.sin(2*pi/365*(284+172)))
     local moon=direction(hour,28,244)
-    local night=name=="night"
-    local key=night and moon or sun
-    local spectrum=night and {.21,.255,.30} or {5.12,5.12,5.12}
-    local transmitted=M.transmittance(key[2])
+    local altitude=math.asin(sun[2])*180/pi
+    local night=1-smooth(-9,0,altitude)
+    -- The single shadowed key changes while both direct beams are dark.
+    -- Sky scattering retains both astronomical directions through twilight.
+    local lunar=1-smooth(-6,-3,altitude)
+    local is_moon=altitude < -2
+    local key=is_moon and moon or sun
+    local solar_spectrum={5.12,5.12,5.12,0}
+    local lunar_spectrum={.21*lunar,.255*lunar,.30*lunar,0}
+    local twilight=smooth(-12,-6,altitude)
+    for i=1,3 do solar_spectrum[i]=solar_spectrum[i]*twilight end
+    local spectrum=is_moon and lunar_spectrum or solar_spectrum
+    local transmitted=M.transmittance(math.max(.0008,key[2]))
+    local disc=smooth(-.00465,.00465,key[2])
     local direct,ground={},{ }
+    local solar=M.transmittance(math.max(.0008,sun[2]));local lunar_direct=M.transmittance(math.max(.0008,moon[2]))
     for i=1,3 do
-        direct[i]=spectrum[i]*transmitted[i]
+        direct[i]=spectrum[i]*transmitted[i]*disc
         ground[i]=direct[i]*math.max(0,key[2])*.24/pi
+        solar[i]=solar[i]*solar_spectrum[i]*smooth(-.00465,.00465,sun[2])
+        lunar_direct[i]=lunar_direct[i]*lunar_spectrum[i]*smooth(-.00465,.00465,moon[2])
     end
-    states[name]={name=name,hour=hour,sun_direction=key,sun_radiance=direct,
-        solar_direction=sun,moon_direction=moon,sky_horizon={0,0,0,0},sky_zenith={0,0,0,0},
-        ground_radiance=ground,sun_shape={0,0,0,0},indirect={1,1,.18,.025},
-        atmosphere_data={key,spectrum,{1,night and 1 or 0,1,0},sun,moon},
+    lunar_direct[4]=night
+    return {name=type(name)=="string" and name or "continuous",hour=hour,night=night,
+        sun_direction=key,sun_radiance=direct,solar_direction=sun,moon_direction=moon,
+        sky_horizon=lunar_direct,sky_zenith={0,0,0,0},ground_radiance=ground,sun_shape=solar,
+        indirect={1,1,.18,.025},atmosphere_data={key,spectrum,{1,night,1,0},sun,moon,solar_spectrum,lunar_spectrum},
         fog_data={.0044,.16,180,.006},fog_tint={.88,.96,1.08,0}}
 end
-function M.rig(name) assert(states[name or "daylight"],"Unknown lighting preset");return copy(states[name or "daylight"]) end
+-- Interpolate the same completed endpoints used by GPU radiance blending.
+function M.blend(a,b,t)
+    local function mix(x,y)
+        if type(x)=="number" then return x+(y-x)*t end
+        if type(x)~="table" then return y end
+        local r={};for k,v in pairs(x) do r[k]=mix(v,y[k]) end;return r
+    end
+    local r=mix(a,b)
+    r.hour=(a.hour+((b.hour-a.hour+12)%24-12)*t)%24
+    for _,k in ipairs({"sun_direction","solar_direction","moon_direction"}) do
+        local d=r[k];local len=sqrt(d[1]^2+d[2]^2+d[3]^2)
+        for i=1,3 do d[i]=d[i]/math.max(len,.000001) end
+    end
+    r.atmosphere_data[1]=r.sun_direction;r.atmosphere_data[4]=r.solar_direction;r.atmosphere_data[5]=r.moon_direction
+    return r
+end
 function M.snapshot(name)
     local r=M.rig(name)
     r.environment_width=M.environment_width;r.environment_height=M.environment_height
@@ -66,7 +100,7 @@ function M.snapshot(name)
     return r
 end
 function M.constants(vector,name,clouds)
-    local rig=M.rig(name)
+    local rig=type(name)=="table" and copy(name) or M.rig(name)
     local result={daylight_data={},atmosphere_data={}}
     local function v(t) return vector(t[1],t[2],t[3],t[4] or 0) end
     for i,key in ipairs({"sun_direction","sun_radiance","sky_horizon","sky_zenith","ground_radiance","sun_shape"}) do
@@ -80,5 +114,5 @@ function M.constants(vector,name,clouds)
     return result
 end
 -- Preserve the world-generator's default-light contract.
-for k,v in pairs(states.daylight) do M[k]=copy(v) end
+for k,v in pairs(M.rig("daylight")) do M[k]=copy(v) end
 return M
