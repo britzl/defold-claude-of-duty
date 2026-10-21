@@ -42,7 +42,7 @@ function M.init(ctx)
         synthesis_backend=backend,verify=sys and sys.get_config_int("audio_synthesis.verify",0)==1 or false,verified=0,
         fingerprints=sys and sys.get_config_int("audio_synthesis.fingerprints",0)==1 and {} or nil,
         recipes=synth.catalog(),cursor=1,clock=0,random=rng.new(ctx.world.seed,"audio/playback"),round={},
-        settings={master=.8,weapons=1,foley=.8,ambience=.6,muted=false},
+        settings={master=.8,weapons=1,foley=.8,ambience=.3,muted=false},
         played=0,completed=0,dropped=0,preempted=0,peak_voices=0,bytes=0,work=0,peak_job=0,loaded=0,
         by_kind={},last={},suspended=false,listener={position=copy(ctx.player.position),yaw=0}}
     ctx.audio=a
