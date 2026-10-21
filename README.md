@@ -1362,8 +1362,10 @@ restart and window resizing, saving review images in `build/ui-validation`.
 Physical mobile and browser UI/input validation remain separate work; this
 increment does not add gamepad or touch adapters.
 
-Two squads of three patrol the street and west courtyard/rear lane. Approach a
-patrol to trigger detection, shared squad alerts and combat. **9** restarts the
+Two squads of three patrol the far street, eastern ruin yard, western rear lane
+and far cross street. Enemy spawns and patrol endpoints stay at least 30 metres
+from the player start, leaving time to get oriented before advancing into combat.
+Approach a patrol to trigger detection, shared squad alerts and combat. **9** restarts the
 encounter with full player/enemy health, fresh weapons and ammunition.
 Inspection cameras pause enemy simulation. The separate world/movement/weapon
 smoke suites explicitly pause AI to isolate their fixtures.

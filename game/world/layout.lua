@@ -210,13 +210,17 @@ return {
         { id = "east_alley", x = 10.5, y = 0, z = 4.6, yaw = -math.pi/2 },
         { id = "west_alley", x = -9, y = 0, z = -10.2, yaw = math.pi/2 },
     },
+    -- Keep spawns and patrol endpoints at least 30 m from the player start,
+    -- leaving the opening market stretch clear until the player advances.
+    -- The exposed street patrol stays beyond the 58 m sight range; the side
+    -- patrols start behind buildings or the gate to break their line of sight.
     enemies = {
-        { id="enemy_1", squad="alpha", x=-1, y=0, z=-39, patrol={x=0,y=0,z=-27} },
-        { id="enemy_2", squad="alpha", x=2.6, y=0, z=-32, patrol={x=0,y=0,z=-20} },
-        { id="enemy_3", squad="alpha", x=10.5, y=0, z=4.6, patrol={x=23.5,y=0,z=-22} },
-        { id="enemy_4", squad="bravo", x=-18, y=0, z=7.5, patrol={x=-8,y=0,z=7.5} },
-        { id="enemy_5", squad="bravo", x=-23.5, y=0, z=3, patrol={x=-23.5,y=0,z=-5} },
-        { id="enemy_6", squad="bravo", x=-18, y=0, z=-10, patrol={x=-8,y=0,z=-10} },
+        { id="enemy_1", squad="alpha", x=1.25, y=0, z=-57, patrol={x=1.25,y=0,z=-50} },
+        { id="enemy_2", squad="alpha", x=23.5, y=0, z=-47, patrol={x=7.5,y=0,z=-47} },
+        { id="enemy_3", squad="alpha", x=23.5, y=0, z=-22, patrol={x=23.5,y=0,z=-31} },
+        { id="enemy_4", squad="bravo", x=-23.5, y=0, z=-20, patrol={x=-23.5,y=0,z=-30} },
+        { id="enemy_5", squad="bravo", x=-23.5, y=0, z=-38, patrol={x=-23.5,y=0,z=-28} },
+        { id="enemy_6", squad="bravo", x=-18, y=0, z=-47, patrol={x=-8,y=0,z=-47} },
     },
     views = {
         north_plaza = { position = { x = 0, y = 1.66, z = 41 }, yaw = 0, pitch = 0, title = "NORTH PLAZA" },
