@@ -38,6 +38,138 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Quality presets and Auto mode (2026-10-21)
+
+**Esc → Graphics → Quality** selects Auto, Low, Medium, High or Ultra.
+`quality.mode=auto` and `quality.target_fps=60` are the startup defaults.
+**Defaults: Auto quality** restores Auto
+starting at High. Changing an advanced quality setting selects Custom, so Auto
+will not overwrite it. Selections survive encounter restart. Touch uses the
+same Quality selector and Defaults button in its Display tab. Input preferences
+and audio gains are independent.
+
+| Preset | Scene scale | Cascade resolution | Material mip floor | FX density | Decals | Photography |
+| --- | --- | --- | --- | --- | --- | --- |
+| Low | 60% | 256 | 2 | 35% | 12 | Low, no lens effects |
+| Medium | 80% | 512 | 1 | 65% | 24 | Medium, ADS DOF |
+| High | 100% | 1,024 | 0 | 100% | 48 | High, blur and ADS DOF |
+| Ultra | 100% | 2,048 | 0 | 100% | 48 | High, blur and ADS DOF |
+
+Scale is applied to each scene dimension; final composition and HUD use the
+full framebuffer. Low disables AO/contact shadows, SSR, local shadows,
+volumetric fog, heat, microdetail and parallax. Medium retains AO, volumetric fog
+and microdetail but omits contact/local shadows, SSR, shadowed fog and heat.
+High and Ultra retain the existing full feature set. Ultra increases shadow
+resolution within the same bounded effects pools.
+
+Material quality selects resident generated mip levels and shading features.
+It **does not rebake or shrink the resident atlas**: `render.material_quality`
+remains the startup atlas capacity (medium by default). All passes retain the
+shared foliage coverage policy. Physics, navigation, AI, damage and simulation
+frequency do not change with quality. The fixed 220 FX meshes remain allocated;
+density reduces active particles, emission counts and collision work.
+
+Auto measures wall-clock update intervals using `socket.gettime()`, since engine
+dt can be capped. Two consecutive two-second windows over budget lower one tier.
+Twenty good seconds permit an upward probe. Failed probes back off for at least
+120 seconds, doubling up to 960 seconds. Loading, pause, focus loss, captures,
+diagnostic views, resizing and settling frames do not drive adaptation. This is
+a bounded frame-rate policy, not a GPU-time governor or a guarantee of 60 FPS.
+
+The shared native/release-WebGL fixture passes 11 checks per backend. Chromium
+also passes a real-mouse selector/Defaults check (12 total). Native records ten
+captures and Chromium eleven, covering all presets, resized Low views and menus.
+It changes presets while firing,
+with a live grenade and ragdoll, then checks ten quality/restart cycles for stable
+target counts/byte estimates and unchanged material bake counts. Capture settings
+are fixed and restore the user's selection. A further browser input run verifies
+touch quality selection and Defaults in four layouts. The 111 focused Lua checks include ten new checks for timing
+hysteresis, invalid settings, resource estimates, shadow resolution and FX bounds.
+
+```sh
+lua tests/quality_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/quality_smoke.py
+# Bundle release wasm-web with tests/quality_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_quality_browser.mjs \
+  --bundle="/path/to/Claude of Duty" --browser="/path/to/Chrome"
+```
+
+For release workloads, bundle with `tests/sustained.project`. Both runners default
+to three fresh processes/pages with 60 seconds of warm-up and 300 seconds of
+sampling. Run backends sequentially on the same machine. The Mac runner's default
+640×360 logical window produces a 1280×720 framebuffer on the target Retina Mac;
+change `--window-width`/`--window-height` on other displays. Both runners reject an
+unexpected framebuffer size or debug engine.
+
+```sh
+python3 tests/sustained_profile.py \
+  --executable="/path/to/Claude of Duty.app/Contents/MacOS/ClaudeofDuty" \
+  --output=build/quality-performance-native
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/profile_sustained_browser.mjs \
+  --bundle="/path/to/Claude of Duty" --browser="/path/to/Chrome" \
+  --output=build/quality-performance-browser
+```
+
+The workload follows connected market nodes through streets and interiors, fires,
+reloads, launches grenades, creates ragdolls and restores the six-actor encounter
+periodically. Damage scale is zero for enemy rounds and player health is restored
+to keep the run alive. Reports retain raw update intervals, visited destinations,
+workload counters, measured RSS and separately labelled render-target estimates.
+`loaded_seconds` measures component initialization to gameplay readiness, excluding
+process startup and browser download; process elapsed time is reported separately.
+Browser RSS includes its isolated browser, renderer and GPU processes. GPU/CPU
+frame timings, verified presentation timestamps, compilation traces and thermal
+telemetry remain qualification gaps; these measurements cannot close those gates.
+
+### Recorded release workloads
+
+On 2026-10-21, three native and three browser processes ran sequentially on an
+Apple M3 Pro / 18 GiB Mac with macOS 27.0.1 (26A434). Each used High at an actual
+1280×720 framebuffer, the default medium-capacity material atlas, 60 seconds of
+warm-up and 300 seconds of sampling. Defold was 1.14.0 release. Native used
+Metal RGBA16F; headless Chrome 155.0.8059.85 used WebGL2/ANGLE Metal and the
+existing encoded-RGBA8 compatibility path.
+
+**Times below are wall-clock update intervals in milliseconds**, not verified
+presented-frame or CPU/GPU timings. RSS is MiB; initialization excludes process
+startup/download, as described above.
+
+| Run | p50 | p95 | p99 | Worst | Peak process RSS | Initialization (s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Metal 1 | 8.4 | 14.8 | 19.2 | 359.7 | 237.5 | 0.96 |
+| Metal 2 | 8.5 | 13.3 | 17.1 | 40.6 | 249.3 | 0.86 |
+| Metal 3 | 8.5 | 13.2 | 16.8 | 43.4 | 246.0 | 0.87 |
+| Chromium 1 | 30.0 | 56.0 | 98.0 | 129.0 | 1267.3 | 2.88 |
+| Chromium 2 | 31.0 | 60.0 | 105.0 | 126.0 | 1295.7 | 2.92 |
+| Chromium 3 | 31.0 | 78.0 | 400.0 | 514.0 | 1323.7 | 3.08 |
+
+All six completed the connected route and combat workload with zero traversal
+stalls, seven encounter restarts, and a stable count of 50 render targets. High's
+estimated target storage was 291.0 MiB on Metal and 242.8 MiB on WebGL, separate
+from measured RSS. The native first run had seven intervals over 50 ms, including
+one 359.7 ms outlier; the other two had none. Browser High exceeds the proposed
+frame-time budget. Its third run slowed markedly near the end; the cause is not
+established. These results do not qualify sustained 60 FPS or thermal stability.
+
+A separate short browser Auto run (30-second warm-up, 60-second sample) made two
+quality changes from High through Medium to Low, producing a 768×432 scene with
+a 1280×720 HUD. It stayed at Low through the sample: mean update 23.1 ms,
+p95 40.0 ms, worst 74.0 ms, peak process RSS 1,174.7 MiB, zero route stalls.
+This verifies real-clock adaptation but still misses the 60 FPS budget; it is not
+a full sustained Low qualification. Evidence: `build/quality-performance-auto`.
+
+Raw samples, workload counters, memory series, engine/backend metadata and
+compiled bundle hashes are retained in `build/quality-performance-native` and
+`build/quality-performance-browser`; host/protocol details are in
+`build/quality-performance-environment.json`. The runners are reproducible; build
+outputs are local evidence and are not committed.
+
+One earlier release-browser quality fixture stalled at the loading screen for
+180 seconds without a reported script/GL error. Subsequent debug and release
+runs completed the shared checks, and all sustained release loads completed.
+Its cause remains unconfirmed; the observed failure and screenshot are preserved
+in `build/quality-browser-startup-timeout`.
+
 ## HUD combat feedback (2026-10-21)
 
 Step 16 adds live enemy contacts to the north-up minimap, with `^` / `v` for
@@ -1209,8 +1341,8 @@ Look uses a radial dead zone, a fine-aim response curve and fixed-tick rates.
 Mouse, touch and gamepad sensitivities are independent (0.25–3x). FOV is 55–100
 vertical degrees and preserves sprint/ADS modifiers. Invert look applies to all
 three devices. **Reset controls** restores these input settings to defaults;
-settings survive encounter restart. Whole-game quality presets/automatic quality
-remain step 18. Physical controller and phone/tablet playtesting remain necessary
+settings survive encounter restart. Whole-game presets and Auto quality are
+available in Graphics (Display on touch). Physical controller and phone/tablet playtesting remain necessary
 for hardware mapping and comfort acceptance.
 
 ```sh
@@ -1369,6 +1501,7 @@ HUD while leaving the settings menu available.
 toggle options, or **Tab / Up / Down** to select a control, **Left / Right** to
 adjust it and **Enter** to activate it. The menu provides:
 
+- **Graphics:** Auto / Low / Medium / High / Ultra quality and Defaults restoring Auto.
 - **Audio:** master, weapons, movement/impacts and ambience volumes, plus mute.
 - **Display:** sun shadows, surface detail, local lights, fog, bloom, exposure
   and the renderer's diagnostic views.

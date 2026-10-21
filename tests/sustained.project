@@ -1,0 +1,11 @@
+[sustained]
+enabled = 1
+warmup = 60
+seconds = 300
+preset = high
+[display]
+width = 1280
+height = 720
+high_dpi = 0
+[engine]
+max_time_step = 0.1

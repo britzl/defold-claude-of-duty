@@ -11,14 +11,36 @@ function M.new(seed)
     seed=seed or 1337
     return {particles=pool(M.particle_limit),ambient=pool(M.ambient_limit),decals=pool(M.decal_limit),haze=pool(M.haze_limit),
         emitters={},random=rng.new(seed,"combat/effects"),ambient_random=rng.new(seed,"ambient/effects"),
+        density=1,decal_count=M.decal_limit,heat_enabled=true,
         serial=0,emitted=0,impacts=0,shots=0,explosions=0,steps=0,deaths=0,recycled=0,collisions=0,rays=0,
         time=0,remainder=0,mote_acc=0,heat_acc=0,by_kind={},peak=0}
 end
+function M.configure(s,options)
+    s.density=options.effect_density or 1
+    s.decal_count=options.impact_decals==false and 1 or options.decal_limit or M.decal_limit
+    s.heat_enabled=options.heat_distortion~=false
+    s.decals_enabled=options.impact_decals~=false
+    for name,items in pairs({particles=s.particles,ambient=s.ambient,decals=s.decals,haze=s.haze}) do
+        for i,e in ipairs(items) do
+            local keep
+            if name=="particles" then
+                local base=M.particle_limit-M.fragment_limit
+                keep=i<=math.ceil(base*s.density) or i>base and i<=base+math.ceil(M.fragment_limit*s.density)
+            else keep=i<=math.ceil(#items*s.density) end
+            if name=="decals" then keep=s.decals_enabled and i<=s.decal_count end
+            if name=="haze" and not s.heat_enabled then keep=false end
+            if not keep then e.life=0 end
+        end
+    end
+end
 local function spawn(s,items,kind,p,n,size,life,colour,fragment)
     s.serial=s.serial+1
-    local first,last=1,#items
+    local first,last=1,math.max(1,math.ceil(#items*s.density))
+    if items==s.decals then last=s.decal_count end
     if items==s.particles then
-        if fragment then first=M.particle_limit-M.fragment_limit+1 else last=M.particle_limit-M.fragment_limit end
+        if fragment then
+            first=M.particle_limit-M.fragment_limit+1;last=first+math.ceil(M.fragment_limit*s.density)-1
+        else last=math.ceil((M.particle_limit-M.fragment_limit)*s.density) end
     end
     local slot=first
     for i=first,last do
@@ -52,7 +74,7 @@ local function fleck(s,kind,p,n,size,life,colour,speed)
 end
 local no_marks={flesh=true,glass=true,water=true,fabric=true,foliage=true}
 local function decal(s,kind,p,n,size,life,colour,surface)
-    if no_marks[surface] then return end
+    if s.decals_enabled==false or no_marks[surface] then return end
     local e=spawn(s,s.decals,kind,V.point(p,n,.003),n,size,life,colour)
     e.decal=true;return e
 end
@@ -79,7 +101,7 @@ function M.impact(s,hit,query)
         local e=puff(s,p,n,surface=="flesh" and .18 or .22,.75,r[3])
         if surface=="flesh" then e.kind=K.blood;e.growth=2;e.opacity=.3 end
     end
-    for _=1,hit.exit and math.ceil(r[2]*.6) or r[2] do
+    for _=1,math.ceil(r[2]*(hit.exit and .6 or 1)*s.density) do
         local e=fleck(s,r[1],p,n,r[4]*(.65+s.random()*.65),.4+s.random()*.9,r[3],r[5]*(.55+s.random()*.65))
         if surface=="foliage" or surface=="fabric" then e.gravity=-2;e.drag=3 end
     end
@@ -98,6 +120,7 @@ function M.fire(s,p,d,world_flash)
     if world_flash then spawn(s,s.particles,K.flash,p,d,.22,.055,{1,.55,.12}) end
 end
 function M.haze(s,p,size,life,strength,ring)
+    if not s.heat_enabled then return end
     local e=spawn(s,s.haze,ring and K.ring or K.haze,p,UP,size,life,{1,1,1})
     e.opacity=strength;e.growth=ring and 7 or 1.6
     return e
@@ -116,16 +139,16 @@ function M.explosion(s,blast,query)
     s.explosions=s.explosions+1
     local p=blast.position
     spawn(s,s.particles,K.flash,p,UP,2.6,.085,{1,.6,.15})
-    for i=1,7 do
+    for i=1,math.ceil(7*s.density) do
         local e=spawn(s,s.particles,K.fire,V.point(p,UP,.12),UP,.7+s.random()*.5,.3+s.random()*.32,{1,.4,.05})
         e.velocity=cone(s.random,UP,1.5+s.random()*3);e.gravity=1.2;e.drag=3;e.growth=2.4
     end
-    for i=1,8 do
+    for i=1,math.ceil(8*s.density) do
         local angle=i*math.pi/4;local d={x=math.cos(angle),y=.2,z=math.sin(angle)}
         local e=puff(s,V.point(p,d,.25),UP,.55,1.8+s.random(),{.22,.20,.17})
         e.velocity=V.point({x=0,y=.5,z=0},d,2.5);e.drag=1.8;e.growth=3.5
     end
-    for i=1,14 do fleck(s,i%3==0 and K.spark or K.chip,V.point(p,UP,.08),UP,.03+s.random()*.035,.7+s.random(),{.4,.31,.20},5+s.random()*8) end
+    for i=1,math.ceil(14*s.density) do fleck(s,i%3==0 and K.spark or K.chip,V.point(p,UP,.08),UP,.03+s.random()*.035,.7+s.random(),{.4,.31,.20},5+s.random()*8) end
     local ring=spawn(s,s.particles,K.ring,p,UP,1.4,.26,{1,.72,.4});ring.growth=7;ring.opacity=.08
     M.haze(s,p,1.6,.4,1.4,true);M.haze(s,V.point(p,UP,.4),2.1,1.4,.35)
     M.column(s,V.point(p,UP,.2),false)
@@ -160,7 +183,7 @@ end
 local function ambience(s,dt,env,query)
     if not env then return end
     local random=s.ambient_random
-    s.mote_acc=s.mote_acc+dt*4
+    s.mote_acc=s.mote_acc+dt*4*s.density
     while s.mote_acc>=1 do
         s.mote_acc=s.mote_acc-1
         local p=env.position
@@ -168,7 +191,7 @@ local function ambience(s,dt,env,query)
         e.velocity={x=.06,y=.025,z=.025};e.opacity=.25*(env.sun or 1)
     end
     s.heat_acc=s.heat_acc+dt
-    if s.heat_acc>=.55 then
+    if s.heat_enabled and s.heat_acc>=.55 then
         s.heat_acc=0
         if (env.sun or 1)>.35 then
             local d=env.forward or {x=0,y=0,z=-1}
@@ -209,7 +232,7 @@ local function tick(s,dt,query,env)
         local e=s.emitters[i];e.life=e.life-dt
         if e.life<=0 then table.remove(s.emitters,i)
         else
-            e.acc=e.acc+dt*(e.persistent and 2 or 8)
+            e.acc=e.acc+dt*(e.persistent and 2 or 8)*s.density
             while e.acc>=1 do
                 e.acc=e.acc-1
                 if not e.persistent or env and V.length({x=e.position.x-env.position.x,y=0,z=e.position.z-env.position.z})<55 then
@@ -241,7 +264,7 @@ function M.appearance(e)
     return e.size*(1+age*e.growth),math.min(1,age*12+.15)*(1-age)^2*e.opacity
 end
 function M.snapshot(s)
-    local out={particle_limit=M.particle_limit,ambient_limit=M.ambient_limit,decal_limit=M.decal_limit,haze_limit=M.haze_limit,
+    local out={effect_density=s.density,active_decal_limit=s.decal_count,particle_limit=M.particle_limit,ambient_limit=M.ambient_limit,decal_limit=M.decal_limit,haze_limit=M.haze_limit,
         emitter_limit=M.emitter_limit,emitters=#s.emitters,emitted=s.emitted,impacts=s.impacts,shots=s.shots,explosions=s.explosions,
         steps=s.steps,deaths=s.deaths,recycled=s.recycled,collisions=s.collisions,rays=s.rays,peak=s.peak,time=s.time,by_kind=s.by_kind}
     for _,name in ipairs({"particles","ambient","decals","haze"}) do

@@ -47,7 +47,12 @@ local function world_camera(self)
     render.set_projection(self.world_projection)
 end
 local function resize(self)
-    local d=settings.dimensions(render.get_window_width(),render.get_window_height())
+    local w,h=render.get_window_width(),render.get_window_height()
+    local d=settings.dimensions(w,h,self.options.render_scale)
+    if d and (self.output_width~=w or self.output_height~=h) then
+        self.output_width,self.output_height=w,h
+        self.gui_projection=vmath.matrix4_orthographic(0,w,0,h,-1,1)
+    end
     if not d then return false end
     if d.width~=self.width or d.height~=self.height then
         self.width,self.height=d.width,d.height
@@ -75,12 +80,21 @@ local function resize(self)
             else self.targets[name]=(name=="depth_normal" or name=="depth_previous") and prepass_target(w,h) or colour_target(w,h,false,name~="haze") end
         end
         photo_pass.resize(self,colour_target)
-        self.gui_projection=vmath.matrix4_orthographic(0,d.width,0,d.height,-1,1)
         self.resizes=self.resizes+1
         temporal.reset(self.temporal,"resize")
         self.report=true
     end
     return true
+end
+local function resize_shadows(self)
+    local size=self.options.shadow_resolution
+    if self.shadow_size==size then return end
+    for _,name in ipairs({"shadow","shadow_static_1","shadow_static_2","shadow_static_3","shadow_static_4"}) do
+        if self.targets[name] then render.delete_render_target(self.targets[name]) end
+        local n=name=="shadow" and size*2 or size
+        self.targets[name]=colour_target(n,n,true,true,false,nil,false,name~="shadow")
+    end
+    self.shadow_size=size;self.shadow_cached_fits=nil;self.report=true
 end
 local function fullscreen(self,material,constants,blend,depth_copy)
     render.set_camera()
@@ -275,13 +289,15 @@ local function report(self)
         environment_faces=self.bake_step==atlas.job_count and 6 or 0, environment_size=settings.environment_size,
         environment_width=daylight.environment_width,environment_height=daylight.environment_height,
         reflection_levels=daylight.reflection_levels,environment_samples=128,volume_count=self.volume_count,
-        shadow_size=shadows.size, shadow_atlas_size=shadows.atlas_size, shadow_cascades=shadows.count,
+        shadow_size=self.shadow_size, shadow_atlas_size=self.shadow_size*2, shadow_cascades=shadows.count,
         shadow_splits=shadows.splits, shadow_texels=self.shadow_texels or {}, shadow_frames=self.shadow_frames,
         shadow_draw_passes=self.shadow_draw_passes or 0,
         shadow_static_draw_passes=self.shadow_static_draw_passes or 0,
         shadow_copy_draw_passes=self.shadow_copy_draw_passes or 0,
         shadow_dynamic_draw_passes=self.shadow_dynamic_draw_passes or 0,
         shadow_cache_refreshes=self.shadow_cache_refreshes or 0,
+        output_width=self.output_width,output_height=self.output_height,
+        render_scale=self.options.render_scale,material_lod=self.options.material_lod,
         width=self.width,height=self.height,bloom_width=self.bloom_width,bloom_height=self.bloom_height,
         target_count=target_count,
         occlusion_width=self.occlusion_width,occlusion_height=self.occlusion_height,
@@ -408,8 +424,7 @@ function init(self)
     coverage_constants(self.lighting);coverage_constants(self.motion_constants)
     for _,constants in ipairs(self.cascade_constants) do coverage_constants(constants) end
     for _,constants in ipairs(self.local_shadow_constants) do coverage_constants(constants) end
-    self.targets.shadow=colour_target(shadows.atlas_size,shadows.atlas_size,true,true)
-    for i=1,shadows.count do self.targets["shadow_static_"..i]=colour_target(shadows.size,shadows.size,true,true,false,nil,false,true) end
+    resize_shadows(self)
     for _,name in ipairs({"albedo","normal","material"}) do
         self.targets[name]=colour_target(atlas.width,atlas.height)
     end
@@ -488,12 +503,13 @@ function update(self,dt)
             o.local_lights and 1 or 0,o.fog and 1 or 0)
         local cache_shadows=o.shadow_cache and self.shadow_cache_ready
         local fits,matrices,data,shadow_dirty=shadows.update(inverse_view,unjittered,self.rig.sun_direction,vmath.vector4,vmath.matrix4,
-            cache_shadows and self.shadow_cached_fits or nil)
+            cache_shadows and self.shadow_cached_fits or nil,self.shadow_size)
         data[18].w=o.view=="cascades" and 1 or o.view=="shadow_visibility" and 2 or 0
         self.lighting.shadow_data=data
         self.shadow_texels={fits[1].texel,fits[2].texel,fits[3].texel,fits[4].texel}
+        -- Reuse the spare component: another uniform exceeds Metal binding slots.
         self.lighting.lighting_features=vmath.vector4(o.interior_lighting and not self.capture.laboratory and 1 or 0,
-            o.environment_filter and 1 or 0,self.volume_count,0)
+            o.environment_filter and 1 or 0,self.volume_count,o.material_lod)
         self.lighting.lighting_transform=self.identity
         self.lighting.local_shadow_params=vmath.vector4(o.local_shadows and o.local_lights and 1 or 0,local_lights.shadow_size,0,0)
         self.muzzle_light_count=0
@@ -522,7 +538,7 @@ function update(self,dt)
             render.enable_material("shadow")
             for i=1,shadows.count do if shadow_dirty[i] then
                 render.set_render_target(t["shadow_static_"..i])
-                render.set_viewport(0,0,shadows.size,shadows.size)
+                render.set_viewport(0,0,self.shadow_size,self.shadow_size)
                 render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
                 render.set_projection(matrices[i])
                 local constants=self.cascade_constants[i];constants.sun_matrix=matrices[i]
@@ -535,7 +551,7 @@ function update(self,dt)
             self.shadow_cache_refreshes=(self.shadow_cache_refreshes or 0)+self.shadow_static_draw_passes
         end
         render.set_render_target(t.shadow)
-        render.set_viewport(0,0,shadows.atlas_size,shadows.atlas_size)
+        render.set_viewport(0,0,self.shadow_size*2,self.shadow_size*2)
         render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
         if o.shadows then
             -- Bind/clear ONCE: switching targets between tiles discards earlier
@@ -882,7 +898,7 @@ function update(self,dt)
             jx=jx/self.width,jy=jy/self.height,previous_jx=photo_previous_jx,previous_jy=photo_previous_jy,
             valid=photo_valid,sky=previous_projection*old_rotation*rotation*vmath.inv(projection)},fullscreen,bind)
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
-        render.set_viewport(0,0,self.width,self.height)
+        render.set_viewport(0,0,self.output_width,self.output_height)
         self.post_constants.post=vmath.vector4(o.exposure,o.bloom and o.bloom_strength or 0,(o.view=="cascades" or o.view=="shadow_visibility") and 0 or settings.views[o.view],o.atlas_half)
         local treatment=o.view=="scene"
         self.post_constants.photo=vmath.vector4(treatment and o.grade_strength or 0,treatment and o.temporal_aa and o.sharpen or 0,
@@ -907,7 +923,7 @@ function update(self,dt)
         end
     else
         render.set_render_target(render.RENDER_TARGET_DEFAULT)
-        render.set_viewport(0,0,self.width,self.height)
+        render.set_viewport(0,0,self.output_width,self.output_height)
         render.clear({[COLOR]=vmath.vector4(.08,.10,.13,1)})
     end
     render.set_camera()
@@ -956,6 +972,7 @@ function on_message(self,id,message)
         local reallocate=next_options.photographic_quality~=self.options.photographic_quality or
             next_options.ads_dof~=self.options.ads_dof or next_options.motion_blur~=self.options.motion_blur
         self.options=next_options
+        resize_shadows(self)
         if reallocate and self.width then photo_pass.resize(self,colour_target) end
         self.exposure_valid=false
         atmosphere_constants(self)

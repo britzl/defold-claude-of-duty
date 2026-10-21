@@ -227,6 +227,13 @@
       "current": "Left-hand windup, elevation-corrected lob, conservative 20-segment sphere clearance and nearby-ally rejection, .02 linear Bullet damping and no prop-to-prop collisions. Basic nearest-danger text instead of projected markers; compact generated explosion audio/FX reuse bounded pools. Reference cooldown, inventory, fuse, radius and damage/falloff rules retained; presentation and sustained cost remain unqualified.",
       "reference": "Three.js ai/agent.js, ai/squad.js and ai/index.js; Kaigen cod_ai_brain.c, cod_ai_squad.c and cod_weapons_grenade.c.",
       "gate": "grenades"
+    },
+    {
+      "id": "quality-policy",
+      "state": "implemented-with-documented-adaptations",
+      "current": "Bilinear scene upscaling with scene TAA and native-resolution HUD; 256/512/1024/2048 cascade tiles; resident atlas mip floors and feature switches; fixed FX pools with reduced active density. Auto uses wall-clock windows and backoff; startup material atlas capacity is not reallocated on tier changes.",
+      "reference": "Kaigen renderer upscale tiers, pixel caps and larger FX/decal budgets; source quality controller.",
+      "gate": "quality-performance"
     }
   ],
   "scenarios": [
@@ -669,7 +676,7 @@
         "tests/input_probe.lua",
         "tools/validate_input_browser.mjs"
       ],
-      "implementation_notes": "Step 17 implements keyboard alternatives/weapon keys/wheel and reference stance toggles, full mapped gamepad commands with fixed-tick analog look, independent sensitivity/FOV/invert/reset settings and a simplified six-button touch layout. Native GUI/action fixtures and real Chromium touch/mouse/keyboard events cover lifecycle and settings; the browser also exercises its standard Gamepad API mapping and normal touch audio activation. Touch omits prone/lean/inspect/fire-mode buttons by user authorization. Physical hardware feel/mapping, Safari/mobile qualification and whole-game automatic/manual quality remain open."
+      "implementation_notes": "Step 17 implements keyboard alternatives/weapon keys/wheel and reference stance toggles, full mapped gamepad commands with fixed-tick analog look, independent sensitivity/FOV/invert/reset settings and a simplified six-button touch layout. Native GUI/action fixtures and real Chromium touch/mouse/keyboard events cover lifecycle and settings; the browser also exercises its standard Gamepad API mapping and normal touch audio activation. Touch omits prone/lean/inspect/fire-mode buttons by user authorization. Physical hardware feel/mapping, Safari/mobile qualification remain open. Step 18 supplies whole-game automatic/manual quality and Defaults."
     },
     {
       "id": "quality-performance",
@@ -678,10 +685,19 @@
         "threejs:src/core/config.js",
         "kaigen:src/claude_of_duty/cod_flow.c"
       ],
-      "current": "partial",
+      "current": "quality presets and adaptation implemented; sustained qualification partial",
       "procedure": "Run the specified sustained protocol for every target preset/device; change manual/automatic quality during combat.",
       "expect": "Recorded budgets, stable adaptation, manual override, no gameplay shader compiles and no resource growth.",
-      "coverage": []
+      "coverage": [
+        "tests/quality_test.lua",
+        "tests/quality_scenario.lua",
+        "tests/quality_smoke.py",
+        "tools/validate_quality_browser.mjs",
+        "tests/sustained_scenario.lua",
+        "tests/sustained_profile.py",
+        "tools/profile_sustained_browser.mjs"
+      ],
+      "implementation_notes": "Low/Medium/High/Ultra and default Auto at 60 FPS. Whole-game policy controls internal scene scale, cascade resolution, material mip floor and shading, active FX density/decals, and photographic processing. HUD retains framebuffer resolution. Advanced quality edits select Custom; Defaults restores Auto, and encounter restart preserves the selection. Auto uses wall-clock update intervals, two slow windows, twenty good seconds before upgrade probes and increasing failed-probe backoff. Loading/menu/focus/capture/resize samples are excluded. Resident material atlas capacity remains configured at startup and fixed mesh pools stay resident. This adapts the reference quality behavior without claiming identical Kaigen upscaling. Native/release-WebGL integration covers presets, combat, resize, ten quality/restart cycles, focus, Defaults and capture restoration. GPU/CPU frame timestamps, shader traces, thermal behavior and full per-preset sustained acceptance remain open. Three High release runs per backend (60 s warm-up + 300 s live workload, actual 1280x720) completed with zero route stalls and constant target counts. Native p95 wall-clock update intervals: 13.2\u201314.8 ms, worst up to 359.7 ms; browser: 56\u201378 ms, worst up to 514 ms. Peak process RSS: native 237.5\u2013249.3 MiB, isolated Chromium 1267.3\u20131323.7 MiB. Browser High exceeds the proposed budget; no presented-frame, CPU/GPU or thermal qualification is claimed. README records an earlier unreproduced browser loading timeout and the raw evidence locations. A short 30+60-second browser Auto run verified two real-clock downgrades to Low (768x432 scene, 1280x720 HUD); p95 updates remained 40 ms, so the budget is still unmet."
     },
     {
       "id": "platform-lifecycle",

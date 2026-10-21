@@ -1,8 +1,9 @@
 local W = require "game.ui.widgets"
 local touch_model=require "game.touch"
 local M = {}
-local tabs = { "audio", "display", "atmosphere", "combat", "photo", "controls" }
+local tabs = { "graphics", "audio", "display", "atmosphere", "combat", "photo", "controls" }
 local specs = {
+    graphics = {{key="mode",label="QUALITY",kind="quality",choices={"auto","low","medium","high","ultra"}}},
     audio = {
         {key="master",label="MASTER",kind="audio",min=0,max=1,step=.05},
         {key="weapons",label="WEAPONS",kind="audio",min=0,max=1,step=.05},
@@ -80,6 +81,7 @@ local function button(state,id,x,y,w,label)
     return item
 end
 local function read(state,spec)
+    if spec.kind=="quality" then return state.settings.quality[spec.key] end
     if spec.kind=="input" then return state.settings.input[spec.key] end
     return state.settings[spec.kind=="audio" and "audio" or "renderer"][spec.key]
 end
@@ -106,6 +108,10 @@ local function refresh(state)
                 gui.set_color(item.value,value==false and W.muted or W.accent)
             end
         end
+    end
+    if state.tab=="graphics" and not state.touch_layout then
+        local q=state.settings.quality
+        gui.set_text(gui.get_node("quality_active"),q.mode=="custom" and "CUSTOM SETTINGS" or "ACTIVE: "..string.upper(q.active).."  /  TARGET: "..q.target_fps.." FPS")
     end
     highlight(state)
 end
@@ -139,7 +145,7 @@ local function rebuild_touch(state)
     if state.tab=="controls" then
         rows={specs.controls[2],specs.controls[4],specs.controls[5]}
     elseif state.tab=="audio" then rows={specs.audio[1],specs.audio[4],specs.audio[5]}
-    else rows={specs.photo[1],specs.display[1],specs.display[4]} end
+    else rows={specs.graphics[1],specs.display[1],specs.display[4]} end
     for i,spec in ipairs(rows) do
         local ry=y+h-175-(i-1)*84
         local item={id="setting_"..spec.key,spec=spec,y=ry-17,
@@ -157,6 +163,8 @@ local function rebuild_touch(state)
     end
     if state.tab=="controls" then
         button(state,"defaults",cx,y+102,w-28,"RESET CONTROLS")
+    elseif state.tab=="display" then
+        button(state,"quality_defaults",cx,y+102,w-28,"DEFAULTS: AUTO QUALITY")
     else
         text(state,nil,cx,y+100,state.tab=="audio" and "MASTER / AMBIENCE / MUTE" or "MORE DISPLAY OPTIONS ON DESKTOP",.68,W.muted)
     end
@@ -210,6 +218,11 @@ local function rebuild(state)
         end
         state.items[#state.items+1]=item
     end
+    if state.tab=="graphics" then
+        text(state,"quality_active",157,385,"",.92,W.accent,gui.PIVOT_W)
+        text(state,nil,157,342,"AUTO ADJUSTS QUALITY TO KEEP PLAY SMOOTH.",.78,W.muted,gui.PIVOT_W)
+        button(state,"quality_defaults",480,275,420,"DEFAULTS: AUTO QUALITY")
+    end
     if state.tab=="controls" then
         button(state,"defaults",650,213,300,"RESET CONTROLS")
         local lines={"WASD / ARROWS MOVE | SHIFT SPRINT | C / CTRL CROUCH | Z PRONE",
@@ -225,7 +238,7 @@ local function rebuild(state)
     refresh(state)
 end
 function M.new()
-    return { nodes={},items={},tab="audio",focus=1,open=false }
+    return { nodes={},items={},tab="graphics",focus=1,open=false }
 end
 function M.state(state,settings)
     local changed=state.open~=settings.paused
@@ -253,7 +266,8 @@ local function change(state,item,delta,absolute)
         value=spec.choices[(index-1+delta)%#spec.choices+1]
     else value=not value end
     -- Fast repeats should not need to wait for message dispatch.
-    if spec.kind=="input" then state.settings.input[spec.key]=value;state.settings.sensitivity=state.settings.input.sensitivity
+    if spec.kind=="quality" then state.settings.quality[spec.key]=value
+    elseif spec.kind=="input" then state.settings.input[spec.key]=value;state.settings.sensitivity=state.settings.input.sensitivity
     else state.settings[spec.kind=="audio" and "audio" or "renderer"][spec.key]=value end
     msg.post("/controller#script","ui_action",{action="setting",kind=spec.kind,key=spec.key,value=value})
     refresh(state)

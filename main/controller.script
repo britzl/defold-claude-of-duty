@@ -173,6 +173,8 @@ function init(self)
     if sys.get_config_int("audio_synthesis.verify",0)==1 then require("tests.native_audio_test").run() end
     if sys.get_config_int("mesh_validation.enabled",0)==1 then self.mesh_validation=require("tests.mesh_browser").new() end
     if sys.get_config_int("audio_content_validation.enabled",0)==1 then self.audio_content_validation=require("tests.audio_content_scenario").new() end
+    if sys.get_config_int("sustained.enabled",0)==1 then self.sustained=require("tests.sustained_scenario").new() end
+    if sys.get_config_int("quality_validation.enabled",0)==1 then self.quality_validation=require("tests.quality_scenario").new() end
     if sys.get_config_int("hud_validation.enabled",0)==1 then self.hud_validation=require("tests.hud_scenario").new() end
     if sys.get_config_int("audio_validation.enabled",0)==1 then self.audio_validation={} end
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id, self.ctx.services.dynamics.by_id }
@@ -244,6 +246,13 @@ function init(self)
         automation_bridge.command("renderer.snapshot",function() return self.renderer_stats end)
         automation_bridge.command("renderer.configure",function(data)
             self.renderer_settings=renderer_settings.configure(self.renderer_settings,data)
+            -- Explicit diagnostic controls are a manual override, except inside captures.
+            if not self.capture then
+                for key in pairs(data) do if require("game.render.quality").owns(key) then
+                    require("game.render.quality").select(self.quality,"custom");break
+                end end
+            end
+            combat_fx.configure(self.combat_visuals,self.renderer_settings)
             msg.post("@render:","renderer_configure",self.renderer_settings)
             -- An explicit address must work even when it equals the original
             -- setting but the live clock has since advanced.
@@ -540,10 +549,13 @@ function fixed_update(self, dt)
 end
 
 function update(self, dt)
+    ui.quality_update(self)
     ui.update(self,dt)
     if self.input_probe then require("tests.input_probe").update(self) end
     if self.animated_atmosphere_validation then require("tests.animated_atmosphere_scenario").update(self.animated_atmosphere_validation,self,dt,restart_encounter) end
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
+    if self.sustained then require("tests.sustained_scenario").update(self.sustained,self,dt,restart_encounter) end
+    if self.quality_validation then require("tests.quality_scenario").update(self.quality_validation,self,dt,restart_encounter) end
     if self.capture then ui.sync_touch(self);return end
     runtime.update(self.ctx, dt)
     ui.sync_touch(self)

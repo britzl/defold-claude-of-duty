@@ -8,7 +8,7 @@ uniform highp vec4 light_colours[4]; // linear RGB radiance
 uniform highp vec4 light_minimums[4];
 uniform highp vec4 light_maximums[4];
 uniform highp vec4 indirect;
-uniform highp vec4 lighting_features; // interior gate, filtered reflections, volume count, reserved
+uniform highp vec4 lighting_features; // interior gate, filtered reflections, volume count, material mip floor
 // Per volume: minimum, maximum, floor/feather/door flag, doorway, aperture.
 uniform highp vec4 volume_data[40];
 float interior_visibility(vec3 p) {

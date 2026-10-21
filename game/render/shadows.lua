@@ -5,7 +5,8 @@ local M={count=4,size=1024,atlas_size=2048,splits={8,22,52,120},blend=.12,
 local function dot(a,b) return a[1]*b[1]+a[2]*b[2]+a[3]*b[3] end
 local function cross(a,b) return {a[2]*b[3]-a[3]*b[2],a[3]*b[1]-a[1]*b[3],a[1]*b[2]-a[2]*b[1]} end
 local function unit(a) local d=math.sqrt(dot(a,a));return {a[1]/d,a[2]/d,a[3]/d} end
-function M.fit(eye,forward,tan_h,tan_v,sun,right,up)
+function M.fit(eye,forward,tan_h,tan_v,sun,right,up,size)
+    size=size or M.size
     local z=unit(sun)
     local x=unit(cross(math.abs(z[2])>.98 and {0,0,1} or {0,1,0},z))
     local y=cross(z,x)
@@ -26,8 +27,8 @@ function M.fit(eye,forward,tan_h,tan_v,sun,right,up)
         local distance=math.min(far,(far+near)*(1+k2)*.5)
         local radius=math.sqrt(math.max((distance-near)^2+near^2*k2,(far-distance)^2+far^2*k2))
         -- Rotation-invariant extent, padding for snap, normal bias and PCSS taps.
-        radius=math.ceil(radius/(1-2*M.guard_texels/M.size)*16)/16
-        local texel=2*radius/M.size
+        radius=math.ceil(radius/(1-2*M.guard_texels/size)*16)/16
+        local texel=2*radius/size
         local centre={eye[1]+forward[1]*distance,eye[2]+forward[2]*distance,eye[3]+forward[3]*distance}
         local cx=math.floor(dot(x,centre)/texel+.5)*texel
         local cy=math.floor(dot(y,centre)/texel+.5)*texel
@@ -50,7 +51,7 @@ function M.fit(eye,forward,tan_h,tan_v,sun,right,up)
             rows={{x[1]/radius,x[2]/radius,x[3]/radius,-cx/radius},
                 {y[1]/radius,y[2]/radius,y[3]/radius,-cy/radius},
                 {-2*z[1]/range,-2*z[2]/range,-2*z[3]/range,(2*cz+M.caster_distance)/range}},
-            viewport={(i-1)%2*M.size,math.floor((i-1)/2)*M.size,M.size,M.size}}
+            viewport={(i-1)%2*size,math.floor((i-1)/2)*size,size,size}}
     end
     return result
 end
@@ -66,12 +67,13 @@ function M.reusable(previous,current)
     end
     return true
 end
-function M.update(inverse_view,projection,sun,vector,matrix,cached)
+function M.update(inverse_view,projection,sun,vector,matrix,cached,size)
+    size=size or M.size
     local forward={-inverse_view.m02,-inverse_view.m12,-inverse_view.m22}
     local eye={inverse_view.m03,inverse_view.m13,inverse_view.m23}
     local right={inverse_view.m00,inverse_view.m10,inverse_view.m20}
     local up={inverse_view.m01,inverse_view.m11,inverse_view.m21}
-    local fits=M.fit(eye,forward,1/projection.m00,1/projection.m11,sun,right,up)
+    local fits=M.fit(eye,forward,1/projection.m00,1/projection.m11,sun,right,up,size)
     local data,matrices,dirty={},{},{}
     for i,fit in ipairs(fits) do
         dirty[i]=not M.reusable(cached and cached[i],fit)
@@ -86,7 +88,7 @@ function M.update(inverse_view,projection,sun,vector,matrix,cached)
         matrices[i]=m
     end
     data[17]=vector(forward[1],forward[2],forward[3],-dot(forward,eye))
-    data[18]=vector(1/M.atlas_size,1/M.size,M.softness,0)
+    data[18]=vector(1/(size*2),1/size,M.softness,0)
     return fits,matrices,data,dirty
 end
 return M

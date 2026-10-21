@@ -59,6 +59,7 @@ function M.new(ctx)
 end
 function M.reset(a)
     a.state=new_state(a.ctx);a.pending={};a.fixture=nil
+    if a.options then fx.configure(a.state,a.options) end
     for _,p in ipairs(a.parts) do visible(p,false) end
 end
 function M.fixture(a,enabled)
@@ -87,6 +88,9 @@ function M.fixture(a,enabled)
         end end
     end
     a.fixture=state
+end
+function M.configure(a,options)
+    a.options=options;fx.configure(a.state,options)
 end
 function M.update(a,dt,camera_rotation,muzzle,capture,enabled,camera_position,sun)
     if not capture then

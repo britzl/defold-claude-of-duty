@@ -2,7 +2,7 @@
 
 [contract.json](contract.json) is the acceptance matrix: 24 feature scenarios with
 reference source paths, expected behavior, a verification procedure, existing
-coverage, and thirteen recorded adaptation decisions. `implemented-core` describes
+coverage, and fourteen recorded adaptation decisions. `implemented-core` describes
 existing code; it does not mean the scenario has passed parity review.
 [reference-lock.json](reference-lock.json) pins the runtime source snapshots and
 all 71 production camera requests, including FOV, lighting and fixture intent.
@@ -22,9 +22,26 @@ These thresholds are engineering proposals, not measured results. The contract
 requires three release runs, each with 60 seconds of warmup and 300 seconds of
 full-map combat sampling. Report actual framebuffer/internal resolution,
 backend, device/OS/browser, dropped samples, CPU/GPU timing and memory scope.
-The complete stress scenario remains unqualified while the remaining combat
-effects and sustained full-map measurements are missing. Frozen capture frames and an FPS overlay do not satisfy
+The complete stress scenario remains unqualified until sustained measurements
+and the missing GPU/CPU, presentation, compilation and thermal evidence are available. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
+
+## Quality increment — 2026-10-21
+
+Step 18 adds whole-game presets, a default 60 FPS Auto policy, manual overrides
+and Defaults restoring Auto. Lower tiers scale scene targets and shadow maps,
+select existing material mip levels and reduce active FX/decal counts. Material
+atlas capacity and mesh pool allocations stay fixed. The HUD remains at native
+framebuffer resolution. Native Metal and release Chromium pass the shared
+11-check lifecycle scenario, including ten quality/restart cycles and capture
+restoration. Release workload runners record wall-clock update intervals and
+measured process RSS separately from render-target byte estimates; these are
+not GPU timings or verified presented-frame timestamps. Three High release runs
+per backend now record 60 seconds of warm-up plus 300 seconds of live workload
+at 1280×720: native p95 updates were 13.2–14.8 ms; browser p95 was 56–78 ms.
+Browser High exceeds the proposed budget, and a native 359.7 ms outlier remains
+recorded. See README.md for full tables, commands, tier definitions and open
+performance gates. The source lock is refreshed without stale visual receipts.
 
 ## Input and touch increment — 2026-10-21
 

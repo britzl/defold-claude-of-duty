@@ -12,7 +12,7 @@ uniform highp vec4 surface_effects; // parallax metres, micro amount, weather am
 #endif
 uniform highp vec4 weather_features; // weather, micro, parallax, detail resolution
 vec4 surface_texel(sampler2D map,vec2 uv,float lod,float kind,float last) {
-    lod=clamp(lod,0.0,last);
+    lod=clamp(lod,lighting_features.w,last);
     float lo=floor(lod),hi=min(lo+1.0,last);
     vec4 a=surface_rects[int(kind)*11+int(lo)];
     vec4 b=surface_rects[int(kind)*11+int(hi)];

@@ -76,6 +76,9 @@ try{
     await menuTap('setting_invert_look');assert((await state()).ui.input.invert_look);
     const bar=await page.evaluate(()=>window.__INPUT_MENU__.slider_fov);await touch(1,bar.x,bar.y,'down');await touch(1,bar.x+55,bar.y);await touch(1,bar.x+55,bar.y,'up');
     assert((await state()).ui.input.fov>80);await menuTap('defaults');assert.equal((await state()).ui.input.fov,70);assert(!(await state()).ui.input.invert_look);
+    await menuTap('tab_display');await menuTap('quality_defaults');await menuTap('setting_mode');
+    assert.equal((await state()).ui.quality.mode,'low');await menuTap('quality_defaults');
+    assert.equal((await state()).ui.quality.mode,'auto');assert.equal((await state()).ui.quality.active,'high');
     await menuTap('resume');assert(!(await state()).ui.paused);assert(!(await state()).mouse_locked);
   }
   check('phone landscape/portrait and tablet menus: sliders, invert, defaults, resume');

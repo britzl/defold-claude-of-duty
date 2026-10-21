@@ -7,6 +7,7 @@ local hud = require "game.ui.hud"
 local feedback = require "game.ui.feedback"
 local touch = require "game.touch"
 local gamepad = require "game.gamepad"
+local quality=require "game.render.quality"
 local M = {}
 
 function M.snapshot(self)
@@ -14,6 +15,7 @@ function M.snapshot(self)
         input={sensitivity=self.ui.sensitivity,touch_sensitivity=self.ui.touch_sensitivity,
             gamepad_sensitivity=self.ui.gamepad_sensitivity,fov=self.ui.fov,invert_look=self.ui.invert_look},
         audio=self.ctx.audio.settings, renderer=self.renderer_settings,
+        quality=self.quality and quality.snapshot(self.quality) or {mode="custom",active="high",target_fps=60},
         touch_controls=self.touch and self.touch.enabled or false }
 end
 
@@ -33,11 +35,39 @@ function M.pause(self, paused)
     M.publish(self)
 end
 
+function M.apply_quality(self,changes)
+    if not changes then return end
+    self.renderer_settings=renderer.configure(self.renderer_settings,changes)
+    msg.post("@render:","renderer_configure",changes)
+    if self.combat_visuals then require("game.render.combat_fx_defold").configure(self.combat_visuals,self.renderer_settings) end
+end
+function M.quality_mode(self,mode)
+    if self.capture then require("game.render.capture_controller").finish(self) end
+    M.apply_quality(self,quality.select(self.quality,mode))
+    M.publish(self)
+end
+function M.quality_update(self)
+    local now=socket.gettime()
+    local dt=self.quality_clock and now-self.quality_clock
+    self.quality_clock=now
+    local width,height=window.get_size()
+    local size=width..":"..height
+    local active=M.active(self) and self.renderer_stats.ready and self.renderer_settings.view=="scene"
+        and width>0 and height>0 and self.quality_size==size
+    self.quality_size=size
+    local changes=quality.sample(self.quality,dt,active)
+    if changes then M.apply_quality(self,changes);M.publish(self) end
+end
 function M.configure(self, data)
-    if data.kind == "audio" then audio.configure(self.ctx, { [data.key]=data.value })
+    if data.kind == "quality" then
+        assert(data.key=="mode","Unknown quality setting")
+        M.quality_mode(self,data.value)
+    elseif data.kind == "audio" then audio.configure(self.ctx, { [data.key]=data.value })
     elseif data.kind == "renderer" then
         self.renderer_settings = renderer.configure(self.renderer_settings, { [data.key]=data.value })
-        msg.post("@render:", "renderer_configure", self.renderer_settings)
+        if self.quality and quality.owns(data.key) then quality.select(self.quality,"custom") end
+        if self.combat_visuals then require("game.render.combat_fx_defold").configure(self.combat_visuals,self.renderer_settings) end
+        msg.post("@render:", "renderer_configure", { [data.key]=data.value })
         if data.key=="hour" or data.key=="lighting" then
             msg.post("@render:", "renderer_atmosphere_seek", {hour=self.renderer_settings.hour})
         end
@@ -50,6 +80,8 @@ end
 
 function M.init(self, restart)
     self.ui, self.focused = controls.new(), true
+    self.quality=quality.new(sys.get_config_string("quality.mode","auto"),sys.get_config_number("quality.target_fps",60))
+    if self.quality.mode~="custom" then M.apply_quality(self,quality.preset(self.quality.active)) end
     self.ctx.preferences=self.ui
     self.gamepad=gamepad.new()
     require("game.browser_input").install()
@@ -86,7 +118,7 @@ function M.init(self, restart)
             ["ui.snapshot"]="Read pause/focus, live settings, compass, damage feedback, killfeed and minimap count.",
             ["ui.pause"]="Pause/resume simulation with {paused}; releases the cursor and clears held gameplay inputs.",
             ["ui.focus"]="Simulate a window focus callback with {focused} for automation; returning focus still requires explicit resume.",
-            ["ui.configure"]="Set one live {kind=audio|renderer|input,key,value}; input supports mouse/touch/gamepad sensitivity 0.25..3, fov 55..100 and invert_look.",
+            ["ui.configure"]="Set one live {kind=quality|audio|renderer|input,key,value}; quality uses key=mode with auto/low/medium/high/ultra/custom. Input supports mouse/touch/gamepad sensitivity 0.25..3, fov 55..100 and invert_look.",
             ["ui.prompt"]="Display {key,text,sub,progress?}, or {clear=true}. Display only; does not run an interaction.",
             ["ui.objectives"]="Display up to six {items={{position={x,y,z},label,name}}}; empty items clears them. Does not create game objectives.",
         }) do
@@ -157,6 +189,8 @@ function M.action(self, data)
     elseif data.action == "restart" and self.ctx.world.ready then
         self.ui_restart(self)
         M.pause(self, false)
+    elseif data.action == "quality_defaults" then
+        M.quality_mode(self,"auto");audio.ui(self.ctx)
     elseif data.action == "defaults" then
         controls.defaults(self.ui)
         M.publish(self)
