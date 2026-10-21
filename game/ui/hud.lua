@@ -1,6 +1,7 @@
 -- Engine-independent presentation state. Notifications never apply damage.
 local events = require "game.events"
 local health = require "game.player.health"
+local feedback = require "game.ui.feedback"
 -- map_limit bounds visible GUI nodes, never the stored world geometry.
 local M = { feed_limit = 4, feed_seconds = 6, map_limit = 256, map_range = 22 }
 local function name(id)
@@ -11,6 +12,7 @@ end
 
 function M.init(ctx)
     ctx.hud = { feed = {}, damage = 0, source = false, headshot = false }
+    feedback.init(ctx)
     events.on(ctx.events, events.DAMAGE_DEALT, ctx.hud, function(state, hit)
         if hit.source == "player" and hit.target ~= "player" then state.headshot = hit.headshot end
         if hit.killed then
@@ -28,6 +30,7 @@ function M.init(ctx)
 end
 
 function M.update(ctx, dt)
+    feedback.update(ctx,dt)
     local state = ctx.hud
     state.damage = math.max(0, state.damage - dt * 1.8)
     for i = #state.feed, 1, -1 do
@@ -38,14 +41,14 @@ end
 
 function M.reset(ctx)
     ctx.hud.feed, ctx.hud.damage, ctx.hud.source, ctx.hud.headshot = {}, 0, false, false
+    feedback.reset(ctx)
 end
 
 function M.heading(yaw)
     return (-math.deg(yaw)) % 360
 end
 
--- Bounded nearest-danger warning, including grenades behind the camera. Full
--- projected marker styling is part of the later HUD parity increment.
+-- Text summary retained for automation; feedback.lua owns projected markers.
 function M.grenade_warning(ctx)
     local nearest,distance,count=nil,math.huge,0
     local out=ctx.presentation

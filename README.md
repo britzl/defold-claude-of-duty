@@ -38,6 +38,63 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## HUD combat feedback (2026-10-21)
+
+Step 16 adds live enemy contacts to the north-up minimap, with `^` / `v` for
+actors above/below the player's floor. Contacts follow the reference's live-actor
+policy and disappear on death or outside the map. Four warnings follow nearby
+live grenade bodies, prioritize imminent fuses, show direction/distance/floor,
+and separate overlapping panels. Behind-camera warnings remain visible.
+
+Player-confirmed hits produce floating damage numbers and white/gold/red hit,
+headshot and kill confirmations. Kills show a fading elimination banner. Six
+simultaneous directional arcs preserve each incoming hit's bearing and follow
+camera yaw. Numbers use the rendered eye, pitch, roll, FOV and viewport aspect;
+points behind/offscreen are hidden. Hit presentation uses no gameplay randomness.
+
+The ammo display has low/empty colours, an independent chamber `+`, and one pip
+per magazine round (30 rifle, 32 SMG, 17 pistol). Reload progress follows the
+weapon clock; pips disappear between magazine removal and insertion. Low-health
+edges pulse with the health system, and the health label shows recovery. Existing
+combat, reload, grenade and heartbeat audio observers supply the sounds once.
+
+`game.ui.feedback.set_prompt(ctx, {key,text,sub,progress})` and
+`set_objectives(ctx, {{position={x,y,z},label,name}})` expose optional display
+contracts. Pass `nil` for the prompt or an empty objective list to clear them.
+Native automation exposes the same capabilities as `ui.prompt` and
+`ui.objectives`. These hooks display information; they do not create interaction
+logic, objectives or an XP system. Text, objective count and numeric inputs are
+bounded/validated. Reset clears both hooks.
+
+The fixed pools hold 16 contacts, four grenade panels, 16 numbers, six damage
+arcs and six objectives. This adds 156 GUI nodes while removing four old direction
+nodes; `main/hud.gui` permits 1,024 nodes. Events never allocate GUI nodes, and
+there are no added textures, render targets or audio resources. Per-item messages
+stay within Defold's transport limit. Pause freezes lifetimes; death, inspection
+and renderer diagnostics hide combat markers. Restart clears all transient state.
+
+```sh
+lua tests/hud_feedback_test.lua
+lua tests/ui_test.lua
+PYTHONPATH=automation-bridge-python python3 tests/hud_feedback_smoke.py
+# Bundle release wasm-web with tests/hud_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_hud_browser.mjs \
+  --bundle="/path/to/Claude of Duty" --browser="/path/to/Chrome"
+```
+
+Seven related Lua suites pass 90 checks. Native Metal and release Chrome WebGL2 /
+ANGLE Metal each pass 15 shared integration checks using actual combat, Bullet
+grenades and GUI receipts. Seven captures per backend cover combat at five
+window layouts plus reload/recovery. Screenshot acknowledgements freeze the
+fixture throughout resize/capture. Reports live under
+`build/hud-feedback-native-validation`, `build/hud-feedback-browser-validation`
+and `build/hud-feedback-unit-validation`.
+
+The default font, simplified glyphs and 44-metre geometry minimap remain port
+adaptations. The 400×600 capture checks resizing; mobile and small-screen
+readability are not qualified. Controlled reference appearance and sustained
+60 FPS qualification remain open.
+
 ## Combat audio and continuous spatial processing (2026-10-20)
 
 Step 15 connects soldier stride footsteps and throttled formant barks, travelled
@@ -1251,7 +1308,7 @@ Gamepad/touch adapters can feed the same `game.input` API later.
 
 ## HUD and pause menu
 
-The HUD includes a spread-reactive crosshair, hitmarker (mint for a headshot),
+The HUD includes a spread-reactive crosshair, hitmarker (gold for a headshot, red for a kill),
 health bar, low-health edge tint, a brief damage flash and a directional hit
 indicator when the attacker is known. It shows the current weapon, fire mode,
 ammunition, reload/inspection status and movement stance. Elimination displays
@@ -1263,9 +1320,9 @@ on encounter restart.
 The compass uses north = world -Z and east = +X. The north-up minimap follows the
 player over a 44-metre square, drawing the generated world's collision footprints
 and a rotated player marker. Rectangles are clipped to the map and the player's
-floor height, so the shop's roof does not fill its accessible interior. The
-current slice supplies 190 rectangles; the GUI bounds this to 256 for larger maps.
-It shows geometry, not enemy positions. Renderer diagnostic views hide the combat
+floor height, so the shop's roof does not fill its accessible interior. Visible
+geometry is bounded to 256 rectangles. Live enemy contacts overlay the map with
+above/below floor hints. Renderer diagnostic views hide the combat
 HUD while leaving the settings menu available.
 
 **Esc** toggles the menu. Use the mouse to select tabs, click/drag sliders and

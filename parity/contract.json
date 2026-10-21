@@ -637,13 +637,18 @@
         "threejs:src/ui/index.js",
         "kaigen:src/claude_of_duty/cod_hud_model.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Fight and reload, receive hits from several bearings, see offscreen grenades, switch floors and resize/pause/restart.",
       "expect": "Contacts, damage numbers, kill banners, grenade indicators and readable bounded layouts with correct lifecycle.",
       "coverage": [
         "tests/ui_test.lua",
-        "tests/ui_smoke.py"
-      ]
+        "tests/ui_smoke.py",
+        "tests/hud_feedback_test.lua",
+        "tests/hud_scenario.lua",
+        "tests/hud_feedback_smoke.py",
+        "tools/validate_hud_browser.mjs"
+      ],
+      "implementation_notes": "Step 16: bounded live enemy contacts with floor hints, four body-tracked grenade/fuse panels, 16 confirmed-hit numbers, six directional arcs, timed elimination banners, magazine/chamber/reload feedback and optional six-objective/prompt display hooks. Native Metal and release WebGL pass shared GUI/lifecycle checks and five-layout captures. Default font, simplified glyphs, 44 m geometry map and confirmation text without XP are retained adaptations; controlled reference visual acceptance and sustained cost remain open."
     },
     {
       "id": "input-settings",

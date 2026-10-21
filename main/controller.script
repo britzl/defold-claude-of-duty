@@ -24,6 +24,7 @@ local audio_adapter = require "game.audio.defold"
 local ui = require "game.ui.controller"
 local ui_controls = require "game.ui.controls"
 local hud_model = require "game.ui.hud"
+local hud_feedback = require "game.ui.feedback"
 local touch = require "game.touch"
 local dynamics = require "game.physics.defold"
 local grenades = require "game.systems.grenades"
@@ -163,6 +164,7 @@ function init(self)
     if sys.get_config_int("audio_synthesis.verify",0)==1 then require("tests.native_audio_test").run() end
     if sys.get_config_int("mesh_validation.enabled",0)==1 then self.mesh_validation=require("tests.mesh_browser").new() end
     if sys.get_config_int("audio_content_validation.enabled",0)==1 then self.audio_content_validation=require("tests.audio_content_scenario").new() end
+    if sys.get_config_int("hud_validation.enabled",0)==1 then self.hud_validation=require("tests.hud_scenario").new() end
     if sys.get_config_int("audio_validation.enabled",0)==1 then self.audio_validation={} end
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id, self.ctx.services.dynamics.by_id }
     self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
@@ -544,6 +546,7 @@ function update(self, dt)
     if self.traversal_validation then require("tests.traversal_scenario").update(self.traversal_validation,self,dt) end
     if self.viewmodel_validation then require("tests.viewmodel_scenario").update(self.viewmodel_validation,self,dt,restart_encounter) end
     if self.health_validation then require("tests.health_scenario").update(self.health_validation,self,dt,restart_encounter) end
+    if self.hud_validation then require("tests.hud_scenario").update(self.hud_validation,self,dt,restart_encounter) end
     if self.soldier_validation then require("tests.soldier_scenario").update(self.soldier_validation,self,dt,restart_encounter) end
     if self.effects_validation then require("tests.effects_scenario").update(self.effects_validation,self,dt,restart_encounter) end
     if self.grenades_validation then require("tests.grenades_scenario").update(self.grenades_validation,self,dt,restart_encounter) end
@@ -720,6 +723,20 @@ function late_update(self, dt)
     state.spread = weapon.spread or 0
     state.touch_controls=self.touch.enabled
     msg.post("/hud#gui", HUD_STATE, state)
+    local feedback=hud_feedback.snapshot(self.ctx)
+    feedback.visible=state.alive and not state.loading and not state.inspecting and not state.diagnostic
+    local width,height=window.get_size()
+    width,height=math.max(1,width),math.max(1,height)
+    local scale=math.min(width/960,height/640)
+    local items=hud_feedback.items(self.ctx,width/scale,height/scale)
+    for kind,list in pairs(items) do feedback[kind]=#list end
+    msg.post("/hud#gui","hud_feedback",feedback)
+    for kind,list in pairs(items) do
+        for i,item in ipairs(list) do
+            item.kind_colour=item.kind;item.kind=kind;item.index=i
+            msg.post("/hud#gui","hud_feedback_item",item)
+        end
+    end
     if self.touch.enabled then
         msg.post("/hud#gui","touch_state",{enabled=not self.capture,active=self.touch.active,
             paused=self.ctx.paused,focused=self.focused,move_x=self.touch.move_x,move_z=self.touch.move_z,
@@ -809,6 +826,7 @@ function on_input(self, action_id, action)
 end
 
 function on_message(self, message_id, message, sender)
+    if message_id==hash("hud_receipt") then self.hud_receipt=message end
     if message_id == hash("ui_action") then ui.action(self, message) end
     if message_id == hash("renderer_stats") or message_id == hash("renderer_atmosphere") or message_id == hash("renderer_details") or message_id == hash("renderer_photographic") or message_id == hash("renderer_configuration") then
         for k,v in pairs(message) do self.renderer_stats[k]=v end

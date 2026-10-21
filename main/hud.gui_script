@@ -2,6 +2,7 @@ local W = require "game.ui.widgets"
 local model = require "game.ui.hud"
 local menu = require "game.ui.menu"
 local touch = require "game.ui.touch"
+local feedback = require "game.ui.feedback_gui"
 local TL = {gui.ANCHOR_LEFT,gui.ANCHOR_TOP}
 local TR = {gui.ANCHOR_RIGHT,gui.ANCHOR_TOP}
 local BL = {gui.ANCHOR_LEFT,gui.ANCHOR_BOTTOM}
@@ -29,13 +30,6 @@ function init(self)
         gui.set_alpha(node,0)
         self.damage[#self.damage+1]=node
     end
-    self.direction={
-        front=W.box("damage_front",480,372,42,3,W.red,"damage"),
-        back=W.box("damage_back",480,268,42,3,W.red,"damage"),
-        left=W.box("damage_left",428,320,3,42,W.red,"damage"),
-        right=W.box("damage_right",532,320,3,42,W.red,"damage"),
-    }
-    for _,node in pairs(self.direction) do gui.set_enabled(node,false) end
     self.title=W.text("title",24,610,"MARKET STREET",1,W.white,gui.PIVOT_W,"hud",TL)
     W.box("map_border",MX,MY,SIZE+4,SIZE+4,W.muted,"hud",TL)
     W.box("map_background",MX,MY,SIZE,SIZE,W.panel,"hud",TL)
@@ -70,6 +64,7 @@ function init(self)
     gui.set_enabled(self.hit,false)
     self.loading=W.text("loading",480,280,"GENERATING MARKET STREET...",1,W.white)
     self.death=W.text("death",480,350,"",1.5,W.white)
+    self.feedback=feedback.new(TL,BR,BOTTOM,TOP)
 end
 
 function update(self,dt)
@@ -97,7 +92,7 @@ local function update_hud(self,state)
     if state.ammo~=previous.ammo then gui.set_text(self.ammo,state.ammo) end
     if state.weapon_status~=previous.weapon_status then gui.set_text(self.weapon_status,state.weapon_status) end
     if state.grenade_warning~=previous.grenade_warning then gui.set_text(self.grenade_warning,state.grenade_warning or "") end
-    gui.set_enabled(self.grenade_warning,state.alive and not state.inspecting and not state.diagnostic)
+    gui.set_enabled(self.grenade_warning,false)
     if state.inspecting~=previous.inspecting or state.title~=previous.title then
         gui.set_text(self.title,state.inspecting and state.title or "MARKET STREET")
         gui.set_text(self.stance,state.inspecting and "INSPECTION" or state.title)
@@ -116,11 +111,7 @@ local function update_hud(self,state)
             or "CLICK TO CAPTURE MOUSE  /  ESC MENU")
     end
     for _,node in ipairs(self.damage) do
-        gui.set_alpha(node,state.diagnostic and 0 or state.damage*.48)
-    end
-    for name,node in pairs(self.direction) do
-        gui.set_enabled(node,state.damage_direction==name and state.damage>0 and state.alive and not state.diagnostic)
-        gui.set_alpha(node,state.damage)
+        gui.set_alpha(node,state.diagnostic and 0 or math.max(state.damage*.48,state.alive and state.health_effect*(.14+.12*state.health_pulse) or 0))
     end
     local gap=5+math.min(12,state.spread*1.4) -- weapon spread is already in degrees
     for i,node in ipairs(self.crosshair) do
@@ -168,6 +159,9 @@ end
 
 function on_message(self,id,message,sender)
     if id==hash("hud_state") then update_hud(self,message)
+    elseif id==hash("hud_feedback") then feedback.state(self.feedback,message,self)
+    elseif id==hash("hud_feedback_item") then feedback.item(self.feedback,message)
+    elseif id==hash("hud_inspect") then msg.post(sender,"hud_receipt",feedback.inspect(self.feedback))
     elseif id==hash("touch_state") then touch.update(self.touch,message)
     elseif id==hash("map_rect") then
         self.map[#self.map+1]=message

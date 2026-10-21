@@ -26,6 +26,18 @@ The complete stress scenario remains unqualified while the remaining combat
 effects and sustained full-map measurements are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## HUD increment — 2026-10-21
+
+Step 16 implements bounded live contacts with floor hints, body-tracked grenade
+warnings/fuses, damage numbers, elimination banners, directional arcs and
+magazine/reload feedback. Optional objective/prompt display contracts remain
+inactive unless supplied. Existing audio observers own confirmation sounds.
+Seven Lua suites pass 90 checks; native Metal and release Chrome WebGL2 each
+pass 15 shared integration checks and seven captures across five window layouts,
+reload and recovery. See README.md for commands and adaptation limits. The source
+lock is refreshed without stale visual receipts; these implementation checks do
+not close controlled cross-engine visual or sustained-performance acceptance.
+
 ## Audio increment — 2026-10-20
 
 Step 15 adds generated combat, soldier and UI cues, contact-driven casing/body

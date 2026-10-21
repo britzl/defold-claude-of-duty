@@ -4,6 +4,7 @@ local controls = require "game.ui.controls"
 local audio = require "game.systems.audio"
 local renderer = require "game.render.settings"
 local hud = require "game.ui.hud"
+local feedback = require "game.ui.feedback"
 local touch = require "game.touch"
 local M = {}
 
@@ -54,6 +55,7 @@ function M.init(self, restart)
         automation_bridge.command("ui.snapshot", function()
             local state = M.snapshot(self)
             state.hud = hud.snapshot(self.ctx)
+            state.feedback = feedback.snapshot(self.ctx)
             state.map_rectangles = #self.ctx.world.minimap
             return state
         end)
@@ -68,11 +70,18 @@ function M.init(self, restart)
             return M.snapshot(self)
         end)
         automation_bridge.command("ui.configure", function(data) return M.configure(self, data) end)
+        automation_bridge.command("ui.prompt",function(data)
+            if data.clear then feedback.set_prompt(self.ctx,nil) else feedback.set_prompt(self.ctx,data) end
+            return feedback.snapshot(self.ctx)
+        end)
+        automation_bridge.command("ui.objectives",function(data) feedback.set_objectives(self.ctx,data.items or {});return feedback.snapshot(self.ctx) end)
         for name, description in pairs({
             ["ui.snapshot"]="Read pause/focus, live settings, compass, damage feedback, killfeed and minimap count.",
             ["ui.pause"]="Pause/resume simulation with {paused}; releases the cursor and clears held gameplay inputs.",
             ["ui.focus"]="Simulate a window focus callback with {focused} for automation; returning focus still requires explicit resume.",
             ["ui.configure"]="Set one live {kind=audio|renderer|input,key,value}; input supports sensitivity 0.25..3.",
+            ["ui.prompt"]="Display {key,text,sub,progress?}, or {clear=true}. Display only; does not run an interaction.",
+            ["ui.objectives"]="Display up to six {items={{position={x,y,z},label,name}}}; empty items clears them. Does not create game objectives.",
         }) do
             automation_bridge.describe("command", name, {description=description,
                 input_schema={type="object"}, output_schema={type="object"}})
