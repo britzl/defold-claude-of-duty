@@ -791,7 +791,22 @@ render targets and audio banks are unchanged. Immediate-query cost still needs
 sustained-combat profiling. Oriented box proxies, split arm segments, accumulated
 travel and private RNG sequences are documented adaptations.
 
+Static world colliders now populate a four-metre X/Z grid during loading. Player
+and enemy bullet queries use it for the starting-inside fallback, while native
+ray hits and live soldier/debris registries retain their existing checks. The
+grid includes rotated ramp bounds and near-face entry tolerance, accepts later
+static additions, and clears on teardown. Exact containment and slab tests still
+decide every hit.
+
+The generated-map regression compares indexed and full queries at 3,644 origins:
+1,224 static colliders become 15.22 candidates per query on average (98.76% fewer
+checks), with identical intervals. Three standalone Lua 5.4 trials measured
+32–35× faster queries with native rays stubbed out. This measures the Lua
+fallback, not full-game FPS or native/WebGL frame time.
+
 ```sh
+lua tests/bullet_query_test.lua
+lua tests/bullet_query_test.lua --benchmark
 lua tests/ballistics_test.lua
 lua tests/weapons_test.lua
 lua tests/ai_test.lua

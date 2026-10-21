@@ -63,8 +63,9 @@ function M.update(test,self,dt,restart)
         box("blocked_target",100,-3,.15,"flesh",1.7,1,"blocked_target")
         box("clear_target",104,-3,.15,"flesh",1.7,1,"clear_target")
         combat.register(ctx.combat,"blocked_target",1000);combat.register(ctx.combat,"clear_target",1000)
-        local query=weapons.query({fixtures.by_id},{groups={hash("world")}})
+        local query=weapons.query({fixtures.by_id},{groups={hash("world")},origin_indices={[fixtures.by_id]=fixtures.origin_index}})
         self.bullet_registries[#self.bullet_registries+1]=fixtures.by_id
+        self.bullet_origin_indices[fixtures.by_id]=fixtures.origin_index
         frames(4)
         local definition={id="fixture",damage=20,muzzleVelocity=1000,penetration=1,dropoff=.6,maxRange=100,dragK=0}
         local function fire(q,x,origin,direction,def)
@@ -152,6 +153,7 @@ function M.update(test,self,dt,restart)
         test.hold_pause=false;runtime.set_paused(ctx,false);frames(3)
         assert(live.age>age);check("pause_freezes_in_flight_rounds")
         table.remove(self.bullet_registries)
+        self.bullet_origin_indices[fixtures.by_id]=nil
         world.final(fixtures);combat.remove(ctx.combat,"blocked_target");combat.remove(ctx.combat,"clear_target")
         for _=1,3 do
             restart(self);ctx.ai.enabled=false;frames(5)

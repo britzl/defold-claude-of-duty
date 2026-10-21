@@ -1,5 +1,6 @@
 -- Engine adapter. Generation and metadata remain testable without Defold.
 local materials = require "game.world.materials"
+local origin_index = require "game.weapons.origin_index"
 local M = {}
 local POSITION, NORMAL, COLOR = hash("position"), hash("normal"), hash("color")
 local EDGES,MASKS=hash("surface_edges"),hash("surface_masks")
@@ -9,7 +10,7 @@ local WORLD = { hash("world") }
 
 function M.new(mesh_factory, collision_factory)
     return { api = M, mesh_factory = mesh_factory, collision_factory = collision_factory,
-        objects = {}, buffers = {}, collisions = {}, by_id = {} }
+        objects = {}, buffers = {}, collisions = {}, by_id = {}, origin_index = origin_index.new() }
 end
 
 local function begin_batch(batch)
@@ -131,6 +132,7 @@ function M.add_collision(adapter, shape)
     physics.set_shape(url, "box", { type = physics.SHAPE_TYPE_BOX, dimensions = vmath.vector3(shape.w, shape.h, shape.d) })
     adapter.collisions[#adapter.collisions + 1] = { id = id, url = url, shape = shape }
     adapter.by_id[id] = shape
+    origin_index.add(adapter.origin_index, id, shape)
 end
 
 function M.raycast(adapter, from, to)
@@ -172,6 +174,7 @@ end
 
 function M.final(adapter)
     adapter.pending_batch=nil -- Unpublished buffer is Lua-owned and can be collected.
+    origin_index.clear(adapter.origin_index)
     for _, id in ipairs(adapter.objects) do go.delete(id) end
     -- Components retain their references until deferred GO deletion completes.
     for _, path in ipairs(adapter.buffers) do resource.release(path) end

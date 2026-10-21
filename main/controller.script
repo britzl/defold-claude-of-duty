@@ -69,6 +69,7 @@ local function create_range(self)
     if not self.range then
         self.range = firing_range.new(self.ctx)
         self.bullet_registries[#self.bullet_registries+1] = self.range.adapter.by_id
+        self.bullet_origin_indices[self.range.adapter.by_id] = self.range.adapter.origin_index
     end
 end
 
@@ -178,9 +179,10 @@ function init(self)
     if sys.get_config_int("hud_validation.enabled",0)==1 then self.hud_validation=require("tests.hud_scenario").new() end
     if sys.get_config_int("audio_validation.enabled",0)==1 then self.audio_validation={} end
     self.bullet_registries = { self.ctx.world.adapter.by_id, self.ctx.services.soldiers.by_id, self.ctx.services.dynamics.by_id }
-    self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries)
+    self.bullet_origin_indices = { [self.ctx.world.adapter.by_id] = self.ctx.world.adapter.origin_index }
+    self.ctx.services.bullets = weapon_adapter.query(self.bullet_registries,{origin_indices=self.bullet_origin_indices})
     self.ctx.services.enemy_bullets=weapon_adapter.query({self.ctx.world.adapter.by_id,self.ctx.services.dynamics.by_id},
-        {groups={hash("world"),hash("player"),hash("debris")},actors={[hash("/player")]="player"}})
+        {groups={hash("world"),hash("player"),hash("debris")},actors={[hash("/player")]="player"},origin_indices=self.bullet_origin_indices})
     if sys.get_sys_info().system_name=="HTML5" and sys.get_config_int("squad_validation.enabled",0)==1 then
         self.squad_validation=require("tests.squads_browser").new()
     end

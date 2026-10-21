@@ -1,6 +1,7 @@
 local geometry = require "game.weapons.geometry"
 local pose = require "game.weapons.viewmodel"
 local trace = require "game.weapons.trace"
+local origin_index = require "game.weapons.origin_index"
 local V = require "game.weapons.math"
 local events = require "game.events"
 local arms = require "game.weapons.arms"
@@ -181,7 +182,9 @@ function M.query(registries,options)
         -- Bullet rays starting inside a shape do not report its entry. Include
         -- only containing boxes, using the very same collider descriptions.
         for _,registry in ipairs(registries) do
-            for id,shape in pairs(registry) do
+            local index=options.origin_indices and options.origin_indices[registry]
+            local candidates=index and origin_index.candidates(index,from,dir) or registry
+            for id,shape in pairs(candidates) do
                 if not seen[id] and not shape.disabled and trace.contains_origin(shape,from,dir) then
                     local interval=trace.box(shape,from,dir,length)
                     if interval and interval.enter<=1e-7 then result[#result+1]=interval end
