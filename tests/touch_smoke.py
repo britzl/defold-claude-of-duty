@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import zipfile
 
 from automation_bridge import editor, engine
 
@@ -15,11 +16,15 @@ def main():
     root = Path(__file__).resolve().parents[1]
     output = root / "build" / "touch-validation"
     output.mkdir(parents=True, exist_ok=True)
-    editor.open_project(root, start_if_needed=False, timeout=5).compile(timeout=120)
+    result=editor.open_project(root, start_if_needed=False, timeout=5).compile(timeout=120)
+    assert result.success,result
+    with zipfile.ZipFile(root / ".internal/cache/engine-archives/arm64-osx/build.zip") as archive:
+        executable=output / "dmengine"
+        executable.write_bytes(archive.read("dmengine"));executable.chmod(0o755)
     with (output / "engine.log").open("w") as log:
         process = subprocess.Popen([
-            str(root / "build/arm64-osx/dmengine"), str(root / "build/default/game.projectc"),
-            "--config=display.high_dpi=0", "--config=touch_validation.enabled=1",
+            str(executable), str(root / "build/default/game.projectc"),
+            "--config=display.high_dpi=0", "--config=touch_validation.enabled=1", "--config=input_validation.enabled=1",
         ], cwd=root, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, "DM_SERVICE_PORT": "dynamic"})
         game = None
         try:
@@ -55,6 +60,7 @@ def main():
 
             engine.wait_until(lambda: cmd("world.snapshot")["ready"], timeout=30)
             engine.wait_until(lambda: cmd("renderer.snapshot")["ready"], timeout=30)
+            cmd("touch_validation.background")
             cmd("ai.configure", {"enabled": False})
             cmd("ui.focus", {"focused": True})
             cmd("ui.pause", {"paused": False})
@@ -76,7 +82,7 @@ def main():
             stick = element("touch_move").bounds
             # Start in empty space and just outside the visible stick, then
             # drag across each control. These gestures must never be captured.
-            for x, y in ((576, 320), (stick.center["x"]+stick.w/2+2, stick.center["y"])):
+            for x, y in ((10, 20), (stick.center["x"]+stick.w/2+2, stick.center["y"])):
                 point(1, x, y, "down")
                 point(1, x+20, y+10)
                 point(1, look["x"], look["y"])
@@ -90,7 +96,7 @@ def main():
             point(1, look["x"], look["y"], "down")
             point(1, look["x"]-120, look["y"]-20)
             point(1, look["x"]-120, look["y"]-20, "up")
-            assert abs(cmd("gameplay.snapshot")["yaw"]-before["yaw"]) > .01
+            assert abs(cmd("gameplay.snapshot")["yaw"]-before["yaw"]) > .01, (look, before, cmd("input_validation.state"))
             assert not cmd("weapons.snapshot")["fired"]
             print("PASS outside touches stay inert; LOOK pad turns without firing", flush=True)
 
@@ -101,10 +107,7 @@ def main():
             tap("touch_crouch")
             game.wait_frames(30)
             assert cmd("gameplay.snapshot")["stance"] == "crouch"
-            tap("touch_prone")
-            game.wait_frames(30)
-            assert cmd("gameplay.snapshot")["stance"] == "prone"
-            tap("touch_prone")
+            tap("touch_crouch")
             game.wait_frames(30)
             assert cmd("gameplay.snapshot")["stance"] == "stand"
 
@@ -175,6 +178,49 @@ def main():
             game.wait_frames(10)
             assert cmd("gameplay.snapshot")["alive"]
             print("PASS analog movement, focus reset, death menu and restart", flush=True)
+            # Mapped controller actions use the real controller script. Hardware
+            # mapping itself is covered by the browser Gamepad API fixture.
+            def pad(name,value):
+                cmd("input_validation.command",{"kind":"inject","name":"pad_"+name,
+                    "action":{"gamepad":0,"value":value}})
+                game.wait_frames(5)
+            cmd("ui.focus", {"focused": True})
+            cmd("ui.pause", {"paused": False})
+            before=cmd("weapons.snapshot")["fired"]
+            pad("move_up",1);pad("look_right",.7);pad("fire",1)
+            assert cmd("input_validation.state")["move_z"] < -.9
+            assert cmd("weapons.snapshot")["fired"] > before
+            pad("pause",1)
+            assert cmd("ui.snapshot")["paused"]
+            assert not cmd("input_validation.state")["held"].get("fire")
+            pad("pause",0);pad("jump",1);pad("jump",0)
+            assert not cmd("ui.snapshot")["paused"]
+            assert not cmd("input_validation.state")["held"].get("fire")
+            pad("move_up",0);pad("look_right",0);pad("fire",0)
+            pad("fire",1);pad("disconnected",0)
+            assert cmd("ui.snapshot")["paused"]
+            assert not cmd("input_validation.state")["held"].get("fire")
+            print("PASS native gamepad actions, menu resume, quarantine and disconnect",flush=True)
+            tap("tab_controls")
+            tap("setting_invert_look")
+            assert cmd("ui.snapshot")["input"]["invert_look"]
+            bar=element("slider_fov").bounds
+            point(1,bar.center["x"]+bar.w*.25,bar.center["y"],"down")
+            point(1,bar.center["x"]+bar.w*.25,bar.center["y"],"up")
+            assert cmd("ui.snapshot")["input"]["fov"]>85
+            tap("defaults")
+            assert cmd("ui.snapshot")["input"]["fov"]==70
+            assert not cmd("ui.snapshot")["input"]["invert_look"]
+            tap("resume")
+            game.key("3",wait="released");game.wait_frames(70)
+            assert cmd("weapons.snapshot")["weapon"]=="pistol"
+            game.key("C",wait="released");game.wait_frames(30)
+            assert cmd("gameplay.snapshot")["stance"]=="crouch"
+            game.key("Z",wait="released");game.wait_frames(30)
+            assert cmd("gameplay.snapshot")["stance"]=="prone"
+            game.key("I",wait="released");game.wait_frames(3)
+            assert cmd("weapons.snapshot")["clip"]=="inspect"
+            print("PASS native keyboard bindings, touch FOV/invert/defaults",flush=True)
         finally:
             if game:
                 game.close_engine()

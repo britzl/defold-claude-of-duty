@@ -3,6 +3,12 @@
 local M={}
 function M.install(self,on_input)
     assert(automation_bridge,"Touch validation requires Automation Bridge")
+    -- This fixture owns a background engine; the host user may focus other apps.
+    -- Focus lifecycle is exercised explicitly through ui.focus in the test.
+    automation_bridge.command("touch_validation.background",function()
+        window.set_listener(nil)
+        return {focus="fixture"}
+    end)
     automation_bridge.command("touch_validation.input",function(data)
         local width,height=window.get_size()
         local points={}

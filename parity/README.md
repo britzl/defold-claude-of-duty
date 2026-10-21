@@ -26,6 +26,22 @@ The complete stress scenario remains unqualified while the remaining combat
 effects and sustained full-map measurements are missing. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Input and touch increment — 2026-10-21
+
+Step 17 adds keyboard alternatives/reference toggles, gamepad actions, independent
+sensitivities, FOV/inversion/reset controls, and a simplified six-button touch
+combat layout. The user authorized omitting prone, lean, inspection and fire-mode
+touch buttons. A large swipe area, fire-drag aiming, finger handoff and sprint
+cancellation during fire/ADS support two-thumb play. Compact menus and safe-area
+layouts cover landscape and portrait. Six Lua suites pass 73 checks; the baseline
+tools pass 12. The release browser fixture passes nine integration groups and
+eight captures, including real browser audio activation, pointer lock, gesture
+cancellation and resizing while fingers remain down. Native GUI/action fixtures
+cover gestures, menus/settings, keyboard and gamepad quarantine with seven
+captures. Native focus and touch/gamepad events are fixture-driven. The source lock is refreshed without stale
+visual receipts. See README.md for controls, reproducible validation commands and
+hardware/quality acceptance limits.
+
 ## HUD increment — 2026-10-21
 
 Step 16 implements bounded live contacts with floor hints, body-tracked grenade

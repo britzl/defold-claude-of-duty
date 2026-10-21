@@ -130,7 +130,7 @@ def main():
         assert len(command("ai.volumes")) == 11
         command("gameplay.damage", dict(target="player", amount=1000))
         engine.wait_until(lambda: not command("gameplay.snapshot")["alive"], timeout=3)
-        game.key("9", wait="released")
+        game.key("F9", wait="released")
         game.wait_frames(5)
         assert command("gameplay.snapshot")["health"] == 100 and soldier()["health"] == 100
         assert command("weapons.snapshot")["ammo"] == 31 and state()["enabled"]

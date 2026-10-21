@@ -2,7 +2,7 @@
 -- Coordinates use a uniform virtual scale; Defold action.x/y use 960 x 640.
 local input = require "game.input"
 local M = {}
-local toggles = { aim=true, crouch=true, prone=true }
+local toggles = { aim=true, crouch=true }
 
 function M.default_enabled(system, browser_touch, override)
     if override == 0 then return false end
@@ -15,26 +15,33 @@ function M.layout(width, height, safe)
     safe = safe or {}
     local left, right = safe.inset_left or 0, safe.inset_right or 0
     local bottom, top = safe.inset_bottom or 0, safe.inset_top or 0
-    local scale = math.max(.01,math.min((width-left-right)/960,(height-bottom-top)/540))
-    local l, r, b, t = left/scale,(width-right)/scale,bottom/scale,(height-top)/scale
-    local layout = { width=width/scale, height=height/scale, buttons={},
-        stick={x=l+132,y=b+202,r=76}, left=l, right=r, bottom=b, top=t }
+    local portrait=(width-left-right)<(height-bottom-top)
+    local scale=math.max(.01,math.min((width-left-right)/(portrait and 460 or 960),
+        (height-bottom-top)/(portrait and 800 or 540)))
+    local l,r,b,t=left/scale,(width-right)/scale,bottom/scale,(height-top)/scale
+    local layout={width=width/scale,height=height/scale,scale=scale,portrait=portrait,buttons={},
+        stick={x=l+110,y=b+(portrait and 220 or 180),r=72},left=l,right=r,bottom=b,top=t}
+    -- The whole unobstructed right side is a look surface. Buttons win hit tests.
+    layout.look={x=(l+r)*.5+(r-l)*.25,y=(b+t)*.5,w=(r-l)*.5,h=t-b-120}
     local function button(id,label,x,y,w,h)
-        layout.buttons[#layout.buttons+1]={id=id,label=label,x=x,y=y,w=w or 82,h=h or 60}
+        layout.buttons[#layout.buttons+1]={id=id,label=label,x=x,y=y,w=w or 94,h=h or 78}
     end
-    button("pause","MENU",r-66,t-106,92,52)
-    button("look","LOOK",r-222,b+390,92,76)
-    button("fire","FIRE",r-90,b+298,112,100)
-    button("aim","AIM",r-222,b+298,92,76)
-    button("jump","JUMP",r-64,b+192)
-    button("crouch","CROUCH",r-158,b+192)
-    button("reload","RELOAD",r-252,b+192)
-    button("prone","PRONE",r-64,b+124)
-    button("next_weapon","WEAPON",r-158,b+124)
-    button("fire_mode","MODE",r-252,b+124)
-    button("lean_left","LEAN <",l+58,b+330)
-    button("lean_right","LEAN >",l+152,b+330)
-    button("inspect","INSPECT",l+246,b+330)
+    button("pause","PAUSE",r-66,t-72,100,70)
+    if portrait then
+        button("fire","FIRE",r-70,b+280,112,104)
+        button("aim","AIM",r-70,b+390)
+        button("jump","JUMP",r-62,b+170)
+        button("crouch","CROUCH",r-164,b+76)
+        button("reload","RELOAD",r-268,b+76)
+        button("next_weapon","SWAP",r-62,b+76)
+    else
+        button("fire","FIRE",r-74,b+242,112,104)
+        button("aim","AIM",r-190,b+242)
+        button("jump","JUMP",r-68,b+138)
+        button("crouch","CROUCH",r-174,b+138)
+        button("reload","RELOAD",r-280,b+138)
+        button("next_weapon","SWAP",r-300,b+242)
+    end
     return layout
 end
 
@@ -44,10 +51,10 @@ end
 
 function M.reset(state, buffer)
     for name in pairs(state.held) do input.button(buffer,name,{released=true},"touch") end
-    buffer.move_x, buffer.move_z = 0, 0
+    input.move(buffer,"touch",0,0)
     state.fingers, state.toggled, state.held = {}, {}, {}
     state.move_id, state.look_id, state.menu_id = nil, nil, nil
-    state.move_x, state.move_z = 0, 0
+    state.move_x, state.move_z, state.sprinting = 0, 0, false
 end
 
 local function hit(rect,x,y)
@@ -61,6 +68,7 @@ local function target(layout,x,y,active)
     if not active then return "ignored" end
     local stick=layout.stick
     if (x-stick.x)^2+(y-stick.y)^2 <= stick.r^2 then return "move" end
+    if hit(layout.look,x,y) then return "look" end
     return "ignored"
 end
 
@@ -81,7 +89,9 @@ local function publish(state,buffer)
     end
     -- Pushing forward to the rim sprints; crossing it twice also uses the
     -- normal tactical-sprint press timing. Crouching/prone still allow walking.
-    held.sprint = state.move_z < -.9 and not held.crouch and not held.prone or nil
+    -- Hysteresis prevents noisy thumb motion from repeatedly toggling sprint.
+    state.sprinting=state.move_z < (state.sprinting and -.72 or -.92) and not held.crouch and not held.aim and not held.fire
+    held.sprint=state.sprinting or nil
     for name in pairs(state.held) do
         if not held[name] then input.button(buffer,name,{released=true},"touch") end
     end
@@ -89,10 +99,10 @@ local function publish(state,buffer)
         if not state.held[name] then input.button(buffer,name,{pressed=true},"touch") end
     end
     state.held=held
-    buffer.move_x,buffer.move_z=state.move_x,state.move_z
+    input.move(buffer,"touch",state.move_x,state.move_z)
 end
 
-function M.handle(state,buffer,points,layout,active,sensitivity)
+function M.handle(state,buffer,points,layout,active,sensitivity,invert)
     for _,point in ipairs(points) do
         local id=point.id
         local x,y=point.x*layout.width/960,point.y*layout.height/640
@@ -103,6 +113,7 @@ function M.handle(state,buffer,points,layout,active,sensitivity)
             if role=="move" then
                 if state.move_id then role="ignored" else state.move_id=id end
             end
+            if role=="jump" then state.toggled.crouch=false end
             if role=="look" then
                 if state.look_id then role="ignored" else state.look_id=id end
             elseif role=="fire" and not state.look_id then state.look_id=id end
@@ -110,8 +121,6 @@ function M.handle(state,buffer,points,layout,active,sensitivity)
             state.fingers[id]=finger
             if toggles[role] then
                 state.toggled[role]=not state.toggled[role]
-                if role=="crouch" then state.toggled.prone=false
-                elseif role=="prone" then state.toggled.crouch=false end
             end
         end
         -- A hold surviving reset/focus/resize cannot acquire a new role.
@@ -119,13 +128,21 @@ function M.handle(state,buffer,points,layout,active,sensitivity)
             if not point.released then
                 if state.move_id==id then movement(state,layout,x,y) end
                 if state.look_id==id then
-                    input.look(buffer,(x-finger.x)*(sensitivity or 1),(y-finger.y)*(sensitivity or 1))
+                    local speed=(sensitivity or 1)*(state.toggled.aim and .55 or 1)
+                    input.look(buffer,(x-finger.x)*speed,(y-finger.y)*speed*(invert and -1 or 1))
                 end
                 finger.x,finger.y=x,y
             else
                 state.fingers[id]=nil
                 if state.move_id==id then state.move_id=nil;state.move_x,state.move_z=0,0 end
-                if state.look_id==id then state.look_id=nil end
+                if state.look_id==id then
+                    state.look_id=nil
+                    -- An already-held fire finger takes over smoothly, using its
+                    -- last position rather than the departing look finger's origin.
+                    for other_id,other in pairs(state.fingers) do
+                        if other.role=="fire" or other.role=="look" then state.look_id=other_id;break end
+                    end
+                end
             end
             -- Preserve short tap edges even if press/release share a batch.
             publish(state,buffer)

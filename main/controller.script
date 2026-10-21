@@ -26,11 +26,18 @@ local ui_controls = require "game.ui.controls"
 local hud_model = require "game.ui.hud"
 local hud_feedback = require "game.ui.feedback"
 local touch = require "game.touch"
+local gamepad = require "game.gamepad"
 local dynamics = require "game.physics.defold"
 local grenades = require "game.systems.grenades"
 
 local actions = {}
 for _, name in ipairs(input.actions) do actions[hash(name)] = name end
+local pad_actions={}
+for _,name in ipairs(gamepad.names) do pad_actions[hash("pad_"..name)]=name end
+pad_actions[hash("pad_next_weapon_dpad")]="next_weapon_dpad"
+pad_actions[hash("pad_pause_back")]="pause_back"
+local aliases={[hash("ui_up")]="forward",[hash("ui_down")]="back",
+    [hash("ui_left")]="left",[hash("ui_right")]="right",[hash("crouch_alt")]="crouch",[hash("inspect_alt")]="inspect"}
 local APPLY_DAMAGE = hash("apply_damage")
 local HUD_STATE = hash("hud_state")
 local VIEW_ACTIONS = { [hash("view_street")] = "street", [hash("view_shop")] = "shop", [hash("view_room")] = "room" }
@@ -47,6 +54,8 @@ local function select_view(self, name)
     self.weapon_drive = nil
     input.reset(self.ctx.input)
     if self.touch then touch.reset(self.touch,self.ctx.input) end
+    if self.gamepad then gamepad.reset(self.gamepad,self.ctx.input) end
+    if self.ui then ui_controls.quarantine(self.ui) end
     window.set_mouse_lock(false)
 end
 
@@ -214,6 +223,9 @@ function init(self)
     ui.init(self, restart_encounter)
     if sys.get_config_int("touch_validation.enabled",0)==1 then
         require("tests.touch_native").install(self,handle_input)
+    end
+    if sys.get_config_int("input_validation.enabled",0)==1 then
+        require("tests.input_probe").install(self,restart_encounter,handle_input)
     end
     msg.post(".", "acquire_input_focus")
     window.set_listener(window_event)
@@ -509,12 +521,14 @@ function init(self)
 end
 
 function fixed_update(self, dt)
+    ui.sync_touch(self)
     if self.ctx.paused or self.capture then return end
     -- Collision objects acquire their Bullet broadphase handles after init.
     if self.ctx.world.ready and not self.ctx.services.capsule then
         self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id)
         self.ctx.services.capsule:sync(self.ctx.player.position, self.ctx.player.motion.height)
     end
+    gamepad.fixed_update(self.gamepad,self.ctx.input,dt,self.ui,ui.active(self))
     if self.weapon_drive then weapon_driver.before(self.ctx, self.weapon_drive) end
     runtime.fixed_update(self.ctx, dt)
     if self.ctx.world.ready then require("game.world.generator").mark(self.ctx.world,"gameplay") end
@@ -526,6 +540,8 @@ function fixed_update(self, dt)
 end
 
 function update(self, dt)
+    ui.update(self,dt)
+    if self.input_probe then require("tests.input_probe").update(self) end
     if self.animated_atmosphere_validation then require("tests.animated_atmosphere_scenario").update(self.animated_atmosphere_validation,self,dt,restart_encounter) end
     if self.rendering_validation then require("tests.rendering_browser").update(self.rendering_validation,self,dt) end
     if self.capture then ui.sync_touch(self);return end
@@ -722,6 +738,7 @@ function late_update(self, dt)
     state.diagnostic = self.renderer_settings.view ~= "scene"
     state.spread = weapon.spread or 0
     state.touch_controls=self.touch.enabled
+    state.gamepad_controls=self.input_device=="gamepad"
     msg.post("/hud#gui", HUD_STATE, state)
     local feedback=hud_feedback.snapshot(self.ctx)
     feedback.visible=state.alive and not state.loading and not state.inspecting and not state.diagnostic
@@ -740,7 +757,8 @@ function late_update(self, dt)
     if self.touch.enabled then
         msg.post("/hud#gui","touch_state",{enabled=not self.capture,active=self.touch.active,
             paused=self.ctx.paused,focused=self.focused,move_x=self.touch.move_x,move_z=self.touch.move_z,
-            held=self.touch.held})
+            held=self.touch.held,health=out.health,reloading=weapon.clip=="reloadTac" or weapon.clip=="reloadEmpty",
+            reload_progress=weapon.progress,ammo_empty=weapon.ammo==0,ammo=string.format("%s  %d / %d",weapon.label,weapon.ammo,weapon.reserve)})
     end
     if profiler then profiler.scope_end() end
     if self.ctx.world.ready and not self.map_sent then
@@ -762,18 +780,23 @@ handle_input = function(self, action_id, action)
     -- Defold also emits mouse-button/pointer events for the first finger.
     -- Ignore their touch source before menus, fire, or pointer lock can see it.
     if action.source==TOUCH_SOURCE then return true end
+    if not action.source and (not action_id or action_id==hash("fire") or action_id==hash("aim"))
+        and require("game.browser_input").compatibility_mouse() then return true end
     if self.capture then
         if action_id==ESCAPE and action.pressed then capture_controller.finish(self) end
         return true
     end
-    local name = actions[action_id]
-    ui_controls.observe(self.ui, name, action)
+    if pad_actions[action_id] then return ui.gamepad_input(self,pad_actions[action_id],action) end
+    if action.pressed then self.input_device="desktop" end
+    local name = actions[action_id] or aliases[action_id]
+    local physical=action_id and tostring(action_id)
+    ui_controls.observe(self.ui, physical, action)
     if action_id == ESCAPE and action.pressed then
         ui.pause(self, not self.ctx.paused)
         return true
     end
     if ui.menu_input(self, action_id, action) then return true end
-    if name and not ui_controls.allowed(self.ui, name) then return true end
+    if not self.focused or (name and not ui_controls.allowed(self.ui, physical)) then return true end
     if action_id==hash("restart_encounter") and action.pressed and self.ctx.world.ready then
         restart_encounter(self)
         return true
@@ -806,7 +829,7 @@ handle_input = function(self, action_id, action)
                 -- dx/dy scale them down with the canvas size (including high DPI).
                 dx, dy = action.screen_dx, action.screen_dy
             end
-            input.look(self.ctx.input, (dx or 0)*self.ui.sensitivity, (dy or 0)*self.ui.sensitivity)
+            if ui.active(self) then input.look(self.ctx.input, (dx or 0)*self.ui.sensitivity, (dy or 0)*self.ui.sensitivity*(self.ui.invert_look and -1 or 1)) end
         end
         return false
     end
@@ -817,7 +840,20 @@ handle_input = function(self, action_id, action)
         return true
     end
     if (name == "fire" or name == "aim") and not window.get_mouse_lock() then return true end
-    if name then return input.button(self.ctx.input, name, action) end
+    if not ui.active(self) then return true end
+    if action_id==hash("wheel_next") or action_id==hash("wheel_previous") then
+        if action.pressed or (action.value or 0)>0 then
+            local wheel=action_id==hash("wheel_next") and "next_weapon" or "previous_weapon"
+            input.button(self.ctx.input,wheel,{pressed=true},"wheel")
+            input.button(self.ctx.input,wheel,{released=true},"wheel")
+        end
+        return true
+    end
+    if name then
+        -- Alias sources are independent for holds; stances share one toggle.
+        local source=(name=="crouch" or name=="prone" or name=="jump" or name=="sprint") and "desktop" or physical
+        return ui_controls.button(self.ui,self.ctx.input,name,action,source)
+    end
     return false
 end
 

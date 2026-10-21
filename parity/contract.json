@@ -173,8 +173,8 @@
     },
     {
       "id": "bindings",
-      "state": "reconcile",
-      "current": "1\u20133 inspection, 6\u20138 weapons, F inspect, held crouch/prone",
+      "state": "reconciled",
+      "current": "1\u20133 weapons; I/F inspect; WASD/arrows; Ctrl/C crouch and Z prone toggles; directional wheel switch; F1\u2013F5/F9 diagnostics/restart. Standard gamepad mapping and six-button touch combat layout. User authorized simplified touch on 2026-10-21: omit prone, lean, inspect and fire-mode buttons; use broad swipe look, fire drag, toggle ADS and automatic sprint.",
       "reference": "1\u20133 weapons, I inspect, wheel switch, toggle crouch/prone",
       "gate": "input-settings"
     },
@@ -657,13 +657,19 @@
         "threejs:src/core/input.js",
         "kaigen:src/claude_of_duty/cod_input.c"
       ],
-      "current": "partial",
+      "current": "implemented-core",
       "procedure": "Complete traversal/combat/menu/restart flows separately with each device; change FOV/inversion/presets and return focus.",
       "expect": "Reference bindings, toggles, defaults and no stuck inputs; actual browser pointer lock and touch/audio activation verified.",
       "coverage": [
         "tests/ui_test.lua",
-        "tests/ui_smoke.py"
-      ]
+        "tests/ui_smoke.py",
+        "tests/touch_test.lua",
+        "tests/input_adapters_test.lua",
+        "tests/touch_smoke.py",
+        "tests/input_probe.lua",
+        "tools/validate_input_browser.mjs"
+      ],
+      "implementation_notes": "Step 17 implements keyboard alternatives/weapon keys/wheel and reference stance toggles, full mapped gamepad commands with fixed-tick analog look, independent sensitivity/FOV/invert/reset settings and a simplified six-button touch layout. Native GUI/action fixtures and real Chromium touch/mouse/keyboard events cover lifecycle and settings; the browser also exercises its standard Gamepad API mapping and normal touch audio activation. Touch omits prone/lean/inspect/fire-mode buttons by user authorization. Physical hardware feel/mapping, Safari/mobile qualification and whole-game automatic/manual quality remain open."
     },
     {
       "id": "quality-performance",

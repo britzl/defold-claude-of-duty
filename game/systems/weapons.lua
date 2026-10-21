@@ -164,8 +164,9 @@ function M.fixed_update(ctx,dt)
         if b.weapon_rifle.pressed then M.select(ctx,"rifle") end
         if b.weapon_smg.pressed then M.select(ctx,"smg") end
         if b.weapon_pistol.pressed then M.select(ctx,"pistol") end
-        if b.next_weapon.pressed then
-            for i,id in ipairs(ids) do if id==w.equipped then M.select(ctx,ids[i%#ids+1]);break end end
+        if b.next_weapon.pressed or b.previous_weapon.pressed then
+            local direction=b.previous_weapon.pressed and -1 or 1
+            for i,id in ipairs(ids) do if id==(w.switch_to or w.equipped) then M.select(ctx,ids[(i-1+direction)%#ids+1]);break end end
         end
         local s,d=w.inventory[w.equipped],defs[w.equipped]
         if b.fire_mode.pressed and not w.switch_to then s.mode=s.mode%#d.modes+1;w.burst=0 end

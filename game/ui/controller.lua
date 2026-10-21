@@ -6,10 +6,13 @@ local renderer = require "game.render.settings"
 local hud = require "game.ui.hud"
 local feedback = require "game.ui.feedback"
 local touch = require "game.touch"
+local gamepad = require "game.gamepad"
 local M = {}
 
 function M.snapshot(self)
     return { paused=self.ctx.paused, focused=self.focused, sensitivity=self.ui.sensitivity,
+        input={sensitivity=self.ui.sensitivity,touch_sensitivity=self.ui.touch_sensitivity,
+            gamepad_sensitivity=self.ui.gamepad_sensitivity,fov=self.ui.fov,invert_look=self.ui.invert_look},
         audio=self.ctx.audio.settings, renderer=self.renderer_settings,
         touch_controls=self.touch and self.touch.enabled or false }
 end
@@ -22,6 +25,7 @@ function M.pause(self, paused)
     if not paused and not self.focused then return end
     controls.quarantine(self.ui)
     if self.touch then touch.reset(self.touch,self.ctx.input) end
+    if self.gamepad then gamepad.reset(self.gamepad,self.ctx.input) end
     input.reset(self.ctx.input)
     runtime.set_paused(self.ctx, paused)
     window.set_mouse_lock(false)
@@ -37,7 +41,7 @@ function M.configure(self, data)
         if data.key=="hour" or data.key=="lighting" then
             msg.post("@render:", "renderer_atmosphere_seek", {hour=self.renderer_settings.hour})
         end
-    elseif data.kind == "input" and data.key == "sensitivity" then controls.configure(self.ui, data.value)
+    elseif data.kind == "input" then controls.configure(self.ui, data.value, data.key)
     else error("Unknown setting") end
     audio.ui(self.ctx)
     M.publish(self)
@@ -46,6 +50,9 @@ end
 
 function M.init(self, restart)
     self.ui, self.focused = controls.new(), true
+    self.ctx.preferences=self.ui
+    self.gamepad=gamepad.new()
+    require("game.browser_input").install()
     local system=sys.get_sys_info().system_name
     self.touch_override=sys.get_config_int("touch_controls.enabled",-1)
     local browser_touch=system=="HTML5" and html5 and html5.run("navigator.maxTouchPoints > 0 ? '1' : '0'")=="1"
@@ -79,7 +86,7 @@ function M.init(self, restart)
             ["ui.snapshot"]="Read pause/focus, live settings, compass, damage feedback, killfeed and minimap count.",
             ["ui.pause"]="Pause/resume simulation with {paused}; releases the cursor and clears held gameplay inputs.",
             ["ui.focus"]="Simulate a window focus callback with {focused} for automation; returning focus still requires explicit resume.",
-            ["ui.configure"]="Set one live {kind=audio|renderer|input,key,value}; input supports sensitivity 0.25..3.",
+            ["ui.configure"]="Set one live {kind=audio|renderer|input,key,value}; input supports mouse/touch/gamepad sensitivity 0.25..3, fov 55..100 and invert_look.",
             ["ui.prompt"]="Display {key,text,sub,progress?}, or {clear=true}. Display only; does not run an interaction.",
             ["ui.objectives"]="Display up to six {items={{position={x,y,z},label,name}}}; empty items clears them. Does not create game objectives.",
         }) do
@@ -91,15 +98,25 @@ function M.init(self, restart)
     M.publish(self)
 end
 
+function M.active(self)
+    return self.focused and not self.ctx.paused and self.ctx.world.ready
+        and self.ctx.player.actor.alive and self.ctx.player.enabled and not self.capture and not self.view or false
+end
+
 function M.sync_touch(self)
     if not self.touch then return end
+    local playable=M.active(self)
+    if playable~=self.input_active then
+        controls.quarantine(self.ui)
+        if self.gamepad then gamepad.reset(self.gamepad,self.ctx.input) end
+        input.reset(self.ctx.input)
+        self.input_active=playable
+    end
     local width,height=window.get_size()
     local safe=window.get_safe_area and window.get_safe_area() or {}
     local key=table.concat({width,height,safe.inset_left or 0,safe.inset_right or 0,
         safe.inset_bottom or 0,safe.inset_top or 0},":")
-    local active=self.touch.enabled and self.focused and not self.ctx.paused
-        and self.ctx.world.ready and self.ctx.player.actor.alive and self.ctx.player.enabled
-        and not self.capture and not self.view or false
+    local active=self.touch.enabled and playable
     if key~=self.touch_layout_key or active~=self.touch.active then
         touch.reset(self.touch,self.ctx.input)
         self.touch_layout_key=key
@@ -109,6 +126,7 @@ function M.sync_touch(self)
 end
 
 function M.touch_input(self, action)
+    self.input_device="touch"
     if self.touch_override==0 then return true end
     if not self.touch.enabled then
         self.touch.enabled=true
@@ -129,7 +147,7 @@ function M.touch_input(self, action)
             end
         end
     elseif touch.handle(self.touch,self.ctx.input,action.touch or {},self.touch_layout,
-        self.touch.active,self.ui.sensitivity)=="pause" then M.pause(self,true) end
+        self.touch.active,self.ui.touch_sensitivity,self.ui.invert_look)=="pause" then M.pause(self,true) end
     return true
 end
 
@@ -139,6 +157,10 @@ function M.action(self, data)
     elseif data.action == "restart" and self.ctx.world.ready then
         self.ui_restart(self)
         M.pause(self, false)
+    elseif data.action == "defaults" then
+        controls.defaults(self.ui)
+        M.publish(self)
+        audio.ui(self.ctx)
     elseif data.action == "setting" then M.configure(self, data) end
 end
 
@@ -150,6 +172,23 @@ function M.focus(self, focused)
         -- return is a fresh gesture, while repeats still cannot become presses.
         self.ui.held, self.ui.blocked = {}, {}
     else M.publish(self) end
+end
+
+function M.gamepad_input(self,name,action)
+    if action.pressed or math.abs(action.value or 0)>.25 then self.input_device="gamepad" end
+    local event=gamepad.handle(self.gamepad,self.ctx.input,name,action,M.active(self),self.ctx.paused and self.focused)
+    if not self.focused then return true end
+    if event=="disconnect" then M.pause(self,true)
+    elseif event=="pause" or event=="cancel" then M.pause(self,not self.ctx.paused)
+    elseif event then M.menu_input(self,hash(event),{pressed=true}) end
+    return true
+end
+
+function M.update(self,dt)
+    if self.ctx.paused and self.focused then
+        local event=gamepad.menu_update(self.gamepad,dt)
+        if event then M.menu_input(self,hash(event),{repeated=true}) end
+    end
 end
 
 function M.menu_input(self, action_id, action)

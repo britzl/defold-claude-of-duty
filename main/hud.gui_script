@@ -54,7 +54,7 @@ function init(self)
     self.stance=W.text("stance",24,102,"STAND",.75,W.muted,gui.PIVOT_W,"hud",BL)
     W.box(nil,754,55,388,62,W.panel,"hud",BR)
     self.ammo=W.text("ammo",936,64,"",1,W.white,gui.PIVOT_E,"hud",BR)
-    self.ammo_hint=W.text(nil,936,40,"R  RELOAD   /   6  7  8  WEAPONS",.72,W.muted,gui.PIVOT_E,"hud",BR)
+    self.ammo_hint=W.text(nil,936,40,"R  RELOAD   /   1  2  3  WEAPONS",.72,W.muted,gui.PIVOT_E,"hud",BR)
     self.weapon_status=W.text("weapon_status",480,132,"",.9,W.accent,nil,"hud",BOTTOM)
     self.grenade_warning=W.text("grenade_warning",480,173,"",1,W.red,nil,"hud",BOTTOM)
     self.hint=W.text("input_hint",480,17,"CLICK TO CAPTURE MOUSE  /  ESC MENU",.73,W.white,nil,"hud",BOTTOM)
@@ -68,6 +68,22 @@ function init(self)
 end
 
 function update(self,dt)
+    menu.update(self.menu)
+    if html5 and sys.get_config_int("input_validation.enabled",0)==1 then
+        local targets={}
+        local width,height=window.get_size()
+        if self.menu.open then
+            for _,item in ipairs(self.menu.items) do
+                local p=gui.get_screen_position(item.node)
+                targets[item.id]={x=p.x,y=height-p.y}
+                if item.track then
+                    local t=gui.get_screen_position(item.track)
+                    targets["slider_"..item.spec.key]={x=t.x,y=height-t.y}
+                end
+            end
+        end
+        html5.run("window.__INPUT_MENU__="..json.encode(targets))
+    end
     -- Sample GUI frames independently of the fixed simulation and pause state.
     if dt<=0 then return end
     self.fps_frames=self.fps_frames+1
@@ -102,14 +118,18 @@ local function update_hud(self,state)
     if state.alive~=previous.alive or state.diagnostic~=previous.diagnostic then
         gui.set_text(self.death,(state.alive or state.diagnostic) and "" or "YOU WERE ELIMINATED")
     end
-    if state.alive~=previous.alive or state.mouse_locked~=previous.mouse_locked or state.touch_controls~=previous.touch_controls then
+    if state.alive~=previous.alive or state.mouse_locked~=previous.mouse_locked or state.touch_controls~=previous.touch_controls or state.gamepad_controls~=previous.gamepad_controls then
         gui.set_enabled(self.stance,not state.touch_controls)
-        gui.set_text(self.ammo_hint,state.touch_controls and "TAP AIM / STANCE TO TOGGLE" or "R  RELOAD   /   6  7  8  WEAPONS")
-        gui.set_text(self.hint,state.touch_controls and (state.alive and "DRAG LOOK TO TURN  /  DRAG FIRE TO SHOOT AND LOOK" or "TAP MENU TO RESTART ENCOUNTER")
-            or not state.alive and "9  RESTART ENCOUNTER  /  ESC MENU"
+        gui.set_text(self.ammo_hint,state.touch_controls and "TAP AIM / STANCE TO TOGGLE" or "R  RELOAD   /   1  2  3  WEAPONS")
+        gui.set_text(self.hint,state.touch_controls and (state.alive and "SWIPE RIGHT SIDE TO LOOK / DRAG FIRE TO AIM" or "TAP MENU TO RESTART ENCOUNTER")
+            or state.gamepad_controls and "STICKS MOVE / LOOK  /  RT FIRE  /  LT AIM  /  START MENU"
+            or not state.alive and "F9  RESTART ENCOUNTER  /  ESC MENU"
             or state.mouse_locked and "WASD  MOVE  /  SHIFT  SPRINT  /  ESC MENU"
             or "CLICK TO CAPTURE MOUSE  /  ESC MENU")
     end
+    for _,group in ipairs({BL,BR}) do gui.set_enabled(group.root,not state.diagnostic and not state.touch_controls) end
+    gui.set_enabled(self.hint,not state.touch_controls)
+    gui.set_enabled(self.weapon_status,not state.touch_controls)
     for _,node in ipairs(self.damage) do
         gui.set_alpha(node,state.diagnostic and 0 or math.max(state.damage*.48,state.alive and state.health_effect*(.14+.12*state.health_pulse) or 0))
     end

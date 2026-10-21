@@ -1157,39 +1157,78 @@ explicitly pending until reference UV/coverage and shadow fixtures are matched.
 Open `game.project` in Defold 1.14.0, fetch libraries, then build and run.
 The existing Automation Bridge dependency supports native smoke checks.
 
-### Mobile touch controls
+### Touch controls
 
-Android and iOS show touch controls automatically. HTML5 also enables them on
-touch-capable browsers, or when the first multi-touch event arrives. Desktop
-keyboard/mouse controls remain available. The overlay is designed for landscape
-play, adapts to window size, and keeps its controls inside the platform safe area.
+Touch controls appear on Android/iOS and touch-capable browsers, or on the first
+multi-touch event. The simplified layout has six combat buttons and **PAUSE**.
+Portrait and landscape use separate arrangements, preserve safe-area insets and
+keep the buttons finger-sized. Health/ammo use a compact touch display.
 
-- Drag the left stick to walk; push fully forward to sprint. Back off and push
-  forward again quickly for tactical sprint.
-- Drag the **LOOK** pad to turn. Hold **FIRE** to shoot; dragging that finger also
-  looks, so two thumbs can move, aim and fire together.
-- Tap **AIM**, **CROUCH**, or **PRONE** to toggle. Crouching during a sprint slides.
-  Hold **JUMP** while moving into a reachable ledge to mantle.
-- Tap **RELOAD**, **WEAPON**, **MODE**, or **INSPECT**; hold either **LEAN** button.
-- **MENU** opens touch-accessible settings, resume and restart, including after
-  death. Look sensitivity is shared with the mouse setting.
+- Drag the left stick to move. Push fully forward to sprint; back off to walk.
+  Sprint has hysteresis to avoid chattering at the edge and stops while firing,
+  aiming or crouching. Push forward twice to use the normal tactical sprint.
+- Swipe the unobstructed right side to look. Hold **FIRE** and drag that finger
+  to aim while firing, so two thumbs can move and shoot together. If another
+  finger was looking, releasing it hands look control to the held fire finger.
+- Tap **AIM** to toggle ADS. Aiming slows swipes for finer control. Tap **CROUCH**
+  to crouch/slide, then **STAND** to get up. **JUMP** also stands up; hold it to
+  mantle. **RELOAD** shows progress and **SWAP** cycles the three weapons.
+- **PAUSE** opens large controls for touch sensitivity, FOV, inversion, reset
+  controls, sound and a small set of display options, plus resume/restart.
 
-Gestures must start inside a visible control. Touches starting elsewhere stay
-ignored until released, even if they move across a control. A drag that starts
-on a control keeps working when the finger leaves its bounds.
-Pause, focus loss, death, inspection and resizing clear touch holds and toggles;
-lift and touch again to start a fresh gesture. Touch-generated mouse events are
-ignored to avoid duplicate clicks, accidental shots or pointer-lock requests.
-The implementation uses Defold's separate
-[multi-touch binding](https://defold.com/manuals/input-mouse-and-touch/).
+Prone, lean, inspection and fire-mode buttons are deliberately omitted from the
+touch layout. Those actions remain on keyboard/gamepad. A gesture keeps its
+original role when dragged across buttons; extra fingers cannot steal the stick
+or start firing by crossing FIRE. Pause, focus loss, death, inspection and resize
+clear holds/toggles and require a fresh press. Only one fresh finger operates menus.
 
-For a desktop layout preview, launch with `--config=touch_controls.enabled=1`;
-`--config=touch_controls.enabled=0` disables touch controls, and the default `-1`
-detects them automatically. Run `lua tests/touch_test.lua` for gesture/input
-regressions and `PYTHONPATH=automation-bridge-python python3 tests/touch_smoke.py`
-for native GUI/gameplay checks. The latter uses an opt-in action fixture because
-macOS cannot inject touch hardware, and saves phone/tablet captures in
-`build/touch-validation`. Physical Android/iOS device validation is still needed.
+Browser compatibility mouse events and untagged touch-generated mouse actions
+in older release engines are filtered before mouse capture or fire sees them.
+Touch activation uses the browser's normal audio gesture policy. No autoplay
+policy bypass is needed by the browser input test.
+
+`--config=touch_controls.enabled=1` forces the overlay for desktop preview;
+`0` disables it and the default `-1` detects it automatically. Run
+`lua tests/touch_test.lua` for ownership, layout and gesture checks, and
+`PYTHONPATH=automation-bridge-python python3 tests/touch_smoke.py` for native
+GUI/gameplay, settings, keyboard and mapped gamepad-action checks. Native touch,
+gamepad and focus events use opt-in fixtures so the engine can run in the
+background; they do not certify hardware feel.
+
+### Gamepad and control settings
+
+Mapped standard gamepads use both sticks for movement/look, **RT/LT** for fire/ADS,
+**A/B/X/Y** for jump/crouch/reload/swap, **L3** to toggle sprint and **R3** to toggle
+prone. **LB/RB** lean. D-pad up/down inspects/changes fire mode; left/right selects
+previous/next weapon. **Start/Back** opens the menu. In menus use the left stick or
+D-pad to navigate/adjust, A to activate and B/Start to resume. Resume receives
+initial menu focus, and held controls must return to neutral after a transition.
+Disconnecting the active controller pauses and releases its inputs.
+
+Look uses a radial dead zone, a fine-aim response curve and fixed-tick rates.
+Mouse, touch and gamepad sensitivities are independent (0.25–3x). FOV is 55–100
+vertical degrees and preserves sprint/ADS modifiers. Invert look applies to all
+three devices. **Reset controls** restores these input settings to defaults;
+settings survive encounter restart. Whole-game quality presets/automatic quality
+remain step 18. Physical controller and phone/tablet playtesting remain necessary
+for hardware mapping and comfort acceptance.
+
+```sh
+lua tests/input_adapters_test.lua
+# Bundle release wasm-web with tests/input_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_input_browser.mjs \
+  --bundle="/path/to/Claude of Duty" --browser="/path/to/Chrome"
+```
+
+The browser fixture sends real Chromium touch, keyboard, wheel and mouse events,
+checks pointer lock and audio activation, and feeds a standard Gamepad API object
+through Defold's browser mapping. Its setup/observation probe is opt-in; browser
+combat input is not injected into Lua. Captures/reports are written under
+`build/input-browser-validation`; native captures are in `build/touch-validation`.
+The input increment passes 73 focused Lua checks and 12 baseline-tool checks.
+The browser suite passes nine integration groups and eight captures; the native
+GUI/action fixture captures seven phone/tablet/menu layouts.
+
 
 HTML5 uses a matrix constant for lens sky reprojection. On OpenGL, resizing
 recreates the scene, weapon and depth/motion targets: Defold 1.14 checks
@@ -1272,7 +1311,8 @@ PYTHONPATH=automation-bridge-python python3 tests/ui_smoke.py
 ```
 
 The game starts in first person. **W/A/S/D** moves, **Shift** sprints, **Space**
-jumps, **Ctrl** holds crouch, and **Z** holds prone. Click to capture the mouse
+jumps, **Ctrl/C** toggles crouch, and **Z** toggles prone (a second press returns
+to crouch). Arrow keys also move. Jump or sprint stands up. Click to capture the mouse
 for looking; **Esc** opens the pause/settings menu and releases it.
 Holding right mouse aims down the weapon sight
 and reduces movement speed.
@@ -1290,21 +1330,21 @@ finish crouched when standing clearance is unavailable. **Q/E** holds a left/
 right lean; release to centre. Lean is disabled during sprinting, slides,
 mantles, airborne movement and prone movement. Walls shorten the camera offset.
 
-Press **1**, **2** or **3** to inspect the street, shopfront or room, and **0** to
-return to the player. Inspection disables movement input. **4** creates the
+Press **F1**, **F2** or **F3** to inspect the street, shopfront or room, and **0** to
+return to the player. Inspection disables movement input. **F4** creates the
 optional traversal course and puts the player at its stairs. Course lanes from
 west to east contain a thin wall/corner, stairs, a high obstacle, 30°/60° ramps,
 a low ceiling and narrow/wide doorways. The course is separate from the street.
 Its second row, farther ahead at z=-15, adds 1.2/1.8-metre ledges, an unreachable
 wall, blocked/crouch-only headroom, a narrow top and an obstructed climb approach.
 
-**Left mouse** fires, **R** reloads, and **F** inspects. **6/7/8** selects the
-rifle/SMG/pistol; **Tab** cycles weapons, and **B** cycles the equipped weapon's
-fire mode. The first click captures the mouse; subsequent clicks fire. **5**
+**Left mouse** fires, **R** reloads, and **I/F** inspects. **1/2/3** selects the
+rifle/SMG/pistol; **Tab** or wheel-down cycles forward, wheel-up cycles backward, and **B** cycles the equipped weapon's
+fire mode. The first click captures the mouse; subsequent clicks fire. **F5**
 creates an optional firing range and moves you to its bare-target lane.
 The other lanes, to the right, have thin wood and thick concrete in front of
 their targets. Targets have 1,000 health and use the normal damage owner.
-Gamepad/touch adapters can feed the same `game.input` API later.
+All three input adapters feed the same simulation commands.
 
 ## HUD and pause menu
 
@@ -1332,7 +1372,8 @@ adjust it and **Enter** to activate it. The menu provides:
 - **Audio:** master, weapons, movement/impacts and ambience volumes, plus mute.
 - **Display:** sun shadows, surface detail, local lights, fog, bloom, exposure
   and the renderer's diagnostic views.
-- **Controls:** mouse sensitivity (0.25–3× the existing tuning) and control help.
+- **Controls:** independent mouse/touch/gamepad sensitivity, FOV, invert look,
+  reset controls and control help.
 - **Resume** and **Restart encounter**, also usable after player death.
 
 Settings apply immediately and survive encounter restarts; they are session
@@ -1350,7 +1391,7 @@ click fires. This also avoids requiring browser pointer lock from a menu message
 
 HUD clusters anchor to screen edges and scale together; the menu fits inside the
 window while preserving its aspect ratio. The GUI uses only generated box/text
-nodes, capped at 384, with no new texture assets. Menu tabs delete their old nodes
+nodes, with a scene cap of 1,024 and no new texture assets. Menu tabs delete their old nodes
 before rebuilding. Minimap metadata is sent once in bounded messages, and HUD
 presentation remains separate from simulation.
 
@@ -1359,13 +1400,13 @@ loading while paused, focus transitions, input quarantine, compass/damage
 direction and minimap clipping. `tests/ui_smoke.py` exercises actual GUI controls,
 native AI/audio pause, held inputs, reload resume, cursor capture, killfeed,
 restart and window resizing, saving review images in `build/ui-validation`.
-Physical mobile and browser UI/input validation remain separate work; this
-increment does not add gamepad or touch adapters.
+The newer input/touch increment and browser fixture are described above; physical
+mobile qualification remains outside the current Mac/browser acceptance gate.
 
 Two squads of three patrol the far street, eastern ruin yard, western rear lane
 and far cross street. Enemy spawns and patrol endpoints stay at least 30 metres
 from the player start, leaving time to get oriented before advancing into combat.
-Approach a patrol to trigger detection, shared squad alerts and combat. **9** restarts the
+Approach a patrol to trigger detection, shared squad alerts and combat. **F9** restarts the
 encounter with full player/enemy health, fresh weapons and ammunition.
 Inspection cameras pause enemy simulation. The separate world/movement/weapon
 smoke suites explicitly pause AI to isolate their fixtures.

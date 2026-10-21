@@ -59,29 +59,60 @@ key_trigger {
   action: "lean_right"
 }
 key_trigger {
-  input: KEY_1
+  input: KEY_F1
   action: "view_street"
 }
 key_trigger {
-  input: KEY_2
+  input: KEY_F2
   action: "view_shop"
 }
 key_trigger {
-  input: KEY_3
+  input: KEY_F3
   action: "view_room"
 }
 key_trigger { input: KEY_0 action: "play" }
 key_trigger { input: KEY_ESC action: "release_mouse" }
-key_trigger { input: KEY_4 action: "course" }
-key_trigger { input: KEY_6 action: "weapon_rifle" }
-key_trigger { input: KEY_7 action: "weapon_smg" }
-key_trigger { input: KEY_8 action: "weapon_pistol" }
+key_trigger { input: KEY_F4 action: "course" }
+key_trigger { input: KEY_1 action: "weapon_rifle" }
+key_trigger { input: KEY_2 action: "weapon_smg" }
+key_trigger { input: KEY_3 action: "weapon_pistol" }
 key_trigger { input: KEY_TAB action: "next_weapon" }
 key_trigger { input: KEY_B action: "fire_mode" }
-key_trigger { input: KEY_5 action: "firing_range" }
-key_trigger { input: KEY_9 action: "restart_encounter" }
+key_trigger { input: KEY_F5 action: "firing_range" }
+key_trigger { input: KEY_F9 action: "restart_encounter" }
 key_trigger { input: KEY_UP action: "ui_up" }
 key_trigger { input: KEY_DOWN action: "ui_down" }
 key_trigger { input: KEY_LEFT action: "ui_left" }
 key_trigger { input: KEY_RIGHT action: "ui_right" }
 key_trigger { input: KEY_ENTER action: "ui_confirm" }
+
+key_trigger { input: KEY_C action: "crouch_alt" }
+mouse_trigger { input: MOUSE_WHEEL_UP action: "wheel_previous" }
+mouse_trigger { input: MOUSE_WHEEL_DOWN action: "wheel_next" }
+gamepad_trigger { input: GAMEPAD_CONNECTED action: "pad_connected" }
+gamepad_trigger { input: GAMEPAD_DISCONNECTED action: "pad_disconnected" }
+gamepad_trigger { input: GAMEPAD_LSTICK_LEFT action: "pad_move_left" }
+gamepad_trigger { input: GAMEPAD_LSTICK_RIGHT action: "pad_move_right" }
+gamepad_trigger { input: GAMEPAD_LSTICK_UP action: "pad_move_up" }
+gamepad_trigger { input: GAMEPAD_LSTICK_DOWN action: "pad_move_down" }
+gamepad_trigger { input: GAMEPAD_RSTICK_LEFT action: "pad_look_left" }
+gamepad_trigger { input: GAMEPAD_RSTICK_RIGHT action: "pad_look_right" }
+gamepad_trigger { input: GAMEPAD_RSTICK_UP action: "pad_look_up" }
+gamepad_trigger { input: GAMEPAD_RSTICK_DOWN action: "pad_look_down" }
+gamepad_trigger { input: GAMEPAD_LTRIGGER action: "pad_aim" }
+gamepad_trigger { input: GAMEPAD_RTRIGGER action: "pad_fire" }
+gamepad_trigger { input: GAMEPAD_RPAD_DOWN action: "pad_jump" }
+gamepad_trigger { input: GAMEPAD_RPAD_RIGHT action: "pad_crouch" }
+gamepad_trigger { input: GAMEPAD_RPAD_LEFT action: "pad_reload" }
+gamepad_trigger { input: GAMEPAD_RPAD_UP action: "pad_next_weapon" }
+gamepad_trigger { input: GAMEPAD_LSTICK_CLICK action: "pad_sprint" }
+gamepad_trigger { input: GAMEPAD_RSTICK_CLICK action: "pad_prone" }
+gamepad_trigger { input: GAMEPAD_LSHOULDER action: "pad_lean_left" }
+gamepad_trigger { input: GAMEPAD_RSHOULDER action: "pad_lean_right" }
+gamepad_trigger { input: GAMEPAD_LPAD_UP action: "pad_inspect" }
+gamepad_trigger { input: GAMEPAD_LPAD_DOWN action: "pad_fire_mode" }
+gamepad_trigger { input: GAMEPAD_LPAD_LEFT action: "pad_previous_weapon" }
+gamepad_trigger { input: GAMEPAD_LPAD_RIGHT action: "pad_next_weapon_dpad" }
+gamepad_trigger { input: GAMEPAD_START action: "pad_pause" }
+gamepad_trigger { input: GAMEPAD_BACK action: "pad_pause_back" }
+key_trigger { input: KEY_I action: "inspect_alt" }

@@ -11,6 +11,7 @@ local function fixture(width,height,safe)
             pressed=event=="down",released=event=="up"}
     end
     local function button(id,name,event)
+        if name=="look" then return point(id,layout.look.x,layout.look.y,event) end
         for _,b in ipairs(layout.buttons) do
             if b.id==name then return point(id,b.x,b.y,event) end
         end
@@ -59,7 +60,7 @@ end)
 test("touches outside visible controls stay ignored even when dragged onto controls",function()
     for _,size in ipairs({{960,640},{844,390},{390,844},{2400,1080}}) do
         local s,i,l,p,b,send=fixture(size[1],size[2],{inset_left=30,inset_right=30,inset_bottom=20})
-        local starts={{l.width*.6,l.height*.5},{l.left+320,l.bottom+202},
+        local starts={{l.left+10,l.top-20},{l.left+20,l.bottom+20},
             {l.stick.x+l.stick.r+1,l.stick.y},{l.stick.x,l.stick.y+l.stick.r+1}}
         for _,pos in ipairs(starts) do
             send(p(1,pos[1],pos[2],"down"))
@@ -104,18 +105,18 @@ test("extra fingers cannot steal sticks, look, or prematurely release fire",func
     send(b(4,"fire","up"));assert(not i.buttons.fire.held)
 end)
 
-test("aim and mutually exclusive stances toggle once per tap",function()
+test("aim and crouch toggle once; jump stands up",function()
     local s,i,l,p,b,send=fixture()
     send(b(1,"aim","down"));input.end_tick(i)
     send(b(1,"aim"),b(1,"aim","up"));assert(i.buttons.aim.held and not i.buttons.aim.pressed)
     send(b(2,"crouch","down"),b(2,"crouch","up"));assert(i.buttons.crouch.held)
-    send(b(3,"prone","down"),b(3,"prone","up"));assert(i.buttons.prone.held and not i.buttons.crouch.held)
+    send(b(3,"jump","down"),b(3,"jump","up"));assert(not i.buttons.crouch.held)
     send(b(4,"aim","down"));assert(not i.buttons.aim.held)
 end)
 
 test("short taps retain pressed edges until the next fixed tick",function()
     local s,i,l,p,b,send=fixture()
-    for _,name in ipairs({"jump","reload","next_weapon","fire_mode","inspect"}) do
+    for _,name in ipairs({"jump","reload","next_weapon"}) do
         send(b(1,name,"down"),b(1,name,"up"))
         assert(i.buttons[name].pressed and i.buttons[name].released and not i.buttons[name].held)
     end
@@ -224,4 +225,33 @@ test("menu touch uses one finger, clears on pause/focus/resize, and requires fre
     window,msg,hash=old_window,old_msg,old_hash
 end)
 
+test("look to fire handoff has no jump and ADS reduces sensitivity",function()
+    local s,i,l,p,b,send=fixture()
+    send(b(1,"look","down"),b(2,"fire","down"))
+    send(b(1,"look","up"));input.end_tick(i)
+    local fire=b(2,"fire")
+    send(p(2,fire.x*l.width/960+20,fire.y*l.height/640+10))
+    near(i.look_x,20);near(i.look_y,10)
+    send(b(3,"aim","down"),b(3,"aim","up"));input.end_tick(i)
+    send(p(2,fire.x*l.width/960+40,fire.y*l.height/640+20))
+    near(i.look_x,11);near(i.look_y,5.5)
+end)
+test("touch release cannot erase gamepad movement; sprint has hysteresis",function()
+    local s,i,l,p,b,send=fixture()
+    input.move(i,"gamepad",.5,0)
+    send(p(1,l.stick.x,l.stick.y,"down"),p(1,l.stick.x,l.stick.y+l.stick.r))
+    assert(i.buttons.sprint.held)
+    input.end_tick(i)
+    send(p(1,l.stick.x,l.stick.y+l.stick.r*.86))
+    assert(i.buttons.sprint.held and not i.buttons.sprint.pressed)
+    send(b(2,"fire","down"));assert(not i.buttons.sprint.held and i.buttons.fire.held)
+    touch.reset(s,i);near(i.move_x,.5);near(i.move_z,0)
+end)
+test("phone controls stay finger-sized, with exactly six combat actions",function()
+    for _,size in ipairs({{844,390},{667,375},{390,844},{375,667}}) do
+        local l=touch.layout(size[1],size[2],{inset_left=15,inset_right=15,inset_bottom=10})
+        assert(#l.buttons==7)
+        for _,b in ipairs(l.buttons) do assert(math.min(b.w,b.h)*l.scale>=43) end
+    end
+end)
 print(count.." touch tests passed")

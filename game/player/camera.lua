@@ -151,7 +151,7 @@ function M.update(ctx, dt)
         or (not m.grounded and m.velocity.y < -6) and F.air or 1
     rig.fov_move = approach(rig.fov_move, target, F.move_tau, dt)
     rig.fov_ads = approach(rig.fov_ads, 1+((w and defs[w.equipped].adsFov or 1)-1)*ads, F.ads_tau, dt)
-    out.fov = F.base*rig.fov_move*rig.fov_ads
+    out.fov = math.rad(ctx.preferences and ctx.preferences.fov or math.deg(F.base))*rig.fov_move*rig.fov_ads
 end
 
 -- The rendered eye and authoritative firing eye share the same composition.

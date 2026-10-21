@@ -83,13 +83,13 @@ def main():
         assert state()["ammo"] == 31
         print("PASS native ADS, three-shot burst and tactical reload with chambered round", flush=True)
 
-        game.key("7", wait="released")
+        game.key("2", wait="released")
         idle("smg")
         capture("smg_hip")
         before = state()["fired"]
         smg = drive([dict(ticks=120, fire=True)])
         assert smg["fired"] == before + 16 and smg["ammo"] == 17, smg
-        game.key("8", wait="released")
+        game.key("3", wait="released")
         idle("pistol")
         capture("pistol_hip")
         before = state()["fired"]
@@ -103,7 +103,7 @@ def main():
         drive([dict(ticks=40)])
         print("PASS native weapon selection, 950 rpm SMG and edge-triggered pistol", flush=True)
 
-        game.key("6", wait="released")
+        game.key("1", wait="released")
         idle("rifle")
         assert state()["mode"] == "burst" and state()["ammo"] == 31
         game.key("B", wait="released")
@@ -125,7 +125,7 @@ def main():
         assert fired["fired"] == before + 1 and fired["clip"] == "idle"
         print("PASS native empty reload, independent inventories and interruptible inspection", flush=True)
 
-        game.key("1", wait="released")
+        game.key("F1", wait="released")
         before = state()["fired"]
         game.wait_frames(5)
         capture("inspection_world_only")

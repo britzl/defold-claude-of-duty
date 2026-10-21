@@ -42,7 +42,7 @@ def main():
         print("PASS world batches, collision dimensions, doorway clearance and navigation")
         print("WORLD", world)
 
-        for key, title in (("2", "THE SHOPFRONT"), ("3", "INSIDE W2"), ("1", "MARKET STREET")):
+        for key, title in (("F2", "THE SHOPFRONT"), ("F3", "INSIDE W2"), ("F1", "MARKET STREET")):
             game.key(key, wait="released")
             game.wait_for_element(type="gui_node_text", text_exact=title)
         print("PASS three inspection views via native keyboard input")
