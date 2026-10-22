@@ -14,7 +14,8 @@ def main():
     game=project.build_and_run(timeout=180)
     report={'sources':source_fingerprint(),'checks':{}}
     def cmd(name,data=None): return game.command(name,data or {})['result']
-    def settle(): game.wait_frames(45)
+    # Allow the staged sky publication and temporal convergence to finish.
+    def settle(): game.wait_frames(60)
     def save(name):
         path=output/(name+'.png');shutil.copyfile(game.screenshot(resolution_multiplier=.5).path,path)
         return Image.open(path).convert('RGB')
@@ -34,11 +35,20 @@ def main():
             assert difference(base,again)==0,(shot,'repeat')
             report['checks'][shot]={'exact_repeat':True}
         for shot,key,arm in [('rifle_hip','combat_materials',True),('rifle_hip','weapon_aa',False),
+                             ('weapon_fire','weapon_aa',False),
                              ('weapon_indoor','interior_lighting',True)]:
-            cmd('capture.shot',{'name':shot});settle();base=save(shot+'-'+key)
+            cmd('capture.shot',{'name':shot})
+            if key=='weapon_aa':
+                # Bloom spreads weapon radiance into the world; disable it to
+                # check AA's own footprint, including a premultiplied flash.
+                cmd('renderer.configure',{'bloom':False})
+            settle();base=save(shot+'-'+key)
             cmd('renderer.configure',{key:False});settle();off=save(shot+'-'+key+'-off')
             delta=difference(base,off,arm)
             assert delta>.001,(shot,key,delta)
+            if key=='weapon_aa':
+                world=(0,0,base.width,base.height//4)
+                assert difference(base.crop(world),off.crop(world))==0,(shot,'AA changed world pixels')
             cmd('renderer.configure',{key:True});settle();back=save(shot+'-'+key+'-return')
             assert difference(base,back)==0,(shot,key,'return')
             report['checks'][shot+'/'+key]={'difference':delta,'arm_crop':arm,'exact_return':True}
@@ -49,7 +59,7 @@ def main():
         (output/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     errors=[line for line in project.console.read().lines if 'ERROR:' in line or 'WARNING:' in line]
     assert not errors,'\n'.join(errors)
-    print('PASS seven exact still repeats and three presentation gates',flush=True)
+    print('PASS seven exact still repeats and four presentation gates',flush=True)
 
 
 if __name__=='__main__': main()

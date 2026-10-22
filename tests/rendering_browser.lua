@@ -147,7 +147,21 @@ function M.new()
             steps[#steps+1]={name=name,id=name}
         end
     end
-    return {steps=steps,index=0,frames=0,intervals={}}
+    local weapon_aa=sys.get_config_string("rendering_validation.suite","")=="weapon_aa"
+    if weapon_aa then
+        steps={}
+        for _,name in ipairs({"rifle_hip","rifle_ads","smg_hip","smg_ads","pistol_hip","pistol_ads","weapon_indoor","weapon_fire"}) do
+            local scales=(name=="rifle_hip" or name=="weapon_fire") and {1,.71} or {1}
+            for _,scale in ipairs(scales) do
+                local id=name..(scale==1 and "" or "_scaled")
+                for i,suffix in ipairs({"","_off","_return"}) do
+                    steps[#steps+1]={name=name,id=id..suffix,
+                        changes={weapon_aa=i~=2,bloom=false,render_scale=scale}}
+                end
+            end
+        end
+    end
+    return {steps=steps,index=0,frames=0,intervals={},shot_frame=weapon_aa and 65 or 45}
 end
 function M.update(test,self,dt)
     if test.done then
@@ -158,13 +172,14 @@ function M.update(test,self,dt)
         return
     end
     if not self.ctx.world.ready or not self.renderer_stats.ready then return end
+    test.target_count=test.target_count or self.renderer_stats.target_count
     test.frames=test.frames+1
     if test.frames==1 then
         test.index=test.index+1
         local step=test.steps[test.index]
         if not step then
             local stats=self.renderer_stats
-            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==44)
+            assert(stats.bake_jobs==atlas.job_count and stats.bake_draws==atlas.draw_count and stats.target_count==test.target_count)
             assert(stats.surface_count==#atlas.surfaces-1 and self.ctx.time.tick==test.tick,"Capture changed simulation")
             assert(self.ctx.audio.ready and self.map_sent and test.tick>0,"Gameplay startup did not finish")
             table.sort(test.intervals)
@@ -182,7 +197,7 @@ function M.update(test,self,dt)
         if step.changes then msg.post("@render:","renderer_configure",step.changes) end
     end
     if test.frames>32 then test.intervals[#test.intervals+1]=dt*1000 end
-    if test.frames==45 then
+    if test.frames==test.shot_frame then
         local step=test.steps[test.index]
         report("RENDER_BROWSER SHOT "..json.encode({id=step.id,page=step.page,view=step.view,
             camera=capture.snapshot(self).camera,renderer=self.renderer_stats}))

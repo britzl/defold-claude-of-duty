@@ -2768,6 +2768,32 @@ Previous pose data is owned per actor; the viewmodel never samples world history
 The weapon uses spatial edge-directed antialiasing in premultiplied linear light,
 with decode-before-filtering on the encoded path, and is composited after world
 TAA/bloom. It has no temporal history or projection jitter.
+The five centre/diagonal edge probes use one decoded texel each. Only the
+fractional edge-directed taps reconstruct bilinear filtering in linear light.
+On encoded RGBA8 this reduces the base reads from 20 to 5, and the maximum reads
+at an edge from 36 to 21; HDR sampling and the coverage/radiance filter are
+unchanged. The resolve still runs at the source target's dimensions, including
+when render scale produces odd internal sizes.
+
+The focused AA regression fixture covers hip/ADS for all three weapons, indoor
+lighting, muzzle flashes and odd-size scaled targets. Each case checks AA on,
+off and restored, including unchanged world pixels with bloom disabled:
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/viewmodel_render_smoke.py
+# Build release wasm-web with tests/weapon_aa_browser.project, then:
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/validate_rendering_browser.mjs --bundle=/path/to/bundle --output=build/weapon-aa-focused-browser-validation --release=1
+python3 tests/weapon_aa_pixels.py build/weapon-aa-focused-browser-validation
+```
+
+Validation: 30 renderer/temporal Lua checks, seven native repeat captures and
+four native presentation checks pass. The focused WebGL fixture passes all ten
+AA cases (30 captures). Twenty-four native before/after captures cover HDR and
+encoded RGBA8; HDR is pixel-identical, with small rounding differences on RGBA8.
+Reports are under `build/weapon-aa-validation`, `build/viewmodel-render-validation`
+and `build/weapon-aa-focused-browser-validation`. GPU frame-time gains are not
+measured. The broader viewmodel gameplay fixture stopped at its
+inspection-interruption assertion; that gameplay check is outside this AA change.
 
 `view="motion"` displays signed velocity around neutral grey (±4 pixels fills
 one colour channel); `view="history"` displays the accepted history weight.

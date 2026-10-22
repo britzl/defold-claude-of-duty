@@ -19,11 +19,14 @@ vec4 sample_weapon(vec2 uv) {
 float edge_value(vec4 c) { return max(c.a,dot(c.rgb,vec3(.2126,.7152,.0722))); }
 void main() {
     vec2 p=aa_params.xy;
-    vec4 centre=sample_weapon(var_uv);
-    float nw=edge_value(sample_weapon(var_uv+vec2(-1,1)*p));
-    float ne=edge_value(sample_weapon(var_uv+vec2(1,1)*p));
-    float sw=edge_value(sample_weapon(var_uv+vec2(-1,-1)*p));
-    float se=edge_value(sample_weapon(var_uv+vec2(1,-1)*p));
+    // The resolve matches the source size: these five probes land on texel
+    // centres. Decode once per probe; only fractional edge taps need the four
+    // decode-before-filter reads on encoded RGBA8 targets.
+    vec4 centre=linear_texel(var_uv);
+    float nw=edge_value(linear_texel(var_uv+vec2(-1,1)*p));
+    float ne=edge_value(linear_texel(var_uv+vec2(1,1)*p));
+    float sw=edge_value(linear_texel(var_uv+vec2(-1,-1)*p));
+    float se=edge_value(linear_texel(var_uv+vec2(1,-1)*p));
     float m=edge_value(centre),low=min(m,min(min(nw,ne),min(sw,se))),high=max(m,max(max(nw,ne),max(sw,se)));
     vec4 result=centre;
     if(high-low>max(.0312,high*.125)) {
