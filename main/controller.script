@@ -4,6 +4,7 @@ local combat = require "game.combat"
 local config = require "game.config"
 local world_adapter = require "game.world.defold"
 local capsule_queries = require "game.player.bullet"
+local collision_revision = require "game.world.collision_revision"
 local player_system = require "game.systems.player"
 local player_health = require "game.player.health"
 local health_tuning = require "game.player.health_tuning"
@@ -536,7 +537,7 @@ function fixed_update(self, dt)
     if self.ctx.paused or self.capture then return end
     -- Collision objects acquire their Bullet broadphase handles after init.
     if self.ctx.world.ready and not self.ctx.services.capsule then
-        self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id)
+        self.ctx.services.capsule = capsule_queries.new("/player#collision", self.ctx.world.adapter.by_id, collision_revision.current)
         self.ctx.services.capsule:sync(self.ctx.player.position, self.ctx.player.motion.height)
     end
     gamepad.fixed_update(self.gamepad,self.ctx.input,dt,self.ui,ui.active(self))
@@ -551,6 +552,7 @@ function fixed_update(self, dt)
 end
 
 function update(self, dt)
+    collision_revision.advance_frame()
     ui.quality_update(self)
     ui.update(self,dt)
     if self.input_probe then require("tests.input_probe").update(self) end

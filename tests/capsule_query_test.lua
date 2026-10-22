@@ -31,3 +31,21 @@ assert(queries==6)
 hits={{fraction=0,normal={x=0,y=1,z=0},object='floor'},{fraction=.5,normal={x=-1,y=0,z=0},object='wall'}}
 local hit=q:sweep(feet,1.12,1,0,0);assert(hit.fraction==.5 and hit.surface=='wood')
 print('PASS fresh Bullet contacts, touching tolerance, bounded contact reuse and tangent-floor filtering')
+local generation=1
+assert(q:clearance_revision()==nil,'Generic queries cannot retain clearance between ticks')
+q=adapter.new('static',{},function() return generation end)
+assert(q:clearance_revision()==1)
+generation=nil;assert(q:clearance_revision()==nil)
+generation=2;assert(q:clearance_revision()==2)
+for _,case in ipairs({
+    {q,'object','replacement'}, {q,'world',2}, {q,'shape',2},
+    {q.filter,'category_bits',4}, {q.filter,'mask_bits',6},
+    {q.filter,'include_triggers',true}, {q.filter,'ignore','another'},
+}) do
+    local owner,key,value=case[1],case[2],case[3]
+    local original=owner[key];owner[key]=value
+    assert(q:clearance_revision()==nil,'Changed query identity/filter must disable reuse: '..key)
+    owner[key]=original
+    assert(q:clearance_revision()==2)
+end
+print('PASS static-world opt-in, pending revisions and native query/filter identity guards')

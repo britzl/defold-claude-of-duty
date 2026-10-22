@@ -2,9 +2,11 @@ local T = require "game.player.tuning"
 local M = {}
 local mt = { __index = M }
 
-function M.new(url, surfaces)
+-- static_revision opts in only for movers whose filter sees static world
+-- geometry exclusively. It returns nil while changes are pending in Defold.
+function M.new(url, surfaces, static_revision)
     local object = assert(bullet3d.get_collision_object(url), "Player collision object missing")
-    return setmetatable({ object = object, world = bullet3d.get_world(),
+    local query = setmetatable({ object = object, world = bullet3d.get_world(),
         shape = bullet3d.collision_object.get_shape(object, 1), surfaces = surfaces,
         position = vmath.vector3(), translation = vmath.vector3(),
         shape_position = vmath.vector3(), identity = vmath.quat(),
@@ -15,6 +17,21 @@ function M.new(url, surfaces)
         sphere = { type = bullet3d.shape.SHAPE_TYPE_SPHERE },
         contacts_result = {}, contacts_pool = {},
     }, mt)
+    if static_revision then
+        query.static_clearance = { revision = static_revision, object = object,
+            world = query.world, shape = query.shape,
+            category = query.filter.category_bits, mask = query.filter.mask_bits }
+    end
+    return query
+end
+
+function M:clearance_revision()
+    local c, f = self.static_clearance, self.filter
+    if c and self.object == c.object and self.world == c.world and self.shape == c.shape
+        and f.category_bits == c.category and f.mask_bits == c.mask
+        and f.ignore == c.object and f.include_triggers == false then
+        return c.revision()
+    end
 end
 
 function M:begin_step()

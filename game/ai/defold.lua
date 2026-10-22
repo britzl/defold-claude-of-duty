@@ -1,6 +1,7 @@
 local geometry = require "game.ai.geometry"
 local rig = require "game.ai.rig"
 local capsule = require "game.player.bullet"
+local collision_revision = require "game.world.collision_revision"
 local V = require "game.weapons.math"
 local M = {}
 local WORLD={hash("world")}
@@ -85,7 +86,7 @@ function M.query(a,e)
     local item=a.instances[e.id]
     if a.ctx.time.frame<=item.born then return end
     if not item.query then
-        item.query=capsule.new(msg.url(nil,item.mover,"collision"),a.world.by_id)
+        item.query=capsule.new(msg.url(nil,item.mover,"collision"),a.world.by_id,collision_revision.current)
         item.query.visible=visible;item.query.walkable=walkable
         for _,h in ipairs(item.hits) do h.object=assert(bullet3d.get_collision_object(h.url)) end
     end

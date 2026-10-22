@@ -1,6 +1,7 @@
 -- Engine adapter. Generation and metadata remain testable without Defold.
 local materials = require "game.world.materials"
 local origin_index = require "game.weapons.origin_index"
+local collision_revision = require "game.world.collision_revision"
 local M = {}
 local POSITION, NORMAL, COLOR = hash("position"), hash("normal"), hash("color")
 local EDGES,MASKS=hash("surface_edges"),hash("surface_masks")
@@ -126,6 +127,7 @@ function M.add_batch(adapter,batch)
 end
 
 function M.add_collision(adapter, shape)
+    collision_revision.changed()
     local id = factory.create(adapter.collision_factory, vmath.vector3(shape.x, shape.y, shape.z), vmath.quat_rotation_x(shape.rotation_x or 0))
     adapter.objects[#adapter.objects + 1] = id
     local url = msg.url(nil, id, "collision")
@@ -173,6 +175,7 @@ function M.validate(adapter, world, query)
 end
 
 function M.final(adapter)
+    if #adapter.collisions > 0 then collision_revision.changed() end
     adapter.pending_batch=nil -- Unpublished buffer is Lua-owned and can be collected.
     origin_index.clear(adapter.origin_index)
     for _, id in ipairs(adapter.objects) do go.delete(id) end

@@ -24,7 +24,8 @@ function M.new(position)
         step_offset = 0, sprinting = false, jumped = false, landed = false,
         impact_speed = 0, travel = 0, recovery_failed = false, lean = 0,
         mantle = false, mantle_cooldown = 0, mantle_probe = 0,
-        mantle_started = false, mantle_completed = false, mantle_aborted = false }
+        mantle_started = false, mantle_completed = false, mantle_aborted = false,
+        clearance = { valid = false } }
     m.vault_started, m.vault_completed, m.vault_aborted = false, false, false
     moves.init(m)
     return m
@@ -196,6 +197,10 @@ end
 
 function M.update(m, input, dt, query)
     if query.begin_step then query:begin_step() end
+    local clearance = m.clearance
+    local previously_clear = clearance.valid
+    -- Consume the proof now, so mantle and failed-recovery exits cannot retain it.
+    clearance.valid = false
     m.jumped, m.landed = false, false
     m.travel = 0
     m.yaw = m.yaw - (input.look_x or 0)*T.mouse_sensitivity
@@ -217,9 +222,19 @@ function M.update(m, input, dt, query)
     local target = T.stances[requested]
     -- Shrinking can itself resolve a ceiling overlap; expansion needs clearance.
     if target.height < m.height and not (m.sprinting and m.crouch_edge) then m.stance, m.height = requested, target.height end
-    if not recover(m, query) then m.grounded = false; return end
+    local revision = query.clearance_revision and query:clearance_revision()
+    local p = m.position
+    local reusable = previously_clear and revision ~= nil and clearance.revision == revision
+        and clearance.query == query and clearance.height == m.height
+        and clearance.x == p.x and clearance.y == p.y and clearance.z == p.z
+    if reusable then m.recovery_failed = false
+    elseif not recover(m, query) then m.grounded = false; return end
+    -- Successful recovery proves this exact capsule clear for this update,
+    -- even for unversioned queries. Ground snapping may change the position.
+    local clear_x, clear_y, clear_z, clear_height = p.x, p.y, p.z, m.height
     local was_grounded = m.grounded
     m.grounded = m.velocity.y <= 0 and ground(m, query, T.ground_probe)
+    local support_x, support_y, support_z, support_height = p.x, p.y, p.z, m.height
     m.coyote = m.grounded and T.coyote_time or math.max(0, m.coyote-dt)
     m.jump_buffer = input.jump and T.jump_buffer or math.max(0, m.jump_buffer-dt)
     m.jump_cooldown = math.max(0, m.jump_cooldown-dt)
@@ -266,14 +281,26 @@ function M.update(m, input, dt, query)
         local progress = (m.position.x-origin.x)*dx + (m.position.z-origin.z)*dz
         if step(m, query, origin, dx, dz, T.stances[m.stance].step, progress) then v.x, v.z = vx, vz end
     end
-    m.grounded = v.y <= 0 and ground(m, query, (was_grounded and not m.jumped) and T.ground_snap or T.ground_probe)
+    -- Reuse positive support only while the grounded capsule is unchanged.
+    -- A miss still needs the longer final snap, and jumping clears grounded.
+    local same_support = m.grounded and m.height == support_height
+        and p.x == support_x and p.y == support_y and p.z == support_z
+    m.grounded = v.y <= 0 and (same_support
+        or ground(m, query, (was_grounded and not m.jumped) and T.ground_snap or T.ground_probe))
     if m.grounded then
         v.y = 0
         m.landed = not was_grounded and not m.jumped
         m.impact_speed = fall_speed
     end
     m.travel = length(m.position.x-origin.x, 0, m.position.z-origin.z)
-    if query:fits(m.position, m.height) then copy(m.safe, m.position) end
+    local same_clearance = m.height == clear_height and p.x == clear_x and p.y == clear_y and p.z == clear_z
+    if same_clearance or query:fits(p, m.height) then
+        copy(m.safe, p)
+        if revision ~= nil and query:clearance_revision() == revision then
+            clearance.valid, clearance.query, clearance.revision = true, query, revision
+            clearance.x, clearance.y, clearance.z, clearance.height = p.x, p.y, p.z, m.height
+        end
+    end
     lean.update(m, input, dt, query)
     query:sync(m.position, m.height)
 end

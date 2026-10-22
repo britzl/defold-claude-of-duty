@@ -106,14 +106,21 @@ test("moving registry replacements and later registries are observed without reb
 end)
 
 test("world loading updates an existing query and teardown clears its static candidates",function()
+    local revision=require 'game.world.collision_revision'
+    revision.advance_frame();revision.advance_frame()
+    local before=revision.current()
     local adapter=world.new("mesh","collision")
     local query=queries(adapter.by_id,adapter.origin_index)
     local p,d={x=0,y=0,z=0},{x=0,y=0,z=-1}
     assert(#hits(query,p,d)==0)
     world.add_collision(adapter,box("loaded",0,0,0,2,2,2))
+    assert(revision.current()==nil)
+    revision.advance_frame();assert(revision.current()==nil)
+    revision.advance_frame();assert(revision.current()~=before)
     assert(#hits(query,p,d)==1)
     local grid=adapter.origin_index
     world.final(adapter)
+    assert(revision.current()==nil)
     assert(next(grid.cells)==nil and #hits(query,p,d)==0)
 end)
 

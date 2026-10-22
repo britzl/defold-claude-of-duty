@@ -340,6 +340,117 @@ the shared soldier fixture passed all 11 checks and 15 captures on native Metal
 and release Chrome WebGL2. Evidence is retained in `build/character-optimization`
 and `build/soldier-native-validation`.
 
+### Current Defold frame profile (2026-10-22)
+
+Fresh native debug Metal / Remotery captures on revision `0bb1bb5` used fixed High
+quality, 1280×720, AC power and six active AI actors. Two repetitions each of
+standing combat, forward sprinting and firing/reloading supplied 6,939 complete
+Main/Step samples. AI damage was disabled to keep the player alive. The editor
+engine reports Defold 1.14.0 (`a81dbb0`), a different revision from the preceding
+release benchmark. These are elapsed main-thread scope times, including waits
+and profiler overhead; they do not measure release FPS or GPU pass durations.
+
+The following groups do not overlap. Values are milliseconds per rendered frame,
+weighted by the number of delivered complete samples in each repetition:
+
+| Frame-time group | Standing | Sprinting | Firing/reloading |
+| --- | ---: | ---: | ---: |
+| AI fixed update + soldier presentation | 2.88 | 3.05 | 3.68 |
+| Unscoped engine `Sim` time | 3.24 | 2.85 | 1.47 |
+| CPU rendering submission (`UpdateRSI`) | 1.20 | 1.17 | 1.64 |
+| Player fixed update | 0.22 | 0.28 | 0.31 |
+| Physics world step | 0.07 | 0.07 | 0.17 |
+| Other scripts, GUI, audio and engine work | 0.93 | 1.15 | 1.98 |
+| **Total Main/Step** | **8.52** | **8.57** | **9.24** |
+
+AI/soldiers account for 34–40% of frame time. Within that group, capsule movement
+(`ai.movement`) costs 1.22–1.38 ms/frame; the remaining self time of `fixed.ai`
+costs 0.62–0.81 ms. Simulation and presentation pose evaluation together cost
+0.63–0.84 ms, palette uploads 0.32–0.34 ms, and hitbox synchronization 0.07–0.11 ms.
+Navigation is only 0.008–0.049 ms in these workloads. The capsule controller's
+collision queries are inside `ai.movement`, separate from the engine world-step
+row. Capsule sweeps/contact checks are the next useful CPU scopes to subdivide.
+
+Rendering submission accounts for 14–18%. The unscoped `Sim` time cannot be
+assigned to individual functions from this capture. A standing control with
+`display.swap_interval=0` reduced total time from 8.52 to 7.21 ms and `Sim` self
+time from 3.24 to 1.82 ms. Reducing only render scale to 0.6 in that uncapped
+control reduced the totals further to 5.41 ms and 0.47 ms, while CPU rendering
+submission stayed around 1.3 ms. This points to a substantial graphics/pacing
+component; it is not a measurement of GPU time. Higher rendering rates also
+reduce fixed updates per rendered frame. A GPU capture is needed to rank shader
+passes; this profiler stream exposed Main, sound, Remotery and log threads.
+
+**Measurement trap:** the bridge's `/frame` handler refreshes the entire scene
+snapshot. Rapid `wait_frames()` polling during the first standing captures added
+38.8–41.1 ms/frame in `Service`, including scene traversal. Those captures are
+excluded from the table. The profiling harness now listens to Remotery without
+frame polling during standing measurements; driven workloads poll completion at
+0.5-second intervals. All six selected captures remained live at High quality,
+with no console errors or production-source changes.
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/frame_profile.py \
+  --output build/frame-profile-new
+```
+
+The consolidated breakdown is `build/frame-profile-analysis/report.json`.
+Raw trees and counters are retained in `build/frame-profile-2026-10-22-current`
+and `build/frame-profile-2026-10-22-unpolled`; diagnostic controls and their runner
+are in `build/frame-profile-pacing`.
+
+### Capsule query reuse (2026-10-22)
+
+The controller now reuses positive ground support within a fixed tick when the
+capsule's position and height have not changed. It also reuses successful overlap
+recovery for the final clearance check at that exact position and height. Ground
+misses, movement, stance changes and jumps still take the normal query paths.
+
+Player and enemy movers opt into clearance reuse between ticks because their
+collision masks contain only the static `world` group. A successful final check
+can replace the following tick's opening contact test. Position, height, query
+identity, native object/shape/world, filter and collision generation must match.
+Reset, mantle and failed-recovery paths invalidate the saved proof. Unversioned
+query adapters retain fresh opening contact tests.
+
+`game/world/collision_revision.lua` tracks changes across all generated world
+adapters, including test courses. Adding or deleting colliders disables reuse
+through two controller update boundaries so deferred physics changes cannot
+inherit pre-change clearance. Any future mutation of static world geometry must
+invalidate this revision; movers that collide with dynamic bodies must not opt in.
+Ground support is always sampled again on the next fixed tick.
+
+The flat-plane regression reduces a settled, unchanged stationary tick from two
+ground sweeps plus two contact tests to one ground sweep. Ordinary walking drops
+the opening contact test (five queries to four). Exact coordinates are required:
+if Bullet ground snapping nudges the feet, final clearance is checked again.
+
+Fresh before/after Remotery captures used the same native debug engine
+(`a81dbb0`), AC power, High quality, 1280×720 and two reversed-order repetitions
+per scenario. Capsule cost per actor update fell **15–21%**:
+
+| Player workload | AI capsule µs/update before → after | Reduction | AI capsule ms/frame before → after |
+| --- | ---: | ---: | ---: |
+| Standing combat | 202.3 → 171.6 | 15.2% | 1.249 → 1.053 |
+| Sprinting | 208.3 → 172.8 | 17.0% | 1.306 → 1.073 |
+| Firing/reloading | 213.9 → 168.1 | 21.4% | 1.463 → 1.117 |
+
+Mean Main/Step times were 8.576 → 8.525 ms, 8.700 → 8.619 ms and
+9.501 → 9.229 ms respectively. These debug elapsed scopes include pacing and
+profiler overhead; they do not establish a release FPS gain. Live combat and
+host thermal variation remain possible confounders. Raw captures and source
+hashes are in `build/frame-profile-capsule-before` and
+`build/frame-profile-capsule-after`; the comparison is
+`build/capsule-reuse-validation/profile-comparison.json`.
+
+Validation passed 103 Lua checks across movement, vaults, camera, AI, world and
+query adapters. The new `tests/capsule_reuse_test.lua` checks query budgets,
+cached/uncached motion parity, invalidation and deferred collider installation.
+Native movement, movement features, shared traversal and AI tactics fixtures all
+passed, including dynamic obstruction, six-actor engagement and restart cycles.
+The release Chrome WebGL2 traversal fixture also passed all 13 checks; evidence
+is in `build/capsule-reuse-validation/browser-traversal`.
+
 ## HUD combat feedback (2026-10-21)
 
 Step 16 adds live enemy contacts to the north-up minimap, with `^` / `v` for
