@@ -95,7 +95,7 @@ camera={get_view=value,get_projection=value}
 local w,h=960,640
 local targets,draws,bindings,messages={},{},{},{}
 local texture_attachments={}
-local active,material,listener
+local active,material,listener,viewport
 local depth_mask,depth_func
 local function noop() end
 render={RENDER_TARGET_DEFAULT="screen",CONTEXT_EVENT_CONTEXT_RESTORED="restored"}
@@ -106,6 +106,7 @@ for _,name in ipairs({"set_viewport","set_camera","set_view","set_projection","s
 end
 render.set_depth_mask=function(value) depth_mask=value end
 render.set_depth_func=function(value) depth_func=value end
+render.set_viewport=function(...) viewport={...} end
 render.get_window_width=function() return w end
 render.get_window_height=function() return h end
 render.predicate=function(tags) return tags[1] end
@@ -126,6 +127,7 @@ render.enable_texture=function(name,target,attachment) assert(not target.deleted
 render.disable_texture=function(name) bindings[name]=nil;texture_attachments[name]=nil end
 render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
+    if material=="environment" then assert(bindings.brdf_texture,"Missing BRDF source") end
     if material=="atmosphere" or material=="atmosphere_copy" then
         for name,attachment in pairs({scattering_texture=graphics.BUFFER_TYPE_COLOR1_BIT,scattering_fine_texture=graphics.BUFFER_TYPE_COLOR2_BIT}) do
             assert(texture_attachments[name]==attachment and bindings[name].params[attachment],"Missing clear-sky cache attachment")
@@ -156,7 +158,7 @@ render.draw=function(predicate,options)
         end
     end
     if predicate=="viewmodel" then assert(not bindings.occlusion_texture,"Weapon sampled world AO") end
-    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture,
+    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture,viewport=viewport,
         scattering_reuse=material=="atmosphere" and options.constants.bake_region.args[3] or nil}
 end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
@@ -209,13 +211,19 @@ test("recipes, padded mip chains and filtered environment finish before the worl
     end
     assert(max_jobs>16 and frames<60,"Loading still waits on small fixed batches")
     assert(self.bake_frames==frames and self.bake_peak_commands<=896)
-    local recipes,filters,cube=0,0,0
+    local recipes,filters,cube,brdf=0,0,0,0
     for _,draw in ipairs(draws) do
         if draw.material=="bake" then recipes=recipes+1 end
         if draw.material=="surface_filter" then filters=filters+1 end
         if draw.material=="environment" then cube=cube+1 end
+        if draw.material=="environment_brdf" then
+            brdf=brdf+1
+            local v=draw.viewport
+            assert(v[1]==0 and v[2]==daylight.environment_height-daylight.environment_stride)
+            assert(v[3]==daylight.environment_stride and v[4]==daylight.environment_stride)
+        end
     end
-    assert(recipes==#atlas.surfaces*2 and filters==atlas.draw_count-#atlas.surfaces*2-1 and cube==1)
+    assert(recipes==#atlas.surfaces*2 and filters==atlas.draw_count-#atlas.surfaces*2-1 and cube==1 and brdf==1)
     assert(self.shadow_frames==0)
     update(self)
     assert(self.shadow_frames==1 and renderer_stats().ready)
@@ -349,7 +357,7 @@ test("capture history converges, holds and invalidates without retaining stale t
     assert(self.targets.history_b~=held)
     on_message(self,"capture_configure",{active=true,laboratory=false,temporal_live=true})
     for _=1,40 do update(self) end
-    assert(self.temporal.age==20 and self.temporal_draw_passes==1)
+    assert(self.temporal.age==21 and self.temporal_draw_passes==1)
     on_message(self,"capture_configure",{active=false,laboratory=false})
 end)
 test("world and weapon antialiasing can be toggled independently",function()
@@ -377,7 +385,7 @@ test("lighting and cloud changes stage complete pairs within the command budget"
     local function seek(changes)
         on_message(self,"renderer_configure",changes)
         local before=self.environment_updates
-        for i=1,18 do
+        for i=1,17 do
             draws={};update(self,1/60)
             assert(self.environment_updates==before and self.weather_draws<=2)
         end
@@ -476,11 +484,20 @@ test("weather reuses scattering; changed and interrupted celestial bakes invalid
     local function complete(changes,integrations)
         on_message(self,"renderer_configure",changes)
         draws={}
-        for _=1,19 do update(self,1/60);assert(self.weather_draws<=2) end
-        local sky,misses=0,0
-        for _,draw in ipairs(draws) do if draw.material=="atmosphere" then
-            sky=sky+1;if draw.scattering_reuse==0 then misses=misses+1 end
-        end end
+        for _=1,18 do update(self,1/60);assert(self.weather_draws<=2) end
+        local sky,misses,environment=0,0,0
+        for _,draw in ipairs(draws) do
+            assert(draw.material~="environment_brdf","Weather reintegrated the static BRDF")
+            if draw.material=="atmosphere" then
+                sky=sky+1;if draw.scattering_reuse==0 then misses=misses+1 end
+            elseif draw.material=="environment" then
+                local v=draw.viewport
+                assert(v[1]==0 and v[2]==environment*daylight.environment_stride)
+                assert(v[3]==daylight.environment_width and v[4]==daylight.environment_stride)
+                environment=environment+1
+            end
+        end
+        assert(environment==daylight.environment_rows-1,"Static BRDF row was overwritten")
         assert(sky==8 and misses==integrations,"Unexpected scattering work: "..misses)
         assert(self.scattering_rig==self.weather.rig and self.weather.stage==0)
     end
@@ -504,7 +521,11 @@ test("context restoration regenerates textures and finalization frees every targ
     local scattering=self.scattering_updates
     listener(nil,"restored");assert(self.bake_step==0)
     assert(self.shadow_cached_fits==nil and self.scattering_rig==nil)
+    draws={}
     while self.bake_step<atlas.job_count do update(self) end
+    local brdf=0
+    for _,draw in ipairs(draws) do if draw.material=="environment_brdf" then brdf=brdf+1 end end
+    assert(brdf==1,"Context restoration must rebuild the BRDF once")
     assert(self.scattering_updates==scattering+1 and self.scattering_rig==self.weather.rig)
     assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2)
     final(self)

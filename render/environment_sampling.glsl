@@ -11,7 +11,7 @@ vec3 environment_face(float face,vec2 p) {
     if(face<4.5) return normalize(vec3(p.x,-p.y,1));
     return normalize(vec3(-p.x,-p.y,-1));
 }
-vec2 environment_uv(vec3 d,float row) {
+vec3 environment_tile(vec3 d) {
     vec3 a=abs(d);vec2 p;float face;
     if(a.x>=a.y && a.x>=a.z) {
         face=d.x>0.0?0.0:1.0;p=vec2(d.x>0.0?-d.z:d.z,-d.y)/a.x;
@@ -20,8 +20,14 @@ vec2 environment_uv(vec3 d,float row) {
     } else {
         face=d.z>0.0?4.0:5.0;p=vec2(d.z>0.0?d.x:-d.x,-d.y)/a.z;
     }
-    return (vec2(face,row)*environment_layout.y+1.0+(p*.5+.5)*environment_layout.x)
+    return vec3(p,face);
+}
+vec2 environment_tile_uv(vec3 tile,float row) {
+    return (vec2(tile.z,row)*environment_layout.y+1.0+(tile.xy*.5+.5)*environment_layout.x)
         /(environment_layout.y*vec2(6,environment_layout.w));
+}
+vec2 environment_uv(vec3 d,float row) {
+    return environment_tile_uv(environment_tile(d),row);
 }
 vec3 environment_row(vec3 d,float row) {
     return decode_radiance(texture2D(environment_texture,environment_uv(d,row)).rgb);
@@ -29,7 +35,15 @@ vec3 environment_row(vec3 d,float row) {
 vec3 environment_specular(vec3 d,float roughness) {
     float level=clamp(roughness,0.0,1.0)*(environment_layout.z-1.0);
     float lo=floor(level),hi=min(lo+1.0,environment_layout.z-1.0);
-    return mix(environment_row(d,lo+1.0),environment_row(d,hi+1.0),level-lo);
+    // Both roughness rows share one face selection and directional projection.
+    vec3 tile=environment_tile(d);
+    vec3 a=decode_radiance(texture2D(environment_texture,environment_tile_uv(tile,lo+1.0)).rgb);
+    float weight=level-lo;
+    // Includes disabled filtering and both roughness endpoints. The atlas has
+    // no hardware mip chain, so this branch does not affect mip derivatives.
+    if(weight==0.0) return a;
+    vec3 b=decode_radiance(texture2D(environment_texture,environment_tile_uv(tile,hi+1.0)).rgb);
+    return mix(a,b,weight);
 }
 vec2 environment_brdf(float nv,float roughness) {
     vec2 uv=vec2(1.5+clamp(nv,0.0,1.0)*(environment_layout.x-1.0),

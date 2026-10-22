@@ -97,7 +97,12 @@ test("weather scheduling is bounded, atomic on seek, and freezes without catch-u
     assert(not atmosphere.step(s,o,1,false,true))
     local seek=settings.configure(o,{hour=1.5,weather_time=120})
     atmosphere.configure(s,o,seek)
-    for i=1,18 do local _,_,done=atmosphere.step(s,seek,1/60,true,true);assert(not done) end
+    local rows=0
+    for i=1,17 do
+        local phase,index,done=atmosphere.step(s,seek,1/60,true,true);assert(not done)
+        if phase=="environment" then rows=rows+1;assert(index==rows) end
+    end
+    assert(rows==daylight.environment_rows-1)
     local phase,blend,done=atmosphere.step(s,seek,1/60,true,true)
     assert(phase=="blend" and blend==1 and done and s.rig.hour==1.5 and s.shown_time==120)
     atmosphere.step(s,seek,.1,false,false)

@@ -149,7 +149,8 @@ local function atmosphere_copy(self,target,source,w,h,next_target,blend,environm
     render.set_render_target(target)
     render.set_viewport(0,0,w,h)
     bind("source_texture",source);bind("next_texture",next_target or source)
-    self.mix_constants.atmosphere_mix=vmath.vector4(blend or 0,next_target and 0 or 1,environment and 1 or 0,8/9)
+    self.mix_constants.atmosphere_mix=vmath.vector4(blend or 0,next_target and 0 or 1,environment and 1 or 0,
+        (daylight.environment_rows-1)/daylight.environment_rows)
     fullscreen(self,"atmosphere_mix",self.mix_constants)
     render.disable_texture("source_texture");render.disable_texture("next_texture")
     self.weather_draws=self.weather_draws+1
@@ -158,6 +159,12 @@ local function bake_environment(self)
     -- Initial loading/context rebakes complete both targets before world draws.
     -- Runtime changes use the staged path below.
     set_atmosphere(self.bake_constants,self.weather.rig,self.options,self.weather.shown_time)
+    -- Borrow a staging target for the one invariant BRDF tile. Its format
+    -- matches the atlas; no extra target or surface sampler is needed.
+    render.set_render_target(self.targets.environment_pending)
+    local stride=daylight.environment_stride
+    render.set_viewport(0,(daylight.environment_rows-1)*stride,stride,stride)
+    fullscreen(self,"environment_brdf",self.bake_constants)
     self.bake_constants.scattering_size=vmath.vector4(daylight.sky_width,daylight.sky_height,1/daylight.sky_width,1/daylight.sky_height)
     self.bake_constants.bake_region=vmath.vector4(0,1,0,0)
     render.set_render_target(self.targets.sky_pending)
@@ -171,8 +178,10 @@ local function bake_environment(self)
     render.set_render_target(self.targets.environment)
     render.set_viewport(0,0,daylight.environment_width,daylight.environment_height)
     bind("sky_texture",self.targets.sky)
+    bind("brdf_texture",self.targets.environment_pending)
     fullscreen(self,"environment",self.bake_constants)
     render.disable_texture("sky_texture")
+    render.disable_texture("brdf_texture")
     self.environment_updates=self.environment_updates+1
     self.environment_dirty=false
     self.report=true
@@ -211,12 +220,14 @@ local function animate_atmosphere(self,dt)
         else
             atmosphere_copy(self,t[scratch],index==1 and t[phase.."_previous"] or t[pending],w,h)
         end
-        render.set_viewport(0,(index-1)*h/count,w,h/count)
-        self.bake_constants.bake_region=vmath.vector4((index-1)/count,1/count,self.scattering_reuse and 1 or 0,0)
-        if phase=="environment" then bind("sky_texture",t.sky_pending)
+        -- Environment updates skip the static final row, retaining atlas pitch.
+        local rows=phase=="sky" and count or daylight.environment_rows
+        render.set_viewport(0,(index-1)*h/rows,w,h/rows)
+        self.bake_constants.bake_region=vmath.vector4((index-1)/rows,1/rows,self.scattering_reuse and 1 or 0,0)
+        if phase=="environment" then bind("sky_texture",t.sky_pending);bind("brdf_texture",t.environment_previous)
         else bind_scattering(t[pending]) end
         fullscreen(self,phase=="sky" and "atmosphere" or "environment",self.bake_constants)
-        if phase=="environment" then render.disable_texture("sky_texture")
+        if phase=="environment" then render.disable_texture("sky_texture");render.disable_texture("brdf_texture")
         else
             unbind_scattering()
             self.scattering_draws=self.scattering_reuse and 0 or 1
@@ -248,7 +259,7 @@ local BAKE_COMMAND_BUDGET=896
 local function bake_job_commands(job)
     -- fullscreen() emits ten commands. Include target/viewport and texture
     -- bindings; atlas patches also issue a complete preservation pass.
-    if not job then return 46 end -- sky/cache + publication copy + environment
+    if not job then return 60 end -- one BRDF tile + sky/cache + publication copy + environment
     if job.op=="recipe" then return 12 end
     return (job.target=="scratch_a" or job.target=="scratch_b") and 16 or 32
 end

@@ -613,15 +613,15 @@ limits and daytime heat follow the displayed transition. The existing 61-degree
 map rotation and approximate scattering/night radiometry remain adaptations.
 
 After loading, updates build a complete new sky and environment behind the
-currently displayed pair: eight 48-pixel sky strips, then nine environment rows,
+currently displayed pair: eight 48-pixel sky strips, then eight environment rows,
 with at most two atmosphere-update draws per frame. Each strip shares a pass with
 a complete preservation copy, respecting Metal's discard-on-load targets.
 Continuous updates blend the complete radiance maps and their direct-light,
 shadow, cloud and fog inputs over 0.2 seconds. Temporal history is retained.
-Explicit seeks publish atomically after 19 render updates and reset history once
+Explicit seeks publish atomically after 18 render updates and reset history once
 at publication. Initial loading retains its bounded loading pipeline. This is a
 sampled, delayed weather update with smooth blends, not an every-frame sky bake.
-The linear BRDF lookup row and cloud alpha retain their own interpolation rules;
+The static BRDF lookup row is copied unchanged; cloud alpha interpolates linearly.
 RGBA8 endpoint copies preserve exact bytes. No additional surface sampler or
 uniform binding is needed: weather values occupy the existing lighting array,
 avoiding the Metal buffer-binding limit found during validation.
@@ -647,8 +647,23 @@ Fourteen native comparisons against the uncached renderer differ by at most
 3/255 in any colour channel (mean below 0.007/255). These validate image stability,
 not GPU frame-time gains. Cache-specific captures and reports are under
 `build/atmosphere-cache-validation` and `build/atmosphere-cache-browser-validation`.
+
 The environment keeps six reflection levels, 128 filter samples and its diffuse
-and BRDF rows. Cloud shading uses the same procedural deck as the visible sky;
+and BRDF rows. The BRDF integral is evaluated once in a single padded tile during
+loading and context restoration, using an existing staging target. The initial
+atlas copies it across all six columns; runtime updates preserve the row,
+including during blends. This removes six redundant 128-sample integrals per
+texel on every weather update, plus one preservation draw and one row draw per
+cycle, without adding texture memory. Reflection sampling selects/projects its
+cube face once for both roughness levels and skips the second sample at exact
+levels, including when filtering is disabled. Fourteen native before/after
+captures differ by at most 1/255 per channel. The 36 atmosphere/renderer Lua
+checks and Metal/WebGL animation fixtures pass, including unchanged BRDF bytes,
+identical tile copies and smooth/rough endpoints. Environment comparison reports
+are under `build/environment-lookup-validation` and
+`build/environment-lookup-browser-validation`; GPU frame-time gains are unmeasured.
+
+Cloud shading uses the same procedural deck as the visible sky;
 fog varies scattering density at low spatial frequencies while retaining the
 analytic mean-density extinction approximation.
 
@@ -668,7 +683,7 @@ python3 tests/animated_atmosphere_pixels.py build/animated_atmosphere-browser-va
 The 34 standalone Lua suites pass **345 checks**. Native Metal passes all eleven
 fixed-view return comparisons, fog/shaft toggles, resize and camera-history checks.
 Native and release Chrome WebGL2/ANGLE Metal each exercise the shared eight-check,
-18-capture fixture and 13 pixel gates: drifting sky/reflections/fog, visible cloud
+18-capture fixture and 16 pixel gates: drifting sky/reflections/fog, visible cloud
 shadow contribution, exact addressed returns, six full-market solar states,
 continuous sunset-to-midnight motion, pause/focus and three resource-stable
 restarts. The native framebuffer is 1920×1280 (captures saved at 960×640); WebGL

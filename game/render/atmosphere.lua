@@ -1,6 +1,7 @@
 -- Presentation-only weather clock and bounded bake scheduler.
 local daylight=require "game.render.daylight"
-local M={sky_slices=8,environment_slices=9,blend_seconds=.2}
+-- The final atlas row is a static BRDF lookup, preserved by the staging copies.
+local M={sky_slices=8,environment_slices=daylight.environment_rows-1,blend_seconds=.2}
 -- Only these inputs affect at_scatter(): medium density and both celestial
 -- directions/irradiances. Cloud toggles, wind and the displayed key are separate.
 function M.same_scattering(a,b)

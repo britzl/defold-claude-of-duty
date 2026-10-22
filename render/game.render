@@ -1,6 +1,7 @@
 script: "/render/game.render_script"
 materials { name: "bake" material: "/render/bake.material" }
 materials { name: "environment" material: "/render/environment.material" }
+materials { name: "environment_brdf" material: "/render/environment_brdf.material" }
 materials { name: "sky" material: "/render/sky.material" }
 materials { name: "shadow" material: "/render/shadow.material" }
 materials { name: "shadow_copy" material: "/render/shadow_copy.material" }

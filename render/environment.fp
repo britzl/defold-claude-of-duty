@@ -1,33 +1,21 @@
 varying highp vec2 var_uv;
 uniform highp vec4 bake_region; // normalized y offset, height
+uniform highp sampler2D brdf_texture;
 #include "/render/radiance.glsl"
 #include "/render/sky.glsl"
 #include "/render/environment_sampling.glsl"
 #include "/render/ggx.glsl"
-// Deterministic Hammersley sequence without integer/bitwise GLSL requirements.
-vec2 sample_point(int index) {
-    float n=float(index),r=0.0,p=.5;
-    for(int bit=0;bit<7;bit++) { r+=mod(n,2.0)*p;n=floor(n*.5);p*=.5; }
-    return vec2((float(index)+.5)/128.0,r);
-}
+#include "/render/environment_samples.glsl"
 void main() {
     vec2 pixel=vec2(var_uv.x,bake_region.x+var_uv.y*bake_region.y)*environment_layout.y*vec2(6,environment_layout.w);
     vec2 tile=floor(pixel/environment_layout.y);
     vec2 uv=(pixel-tile*environment_layout.y-1.0)/environment_layout.x;
     float row=tile.y;
     if(row>environment_layout.w-1.5) {
-        vec2 q=clamp((pixel-tile*environment_layout.y-1.5)/(environment_layout.x-1.0),0.0,1.0);
-        float nv=max(q.x,.0001),rough=q.y,a=max(rough*rough,.0001);
-        vec3 v=vec3(sqrt(max(0.0,1.0-nv*nv)),0,nv);vec2 integral=vec2(0);
-        for(int i=0;i<128;i++) {
-            vec3 h=ggx_half(sample_point(i),rough),l=reflect(-v,h);
-            float nl=max(l.z,0.0),vh=max(dot(v,h),0.0);
-            if(nl>0.0) {
-                float weight=ggx_g1(nv,a*a)*ggx_g1(nl,a*a)*vh/max(h.z*nv,.00001);
-                float f=pow(1.0-vh,5.0);integral+=vec2(1.0-f,f)*weight;
-            }
-        }
-        gl_FragColor=vec4(integral/128.0,0,1);return;
+        // Initial bake broadcasts the one cached LUT tile across this row.
+        // Runtime updates preserve the row and only filter sky-dependent rows.
+        vec2 lut_pixel=vec2(pixel.x-tile.x*environment_layout.y,pixel.y);
+        gl_FragColor=texture2D(brdf_texture,lut_pixel/(environment_layout.y*vec2(6,environment_layout.w)));return;
     }
     vec3 n=environment_face(tile.x,uv*2.0-1.0);
     if(row<.5) { gl_FragColor=vec4(encode_radiance(sky_radiance(n)),1);return; }
