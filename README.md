@@ -38,6 +38,50 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Cached room-light shadows (2026-10-22)
+
+The two room lights now cache their static shadow geometry. Previously, all
+12 cubemap faces redrew the world every frame, even while the lights and walls
+stayed still. One atlas copy now restores both colour and actual depth before
+animated soldiers are drawn each frame. Position/range or slot changes, world
+readiness, restart/history resets, capture/settings changes and graphics context
+restoration invalidate the cache. Fading light intensity does not invalidate it.
+Both cubes rebuild together in one render pass to preserve tiles on Metal.
+
+Native Metal measurements at 1280×720, with all visual features retained:
+
+| View | Full room-shadow redraw | Cached room shadows |
+| --- | ---: | ---: |
+| Live spawn, AI/weapon/HUD | 356 average | 222 average |
+| Frozen street | 275 | 141 |
+| Frozen interior | 246 | 122 |
+| Frozen courtyard | 207 | 70 |
+
+The live result is a **38% draw-call reduction**, averaged over two alternating
+cache-off/cache-on samples (91–92 delivered counter samples each). These are
+short debug-engine submission measurements, not sustained FPS or GPU timings.
+Room transitions and cache invalidation still require a full static redraw.
+The cache adds one 768×1024 RGBA8/depth target, estimated at **6 MiB**; High now
+has 51 steady render targets. Geometry, shadow resolution and effects are unchanged.
+
+`local_shadow_cache=false` restores full room-shadow redraws for comparisons;
+quality presets enable caching. `renderer.snapshot` reports separate static,
+dynamic and copy pass counts plus cache refreshes. These pass counts are distinct
+from the engine's actual `DrawCalls` counter.
+
+Run `PYTHONPATH=automation-bridge-python python3 tests/local_shadow_cache_smoke.py`
+with Pillow and NumPy for paired native images, moving-caster checks and counters.
+Native scene/atlas comparisons and five camera-sweep positions were pixel-identical.
+Moving-soldier atlas checks also matched while the static cache stayed valid.
+The WebGL fixture uses `tests/local_shadow_cache_browser.project` with
+`tools/validate_rendering_browser.mjs`, then `python3 tests/local_shadow_cache_pixels.py`.
+All seven settled WebGL image pairs were pixel-identical and three resizes passed.
+The fixture warms its laboratory and waits for temporal convergence before pairing
+images. Forced WebGL context recovery still failed to rebake; it remains an
+unqualified path as described in the existing renderer limitations below.
+Local evidence is retained in
+`build/local-shadow-cache-validation` and `build/local-shadow-cache-browser-validation`.
+
 ## Quality presets and Auto mode (2026-10-21)
 
 **Esc → Graphics → Quality** selects Auto, Low, Medium, High or Ultra.

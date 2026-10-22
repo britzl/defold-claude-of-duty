@@ -59,4 +59,15 @@ function M.faces(position)
     end
     return result
 end
+-- Only position/range affect a room's shadow map. Slot gains and colours can
+-- fade every frame without changing either its geometry or its projection.
+function M.same_shadow_positions(a,b)
+    if not a or not b then return false end
+    for i=1,M.shadow_count do
+        for _,axis in ipairs({"x","y","z","w"}) do
+            if a[i][axis]~=b[i][axis] then return false end
+        end
+    end
+    return true
+end
 return M

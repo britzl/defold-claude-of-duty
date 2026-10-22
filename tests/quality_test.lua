@@ -12,6 +12,7 @@ test('all presets are valid and independent; quality never owns gameplay fields'
         local p=Q.preset(name);S.configure(S.defaults(),p)
         p.shadows=false;assert(Q.preset(name).shadows)
         assert(not Q.owns('fov') and not Q.owns('hour') and not Q.owns('damage_scale'))
+        assert(p.local_shadow_cache and Q.owns('local_shadow_cache'))
     end
     for _,v in ipairs({{render_scale=0/0},{render_scale=2},{shadow_resolution=768},{decal_limit=1.5},{material_lod=-1}}) do
         assert(not pcall(S.configure,S.defaults(),v))

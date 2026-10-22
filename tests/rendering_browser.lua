@@ -147,6 +147,21 @@ function M.new()
             steps[#steps+1]={name=name,id=name}
         end
     end
+    local local_shadow_cache=sys.get_config_string("rendering_validation.suite","")=="local_shadow_cache"
+    if local_shadow_cache then
+        -- Upload the laboratory before collecting paired temporal histories.
+        -- Its first WebGL frame can precede the deferred mesh resources.
+        steps={{name="local_lights",id="local_shadow_fixture_warmup",changes={local_shadow_cache=false}}}
+        for _,name in ipairs({"street","interior","courtyard","local_lights","foliage_local"}) do
+            for _,view in ipairs((name=="local_lights" or name=="foliage_local") and {"scene","local_shadow"} or {"scene"}) do
+                for _,cached in ipairs({false,true}) do
+                    steps[#steps+1]={name=name,id=name.."_"..view..(cached and "_cached" or "_reference"),
+                        changes={view=view,local_shadow_cache=cached}}
+                end
+            end
+        end
+        steps[#steps+1]={name="street",id="street_return"}
+    end
     local weapon_aa=sys.get_config_string("rendering_validation.suite","")=="weapon_aa"
     if weapon_aa then
         steps={}
@@ -161,7 +176,7 @@ function M.new()
             end
         end
     end
-    return {steps=steps,index=0,frames=0,intervals={},shot_frame=weapon_aa and 65 or 45}
+    return {steps=steps,index=0,frames=0,intervals={},shot_frame=(weapon_aa or local_shadow_cache) and 65 or 45}
 end
 function M.update(test,self,dt)
     if test.done then

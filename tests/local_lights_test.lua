@@ -7,6 +7,20 @@ local function light(id,x)
     return {id=id,kind="room",x=x,y=2,z=0,radius=6,minimum={x=x-1,y=0,z=-1},maximum={x=x+1,y=3,z=1}}
 end
 local list={light("a",0),light("b",4),light("c",8),light("d",12),light("e",16),light("f",20)}
+test("shadow reuse requires the same position, range and cube slot",function()
+    local function positions() return {{x=1,y=2,z=3,w=6},{x=4,y=5,z=6,w=8}} end
+    local a,b=positions(),positions()
+    assert(lights.same_shadow_positions(a,b))
+    assert(not lights.same_shadow_positions(a,nil))
+    for i=1,2 do for _,axis in ipairs({"x","y","z","w"}) do
+        b=positions();b[i][axis]=b[i][axis]+.01
+        assert(not lights.same_shadow_positions(a,b))
+    end end
+    b=positions();b[1],b[2]=b[2],b[1]
+    assert(not lights.same_shadow_positions(a,b))
+    b=positions();b[1].w=0
+    assert(not lights.same_shadow_positions(a,b))
+end)
 test("room selection is bounded, deterministic and resists boundary jitter",function()
     local state=lights.update(nil,list,{x=0,y=1,z=0},0,true)
     assert(#state.slots==4 and state.slots[1].light.id=="a")

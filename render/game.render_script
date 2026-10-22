@@ -116,6 +116,70 @@ local function fullscreen(self,material,constants,blend,depth_copy)
     if material then render.disable_material() end
 end
 local function bind(name,target) render.enable_texture(name,target,COLOR) end
+local function local_shadow_draw(self,material,predicate)
+    render.set_view(self.identity)
+    render.enable_material(material)
+    local count=0
+    for light,faces in ipairs(self.local_shadow_views) do
+        for face,matrix in ipairs(faces) do
+            local c=self.local_shadow_constants[(light-1)*6+face]
+            c.sun_matrix=matrix;c.local_shadow_position=self.local_shadow_positions[light]
+            render.set_viewport((face-1)%3*local_lights.shadow_size,
+                (math.floor((face-1)/3)+(light-1)*2)*local_lights.shadow_size,local_lights.shadow_size,local_lights.shadow_size)
+            render.set_projection(matrix)
+            render.draw(predicate,{constants=c,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrix})
+            count=count+1
+        end
+    end
+    render.disable_material()
+    return count
+end
+local function local_shadow_pass(self)
+    local t,o=self.targets,self.options
+    self.local_shadow_static_draw_passes,self.local_shadow_dynamic_draw_passes,self.local_shadow_copy_draw_passes=0,0,0
+    local active=false
+    for _,position in ipairs(self.local_shadow_positions) do if position.w>0 then active=true end end
+    local enabled=o.local_lights and o.local_shadows and active
+    local cached=enabled and o.local_shadow_cache and self.shadow_cache_ready
+    if not cached then self.local_shadow_valid=false end
+    if enabled and not self.local_shadow_views then
+        self.local_shadow_views={}
+        for i,position in ipairs(self.local_shadow_positions) do
+            self.local_shadow_views[i]=position.w>0 and local_lights.faces(position) or {}
+        end
+    end
+    local predicate=self.capture.laboratory and self.laboratory_shadow or self.world_shadow
+    if cached and not self.local_shadow_valid then
+        -- Rebuild the complete static atlas in one render pass. Preserving
+        -- individual faces across target switches is unsafe on tile GPUs.
+        render.set_render_target(t.local_shadow_static)
+        render.set_viewport(0,0,local_lights.shadow_width,local_lights.shadow_height)
+        render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+        self.local_shadow_static_draw_passes=local_shadow_draw(self,"local_shadow",predicate)
+        self.local_shadow_valid=true
+        self.local_shadow_cache_refreshes=(self.local_shadow_cache_refreshes or 0)+1
+    end
+    render.set_render_target(t.local_shadow)
+    render.set_viewport(0,0,local_lights.shadow_width,local_lights.shadow_height)
+    render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
+    if enabled then
+        if cached then
+            bind("source_texture",t.local_shadow_static)
+            render.enable_texture("source_depth",t.local_shadow_static,DEPTH)
+            fullscreen(self,"shadow_copy",nil,false,true)
+            render.disable_texture("source_texture");render.disable_texture("source_depth")
+            self.local_shadow_copy_draw_passes=1
+            render.enable_state(G.STATE_CULL_FACE)
+            render.set_depth_func(G.COMPARE_FUNC_LEQUAL)
+        else
+            self.local_shadow_static_draw_passes=local_shadow_draw(self,"local_shadow",predicate)
+        end
+        if not self.capture.active or self.capture.actors then
+            self.local_shadow_dynamic_draw_passes=local_shadow_draw(self,"local_shadow_skinned",self.soldier_shadow)
+        end
+    end
+    self.local_shadow_draw_passes=self.local_shadow_static_draw_passes+self.local_shadow_dynamic_draw_passes
+end
 local function bake_scratch(self)
     self.targets.atlas_spare=colour_target(atlas.width,atlas.height)
     self.targets.scratch_a=colour_target(atlas.scratch_size,atlas.scratch_size)
@@ -365,6 +429,10 @@ local function report(self)
         reflection_draw_passes=self.reflection_draw_passes or 0,reflection_steps=48,
         local_shadow_lights=local_lights.shadow_count,local_shadow_size=local_lights.shadow_size,
         local_shadow_draw_passes=self.local_shadow_draw_passes or 0,
+        local_shadow_static_draw_passes=self.local_shadow_static_draw_passes or 0,
+        local_shadow_dynamic_draw_passes=self.local_shadow_dynamic_draw_passes or 0,
+        local_shadow_copy_draw_passes=self.local_shadow_copy_draw_passes or 0,
+        local_shadow_cache_refreshes=self.local_shadow_cache_refreshes or 0,
         glass_draw_passes=self.glass_draw_passes or 0,
         combat_transparency="sorted_after_taa",combat_particle_limit=combat_fx.particle_limit,combat_decal_limit=combat_fx.decal_limit,
         haze_draw_passes=self.haze_draw_passes or 0,
@@ -462,6 +530,7 @@ function init(self)
     self.local_shadow_constants={}
     for i=1,12 do self.local_shadow_constants[i]=render.constant_buffer() end
     self.targets.local_shadow=colour_target(local_lights.shadow_width,local_lights.shadow_height,true,true)
+    self.targets.local_shadow_static=colour_target(local_lights.shadow_width,local_lights.shadow_height,true,true,false,nil,false,true)
     self.lighting.volume_data={}
     for i=1,daylight.max_volumes*5 do self.lighting.volume_data[i]=vmath.vector4() end
     self.cascade_constants={}
@@ -492,6 +561,7 @@ function init(self)
             self.bake_step=0
             self.weather.stage=0;self.weather.pending=nil;self.weather.forced=true
             self.shadow_cached_fits=nil
+            self.local_shadow_valid=false
             self.scattering_rig=nil;self.scattering_reuse=false
             self.grade_ready=false;self.exposure_valid=false
             temporal.reset(self.temporal,"context_restored")
@@ -640,35 +710,7 @@ function update(self,dt)
         end
         self.shadow_draw_passes=self.shadow_static_draw_passes+self.shadow_dynamic_draw_passes
 
-        render.set_render_target(t.local_shadow)
-        render.set_viewport(0,0,local_lights.shadow_width,local_lights.shadow_height)
-        render.clear({[COLOR]=vmath.vector4(1,0,0,1),[DEPTH]=1})
-        self.local_shadow_draw_passes=0
-        if o.local_lights and o.local_shadows then
-            render.set_view(self.identity)
-            for light=1,local_lights.shadow_count do
-                local position=self.local_shadow_positions[light]
-                if position.w>0 then
-                    for face,matrix in ipairs(local_lights.faces(position)) do
-                        local tile=(light-1)*6+face
-                        local c=self.local_shadow_constants[tile]
-                        c.sun_matrix=matrix;c.local_shadow_position=position
-                        render.set_viewport((face-1)%3*local_lights.shadow_size,
-                            (math.floor((face-1)/3)+(light-1)*2)*local_lights.shadow_size,local_lights.shadow_size,local_lights.shadow_size)
-                        render.set_projection(matrix)
-                        render.enable_material("local_shadow")
-                        render.draw(self.capture.laboratory and self.laboratory_shadow or self.world_shadow,{constants=c,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrix})
-                        self.local_shadow_draw_passes=self.local_shadow_draw_passes+1
-                        if not self.capture.active or self.capture.actors then
-                            render.enable_material("local_shadow_skinned")
-                            render.draw(self.soldier_shadow,{constants=c,frustum_planes=render.FRUSTUM_PLANES_ALL,frustum=matrix})
-                            self.local_shadow_draw_passes=self.local_shadow_draw_passes+1
-                        end
-                    end
-                end
-            end
-            render.disable_material()
-        end
+        local_shadow_pass(self)
 
         -- World geometry only; identical skinning and cutouts to colour/shadows.
         -- This data target is deliberately portable RGBA8, independent of HDR.
@@ -1000,13 +1042,16 @@ function on_message(self,id,message)
     if id==hash("renderer_world_ready") then
         self.shadow_cache_ready=true
         self.shadow_cached_fits=nil
+        self.local_shadow_valid=false
     elseif id==hash("renderer_reset_history") then
         self.shadow_cached_fits=nil
+        self.local_shadow_valid=false
         temporal.reset(self.temporal,message.reason or "explicit")
         self.exposure_valid=false
         self.report=true
     elseif id==hash("capture_configure") then
         self.shadow_cached_fits=nil
+        self.local_shadow_valid=false
         self.capture=message
         if message.active then
             atmosphere.seek(self.weather,self.options.hour,self.options.weather_time)
@@ -1018,6 +1063,7 @@ function on_message(self,id,message)
         self.report=true
     elseif id==hash("renderer_configure") then
         self.shadow_cached_fits=nil
+        self.local_shadow_valid=false
         local next_options=settings.configure(self.options,message)
         atmosphere.configure(self.weather,self.options,next_options)
         local reallocate=next_options.photographic_quality~=self.options.photographic_quality or
@@ -1053,7 +1099,12 @@ function on_message(self,id,message)
     elseif id==hash("renderer_flashes") then
         self.flash_positions,self.flash_colours=message.positions,message.colours
     elseif id==hash("renderer_lights") then
-        self.local_shadow_positions=message.shadow_positions or {vmath.vector4(),vmath.vector4()}
+        local positions=message.shadow_positions or {vmath.vector4(),vmath.vector4()}
+        if not local_lights.same_shadow_positions(positions,self.local_shadow_positions) then
+            self.local_shadow_valid=false
+            self.local_shadow_views=nil
+        end
+        self.local_shadow_positions=positions
         self.lighting.light_shadow_slots=message.shadow_slots or vmath.vector4(-1,0,-1,0)
         self.light_count=math.min(#message.lights,settings.max_lights)
         for i=1,settings.max_lights do

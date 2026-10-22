@@ -18,7 +18,7 @@ local presets={
         local_shadows=true,volumetric_fog=true,fog_shadows=true,heat_distortion=true,
         micro_detail=true,parallax=true,motion_blur=.15,ads_dof=1},
 }
-local common={shadow_cache=true,interior_lighting=true,environment_filter=true,shadows=true,normal_maps=true,local_lights=true,fog=true,bloom=true,glass=true,
+local common={shadow_cache=true,local_shadow_cache=true,interior_lighting=true,environment_filter=true,shadows=true,normal_maps=true,local_lights=true,fog=true,bloom=true,glass=true,
     muzzle_lights=true,temporal_aa=true,weapon_aa=true,combat_materials=true,combat_effects=true,
     soft_particles=true,impact_decals=true,weathering=true,auto_exposure=true,clouds=true,cloud_shadows=true}
 function M.preset(name)

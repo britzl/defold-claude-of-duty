@@ -19,7 +19,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4*4+daylight.sky_width*daylight.sky_height*16)
+    assert(settings.target_bytes(1920,1280)==768*1024*8*2+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4*4+daylight.sky_width*daylight.sky_height*16)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -90,7 +90,7 @@ local function value(...) return setmetatable({x=0,y=0,z=0,w=1,m00=1,m10=0,m20=0
 matrix_mt.__add=function() return value() end
 matrix_mt.__mul=function() return value() end
 vmath={matrix4=value,matrix4_perspective=value,matrix4_orthographic=value,matrix4_look_at=value,normalize=value,
-    vector3=value,vector4=function(...) local v=value(...);v.w=select(4,...) or 0;return v end,inv=value}
+    vector3=value,vector4=function(...) local v=value(...);v.x,v.y,v.z,v.w=select(1,...) or 0,select(2,...) or 0,select(3,...) or 0,select(4,...) or 0;return v end,inv=value}
 camera={get_view=value,get_projection=value}
 local w,h=960,640
 local targets,draws,bindings,messages={},{},{},{}
@@ -138,6 +138,9 @@ render.draw=function(predicate,options)
         assert(bindings.source_texture and bindings.source_texture==bindings.source_depth,"Missing matching cached colour/depth")
         assert(depth_mask and depth_func==graphics.COMPARE_FUNC_ALWAYS,"Cached depth must overwrite the destination")
         assert(bindings.source_depth.params[graphics.BUFFER_TYPE_DEPTH_BIT].flags==render.TEXTURE_BIT)
+    end
+    if material=="local_shadow" or material=="local_shadow_skinned" then
+        assert(depth_mask and depth_func==graphics.COMPARE_FUNC_LEQUAL,"Local casters need the restored depth test")
     end
     if options and options.frustum then
         assert(options.frustum_planes==render.FRUSTUM_PLANES_ALL,"3D draw omitted near/far culling")
@@ -193,7 +196,7 @@ test("recipes, padded mip chains and filtered environment finish before the worl
         assert(self.lighting.surface_infos[i].args[2]==s.size)
         assert(self.lighting.surface_parameters[i].args[1]==s.parallax)
     end
-    assert(#targets==53)
+    assert(#targets==54)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")
     for _,name in ipairs({"scene","weapon","environment","bloom_down_1","bloom_up_1"}) do
         assert(self.targets[name].params[graphics.BUFFER_TYPE_COLOR0_BIT].format==graphics.TEXTURE_FORMAT_RGBA16F)
@@ -279,7 +282,7 @@ test("heat distortion uses a separate offset target and skips work when disabled
 end)
 test("resize reuses screen targets and leaves generated textures intact",function()
     w,h=1279,719;update(self)
-    assert(#targets==53 and self.resizes==2 and self.bake_draws==atlas.draw_count)
+    assert(#targets==54 and self.resizes==2 and self.bake_draws==atlas.draw_count)
     assert(self.targets.scene.params[graphics.BUFFER_TYPE_COLOR0_BIT].width==1279)
     assert(self.bloom_width==319 and self.bloom_height==179)
     assert(self.occlusion_width==640 and self.occlusion_height==360)
@@ -464,6 +467,51 @@ test("static shadow caching copies depth and redraws animated casters every fram
     assert(self.shadow_static_draw_passes==4)
     on_message(self,"capture_configure",{active=false,laboratory=false})
 end)
+test("local shadow cache preserves static depth, live casters and invalidation",function()
+    local function lights(x,r)
+        on_message(self,"renderer_lights",{lights={},shadow_positions={vmath.vector4(x or 1,2,3,r or 6),vmath.vector4(4,5,6,8)}})
+    end
+    local function passes(static,dynamic,copy)
+        draws={};update(self)
+        assert(self.local_shadow_static_draw_passes==static)
+        assert(self.local_shadow_dynamic_draw_passes==dynamic)
+        assert(self.local_shadow_copy_draw_passes==copy)
+        local counts={local_shadow=0,local_shadow_skinned=0,shadow_copy=0}
+        for _,d in ipairs(draws) do
+            if d.target==self.targets.local_shadow_static or d.target==self.targets.local_shadow then
+                counts[d.material]=counts[d.material]+1
+                if d.material=="local_shadow_skinned" or d.material=="shadow_copy" then
+                    assert(d.target==self.targets.local_shadow,"Dynamic casters contaminated the static cache")
+                end
+            end
+        end
+        assert(counts.local_shadow==static and counts.local_shadow_skinned==dynamic and counts.shadow_copy==copy)
+    end
+    on_message(self,"renderer_configure",{local_lights=true,local_shadows=true,local_shadow_cache=true})
+    on_message(self,"capture_configure",{active=false})
+    lights()
+    self.shadow_cache_ready=false;passes(12,12,0)
+    on_message(self,"renderer_world_ready",{});passes(12,12,1)
+    local refreshes,views=self.local_shadow_cache_refreshes,self.local_shadow_views
+    lights();passes(0,12,1)
+    assert(self.local_shadow_cache_refreshes==refreshes and self.local_shadow_views==views)
+    lights(2);passes(12,12,1)
+    assert(self.local_shadow_views~=views)
+    lights(2,7);passes(12,12,1)
+    on_message(self,"renderer_reset_history",{reason="restart"});passes(12,12,1)
+    on_message(self,"capture_configure",{active=true,laboratory=true});passes(12,0,1)
+    passes(0,0,1)
+    on_message(self,"capture_configure",{active=true,actors=true});passes(12,12,1)
+    on_message(self,"renderer_configure",{local_shadow_cache=false});passes(12,12,0);passes(12,12,0)
+    on_message(self,"renderer_configure",{local_shadow_cache=true,local_shadows=false});passes(0,0,0)
+    on_message(self,"renderer_configure",{local_shadows=true});passes(12,12,1)
+    on_message(self,"renderer_configure",{local_lights=false});passes(0,0,0)
+    on_message(self,"renderer_configure",{local_lights=true});passes(12,12,1)
+    on_message(self,"renderer_lights",{lights={},shadow_positions={vmath.vector4(),vmath.vector4(4,5,6,8)}})
+    passes(6,6,1);passes(0,6,1)
+    on_message(self,"renderer_lights",{lights={}});passes(0,0,0)
+    on_message(self,"capture_configure",{active=false})
+end)
 test("continuous weather fits command capacity and retains history and allocations",function()
     on_message(self,"capture_configure",{active=false,laboratory=false})
     on_message(self,"renderer_photographic_state",{ads=0,paused=false})
@@ -520,7 +568,7 @@ end)
 test("context restoration regenerates textures and finalization frees every target once",function()
     local scattering=self.scattering_updates
     listener(nil,"restored");assert(self.bake_step==0)
-    assert(self.shadow_cached_fits==nil and self.scattering_rig==nil)
+    assert(self.shadow_cached_fits==nil and self.scattering_rig==nil and not self.local_shadow_valid)
     draws={}
     while self.bake_step<atlas.job_count do update(self) end
     local brdf=0
