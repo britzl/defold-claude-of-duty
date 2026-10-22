@@ -162,6 +162,16 @@ function M.new()
         end
         steps[#steps+1]={name="street",id="street_return"}
     end
+    local world_batching=sys.get_config_string("rendering_validation.suite","")=="world_batching"
+    if world_batching then
+        -- Test-only override, before the first loading update constructs meshes.
+        local generator=require "game.world.generator"
+        generator.max_batch_vertices=sys.get_config_int("rendering_validation.batch_vertices",generator.max_batch_vertices)
+        steps={}
+        for _,name in ipairs({"street","interior","courtyard","detail","shadow_distance"}) do
+            steps[#steps+1]={name=name,id=name}
+        end
+    end
     local weapon_aa=sys.get_config_string("rendering_validation.suite","")=="weapon_aa"
     if weapon_aa then
         steps={}
@@ -176,7 +186,8 @@ function M.new()
             end
         end
     end
-    return {steps=steps,index=0,frames=0,intervals={},shot_frame=(weapon_aa or local_shadow_cache) and 65 or 45}
+    return {steps=steps,index=0,frames=0,intervals={},shot_frame=(weapon_aa or local_shadow_cache or world_batching) and 65 or 45,
+        step_frames=world_batching and 180 or 100}
 end
 function M.update(test,self,dt)
     if test.done then
@@ -217,6 +228,6 @@ function M.update(test,self,dt)
         report("RENDER_BROWSER SHOT "..json.encode({id=step.id,page=step.page,view=step.view,
             camera=capture.snapshot(self).camera,renderer=self.renderer_stats}))
     end
-    if test.frames>=100 then test.frames=0 end
+    if test.frames>=test.step_frames then test.frames=0 end
 end
 return M

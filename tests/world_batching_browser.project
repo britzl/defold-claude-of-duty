@@ -1,0 +1,9 @@
+[rendering_validation]
+enabled = 1
+suite = world_batching
+[display]
+width = 1280
+height = 720
+high_dpi = 0
+[quality]
+mode = high

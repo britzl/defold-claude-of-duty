@@ -65,6 +65,31 @@ function M.run()
     worldmesh.close(cancelled);worldmesh.close(cancelled)
     assert(not pcall(worldmesh.begin,{invalid={1,"bad"}},16,36))
     collectgarbage("collect") -- Includes the failed begin's owned edge line.
+    -- Dense-cell growth and splitting must preserve every stream byte. The
+    -- larger upload budget changes draw boundaries, never geometry or shading.
+    local packed={}
+    for _,limit in ipairs({12288,require("game.world.generator").max_batch_vertices}) do
+        local dense=worldmesh.begin({},16,limit)
+        for i=1,1400 do
+            local s={id="dense/"..i,material="concrete",x=1+(i%10)*.1,y=1+i*.001,z=1,w=.1,h=.1,d=.1}
+            assert(worldmesh.append(dense,s,materials.concrete,1+i*.0001)==36)
+        end
+        local batches=worldmesh.finish(dense)
+        local streams={};local vertices=0
+        for i,b in ipairs(batches) do
+            assert(b.vertex_count<=limit and b.chunk_x==0 and b.chunk_z==0)
+            vertices=vertices+b.vertex_count
+            local data=worldmesh.take_buffer(dense,i)
+            for _,name in ipairs({"position","normal","color","surface_edges","surface_masks","surface_data"}) do
+                streams[name]=(streams[name] or "")..buffer.get_bytes(data,hash(name))
+            end
+        end
+        assert(vertices==1400*36)
+        packed[#packed+1]={streams=streams,batches=#batches}
+        worldmesh.close(dense)
+    end
+    assert(packed[2].batches==2 and packed[2].batches<packed[1].batches)
+    for name,bytes in pairs(packed[1].streams) do assert(bytes==packed[2].streams[name],"Dense batch growth changed "..name) end
     local pane=glass.pane("test",42,1.4,-.5,2.5,2.6,"z")
     local native=worldmesh.pack(pane)
     local names={"position","normal","color","surface_edges","surface_masks"}
@@ -78,7 +103,8 @@ function M.run()
         for k,v in ipairs(arrays[i]) do stream[k]=i==1 and v-center[(k-1)%3+1] or v end
     end
     equal_buffer(native,reference,names)
-    print("NATIVE_MESH_TEST PASS "..#shapes.." primitives, glass, ownership, container growth and cancellation")
+    local message="NATIVE_MESH_TEST PASS "..#shapes.." primitives, glass, ownership, dense batch splitting, container growth and cancellation"
+    if html5 then html5.run("console.log("..json.encode(message)..")") else print(message) end
     return #shapes
 end
 return M

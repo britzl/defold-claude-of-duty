@@ -138,6 +138,39 @@ test("spatial batches retain every surface family and weather value per triangle
     end
 end)
 
+test("dense cells use fewer buffers without merging culling cells or changing triangles",function()
+    local limit=generator.max_batch_vertices
+    local function packed(cap)
+        generator.max_batch_vertices=cap
+        local w=generator.new(layout)
+        w.job=nil;w.mesh_index=1;w.shape_faces={};w.edge_points={}
+        for i=1,1400 do
+            w.shapes[i]={id="dense/"..i,material=i%2==0 and "concrete" or "wood",
+                x=1,y=i*.001,z=1,w=.1,h=.1,d=.1}
+        end
+        w.shapes[1401]={id="neighbour",material="concrete",x=17,y=1,z=1,w=.1,h=.1,d=.1}
+        while w.phase=="geometry" do generator.step(w,4096) end
+        local streams,counts={},{}
+        for _,b in ipairs(w.batches) do if not b.glass then
+            assert(b.vertex_count<=cap)
+            local key=b.chunk_x.."/"..b.chunk_z
+            counts[key]=(counts[key] or 0)+1;streams[key]=streams[key] or {}
+            for _,name in ipairs({"positions","normals","colors","edges","masks","surfaces"}) do
+                local values=streams[key][name] or {};streams[key][name]=values
+                for _,v in ipairs(b[name]) do values[#values+1]=v end
+            end
+        end end
+        return streams,counts
+    end
+    local before,small=packed(12288)
+    local after,large=packed(limit)
+    assert(large['0/0']==2 and large['0/0']<small['0/0'] and large['1/0']==1)
+    for cell,streams in pairs(before) do for name,values in pairs(streams) do
+        assert(#values==#after[cell][name])
+        for i,v in ipairs(values) do assert(v==after[cell][name][i],name) end
+    end end
+end)
+
 test("decoration detail and seed cannot move collision or change spawn/weapon random streams", function()
     local a = generate(24, { detail = true, seed = 42 })
     local b = generate(24, { detail = false, seed = 42 })

@@ -5,7 +5,9 @@ local interior = require "game.world.interior"
 local visible_faces = require "game.world.visible_faces"
 local daylight = require "game.render.daylight"
 local materials=require "game.world.materials"
-local M = { max_batch_vertices = 12288 }
+-- Keep the existing spatial culling cells, but let dense cells share one mesh.
+-- Lua uploads still yield in 512-vertex slices; native uploads bound each call.
+local M = { max_batch_vertices = 49152 }
 
 -- These monotonic timestamps include frames missed by an attaching profiler.
 function M.mark(world,stage)

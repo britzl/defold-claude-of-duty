@@ -24,7 +24,7 @@ const server=createServer(async(req,res)=>{
             const backend=url.searchParams.get('backend')==='lua'?'lua':'native';
             const verify=url.searchParams.get('verify')==='1'?1:0;
             const flags=[`--config=world_mesh.backend=${backend}`,`--config=world_mesh.verify=${verify}`,
-                '--config=mesh_validation.enabled=1','--config=market_validation.enabled=0'];
+                '--config=mesh_validation.enabled=1','--config=market_validation.enabled=0','--config=rendering_validation.enabled=0'];
             bytes=html.replace('EngineLoader.load(',`CUSTOM_PARAMETERS.engine_arguments.push(...${JSON.stringify(flags)});EngineLoader.load(`);
         } else bytes=await readFile(path);
         res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(bytes);
@@ -66,7 +66,7 @@ try {
         assert(complete,'Mesh browser fixture timed out');assert.deepEqual(run.errors,[]);
         assert.equal(run.ready.backend,config.backend);assert.equal(run.result.actors,6);
         if(config.verify) assert(run.fixture_pass,'Missing native primitive/ownership checks');
-        assert.equal(run.batches.length,86);assert.equal(run.ready.stats.vertices,413568);
+        assert.equal(run.batches.length,65);assert.equal(run.ready.stats.vertices,414432);
         const baseline=report.runs.find(r=>r.backend==='lua');
         if(baseline) assert.deepEqual(run.batches,baseline.batches,'Installed mesh streams/bounds differ');
         if(!config.verify && !report.runs.some(r=>!r.verify && r.backend===config.backend))

@@ -56,8 +56,12 @@ the reference implementation.
 The builder rejects appends after finish and access after close. Lua retains
 the builder until all batches are installed, closes it after upload, and also
 closes it when loading is cancelled. Each native upload handles one bounded
-batch (at most 12,288 vertices); the existing 4 ms loading deadline is checked
-between batches. Individual native calls do not yield.
+batch (at most 49,152 vertices); the existing 4 ms loading deadline is checked
+between batches. Individual native calls do not yield. Dense cells share larger
+batches while retaining the original 16-metre cells (64 metres for terrain).
+Native staging arrays grow on demand, bounded by this limit, so sparse cells do
+not reserve the entire dense-cell capacity. The Lua fallback still uploads in
+512-vertex slices.
 
 ## Validation and measurements
 

@@ -225,9 +225,16 @@ bool Append(Builder& b,const Shape& s,const Material& m,double shade,size_t& ver
         Batch* batch=new Batch;batch->material=s.material;batch->chunk_x=cx;batch->chunk_z=cz;
         char full_key[128];std::snprintf(full_key,sizeof(full_key),"%s/%u",key,(unsigned)b.batches.Size()+1);batch->key=full_key;
         index=b.batches.Size();Push(b.batches,batch);Put(b.lookup,hash,index);
-        batch->vertices.SetCapacity((uint32_t)b.max_vertices);
     }
-    Batch& batch=*b.batches[index];batch.vertices.PushArray(geometry.vertices.Begin(),geometry.vertices.Size());
+    Batch& batch=*b.batches[index];
+    // Sparse cells should not reserve the full dense-cell upload budget.
+    // Grow geometrically, bounded by the same hard vertex limit as batching.
+    uint32_t required=batch.vertices.Size()+(uint32_t)vertices;
+    if (required>batch.vertices.Capacity()) {
+        uint32_t capacity=std::max(required,std::max(1024u,batch.vertices.Capacity()*2));
+        batch.vertices.SetCapacity(std::min((uint32_t)b.max_vertices,capacity));
+    }
+    batch.vertices.PushArray(geometry.vertices.Begin(),geometry.vertices.Size());
     for (int k=0;k<3;++k) { batch.bounds[k]=std::min(batch.bounds[k],geometry.bounds[k]);batch.bounds[k+3]=std::max(batch.bounds[k+3],geometry.bounds[k+3]); }
     ++batch.boxes;return true;
 }

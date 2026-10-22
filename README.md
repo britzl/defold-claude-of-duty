@@ -38,6 +38,50 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Larger world batches (2026-10-22)
+
+Dense world cells now share meshes up to 49,152 vertices instead of splitting at
+12,288. The existing 16-metre spatial cells and 64-metre terrain cells remain;
+the world still contains 414,432 vertices. Mesh count falls from **86 to 65**.
+Native staging arrays grow on demand so sparse cells do not reserve the larger
+maximum. Lua uploads retain their 512-vertex slices.
+
+Native Metal draw calls at High, 1280×720, with cached room shadows enabled:
+
+| View | Previous batches | Larger batches |
+| --- | ---: | ---: |
+| Live spawn, AI/weapon/HUD | 220.5 average | 186.3 average |
+| Frozen street | 141 | 107 |
+| Frozen interior | 122 | 92 |
+| Frozen courtyard | 70 | 66 |
+| Frozen detail | 70 | 64 |
+| Frozen shadow distance | 159 | 119 |
+
+That is another **34 calls / 15.5%** in the live samples. The two live samples
+per build are short debug-engine measurements, not a sustained FPS benchmark.
+Larger batch bounds submit more offscreen geometry in some views: the detail
+capture submits 41% more vertices despite using fewer draws. Release WebGL GPU
+timers on an M3 Pro, using two runs per limit in A/B/B/A order, measured scene
+medians within 0.3 ms (−1.1% to +2.5%). This reduces submission overhead without
+claiming an FPS gain. Native loading's peak job stayed around 10 ms.
+
+The 24 world tests and four upload tests pass. Dense-cell regression checks
+compare all stream bytes across both limits, including native buffer growth and
+splitting. Five native image pairs match within 2/255 per channel; five WebGL
+pairs have mean differences below 0.007/255. Browser resize checks pass.
+All 65 installed buffers and bounds also match between Lua and native builders
+in the release WebGL engine, including a separate native verification run.
+
+For browser comparisons, build with `tests/world_batching_browser.project` and
+run `tools/validate_rendering_browser.mjs` with `--release=1 --sample-ms=1200
+--width=1280 --height=762`. Repeat with
+`--engine-args='["--config=rendering_validation.batch_vertices=12288"]'` for the
+previous limit in the same engine. The override exists only in this test suite.
+`tools/validate_native_mesh_browser.mjs` also accepts this bundle and disables
+the rendering fixture while checking Lua/native installed buffers and bounds.
+Its binary fingerprints escape embedded NUL bytes before hashing.
+Local measurements and images are in `build/world-batching-validation`.
+
 ## Cached room-light shadows (2026-10-22)
 
 The two room lights now cache their static shadow geometry. Previously, all
