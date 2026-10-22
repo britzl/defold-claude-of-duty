@@ -137,22 +137,13 @@ local function atmosphere_constants(self)
         set_atmosphere(constants,self.rig,{clouds=self.weather.clouds,cloud_shadows=self.options.cloud_shadows},self.weather.shown_time)
     end
 end
-local function bake_environment(self)
-    -- Initial loading/context rebakes complete both targets before world draws.
-    -- Runtime changes use the staged path below.
-    set_atmosphere(self.bake_constants,self.weather.rig,self.options,self.weather.shown_time)
-    self.bake_constants.bake_region=vmath.vector4(0,1,0,0)
-    render.set_render_target(self.targets.sky)
-    render.set_viewport(0,0,daylight.sky_width,daylight.sky_height)
-    fullscreen(self,"atmosphere",self.bake_constants)
-    render.set_render_target(self.targets.environment)
-    render.set_viewport(0,0,daylight.environment_width,daylight.environment_height)
-    bind("sky_texture",self.targets.sky)
-    fullscreen(self,"environment",self.bake_constants)
-    render.disable_texture("sky_texture")
-    self.environment_updates=self.environment_updates+1
-    self.environment_dirty=false
-    self.report=true
+local function bind_scattering(target)
+    render.enable_texture("scattering_texture",target,MOTION)
+    render.enable_texture("scattering_fine_texture",target,EXPECTED)
+end
+local function unbind_scattering()
+    render.disable_texture("scattering_texture")
+    render.disable_texture("scattering_fine_texture")
 end
 local function atmosphere_copy(self,target,source,w,h,next_target,blend,environment)
     render.set_render_target(target)
@@ -163,9 +154,33 @@ local function atmosphere_copy(self,target,source,w,h,next_target,blend,environm
     render.disable_texture("source_texture");render.disable_texture("next_texture")
     self.weather_draws=self.weather_draws+1
 end
+local function bake_environment(self)
+    -- Initial loading/context rebakes complete both targets before world draws.
+    -- Runtime changes use the staged path below.
+    set_atmosphere(self.bake_constants,self.weather.rig,self.options,self.weather.shown_time)
+    self.bake_constants.scattering_size=vmath.vector4(daylight.sky_width,daylight.sky_height,1/daylight.sky_width,1/daylight.sky_height)
+    self.bake_constants.bake_region=vmath.vector4(0,1,0,0)
+    render.set_render_target(self.targets.sky_pending)
+    render.set_viewport(0,0,daylight.sky_width,daylight.sky_height)
+    bind_scattering(self.targets.sky_scratch)
+    fullscreen(self,"atmosphere",self.bake_constants)
+    unbind_scattering()
+    self.scattering_rig=self.weather.rig
+    self.scattering_updates=self.scattering_updates+1
+    atmosphere_copy(self,self.targets.sky,self.targets.sky_pending,daylight.sky_width,daylight.sky_height)
+    render.set_render_target(self.targets.environment)
+    render.set_viewport(0,0,daylight.environment_width,daylight.environment_height)
+    bind("sky_texture",self.targets.sky)
+    fullscreen(self,"environment",self.bake_constants)
+    render.disable_texture("sky_texture")
+    self.environment_updates=self.environment_updates+1
+    self.environment_dirty=false
+    self.report=true
+end
 local function animate_atmosphere(self,dt)
     local s,t=self.weather,self.targets
     self.weather_draws=0
+    self.scattering_draws=0
     local forced=s.forced
     local phase,index,committed=atmosphere.step(s,self.options,dt,self.photo_state.paused or not self.shadow_cache_ready,self.capture.active)
     if not phase then return end
@@ -176,18 +191,40 @@ local function animate_atmosphere(self,dt)
             atmosphere_copy(self,t[name.."_previous"],t[name],w,h)
         end
         set_atmosphere(self.bake_constants,s.pending,self.options,s.pending_time)
+        self.scattering_reuse=atmosphere.same_scattering(self.scattering_rig,s.pending)
+        -- Invalidate before overwriting any strips. A seek may interrupt this
+        -- bake and return to the old hour while the cache contains mixed rows.
+        if not self.scattering_reuse then self.scattering_rig=nil end
     elseif phase=="sky" or phase=="environment" then
         local count=phase=="sky" and atmosphere.sky_slices or atmosphere.environment_slices
         local w,h=phase=="sky" and daylight.sky_width or daylight.environment_width,phase=="sky" and daylight.sky_height or daylight.environment_height
         local pending,scratch=phase.."_pending",phase.."_scratch"
         -- A complete preservation draw and one strip share a render pass;
         -- Metal's DONT_CARE load action cannot discard earlier strips.
-        atmosphere_copy(self,t[scratch],index==1 and t[phase.."_previous"] or t[pending],w,h)
+        if phase=="sky" then
+            render.set_render_target(t[scratch])
+            render.set_viewport(0,0,w,h)
+            bind("source_texture",t[pending]);bind_scattering(t[pending])
+            fullscreen(self,"atmosphere_copy")
+            render.disable_texture("source_texture");unbind_scattering()
+            self.weather_draws=self.weather_draws+1
+        else
+            atmosphere_copy(self,t[scratch],index==1 and t[phase.."_previous"] or t[pending],w,h)
+        end
         render.set_viewport(0,(index-1)*h/count,w,h/count)
-        self.bake_constants.bake_region=vmath.vector4((index-1)/count,1/count,0,0)
-        if phase=="environment" then bind("sky_texture",t.sky_pending) end
+        self.bake_constants.bake_region=vmath.vector4((index-1)/count,1/count,self.scattering_reuse and 1 or 0,0)
+        if phase=="environment" then bind("sky_texture",t.sky_pending)
+        else bind_scattering(t[pending]) end
         fullscreen(self,phase=="sky" and "atmosphere" or "environment",self.bake_constants)
-        if phase=="environment" then render.disable_texture("sky_texture") end
+        if phase=="environment" then render.disable_texture("sky_texture")
+        else
+            unbind_scattering()
+            self.scattering_draws=self.scattering_reuse and 0 or 1
+            if index==count then
+                self.scattering_rig=s.pending
+                if not self.scattering_reuse then self.scattering_updates=self.scattering_updates+1 end
+            end
+        end
         t[pending],t[scratch]=t[scratch],t[pending]
         self.weather_draws=self.weather_draws+1
     else
@@ -211,7 +248,7 @@ local BAKE_COMMAND_BUDGET=896
 local function bake_job_commands(job)
     -- fullscreen() emits ten commands. Include target/viewport and texture
     -- bindings; atlas patches also issue a complete preservation pass.
-    if not job then return 26 end -- sky + environment
+    if not job then return 46 end -- sky/cache + publication copy + environment
     if job.op=="recipe" then return 12 end
     return (job.target=="scratch_a" or job.target=="scratch_b") and 16 or 32
 end
@@ -330,6 +367,7 @@ local function report(self)
         solar_hour=self.weather.rig.hour,requested_hour=self.weather.hour,weather_time=self.weather.shown_time,
         requested_weather_time=self.weather.time,atmosphere_stage=self.weather.stage,atmosphere_blend=self.weather.blend or 0,
         atmosphere_update_draws=self.weather_draws or 0,atmosphere_update_slices=atmosphere.sky_slices+atmosphere.environment_slices,
+        scattering_updates=self.scattering_updates,scattering_update_draws=self.scattering_draws or 0,
         sun_direction=self.rig.sun_direction,solar_direction=self.rig.solar_direction,night_amount=self.rig.night})
     msg.post("main:/controller#script","renderer_photographic",{
         bloom_levels=photographic.quality(self.options.photographic_quality).levels,bloom_draw_passes=self.bloom_draw_passes or 0,
@@ -377,6 +415,7 @@ function init(self)
     self.mix_constants=render.constant_buffer()
     self.mix_constants.colour_pipeline=vmath.vector4(self.pipeline.hdr and 1 or 0,0,0,0)
     self.environment_updates=0
+    self.scattering_updates=0;self.weather_draws=0
     self.environment_dirty=true
     self.volume_count=0
     self.lighting=render.constant_buffer()
@@ -432,7 +471,7 @@ function init(self)
     self.targets.environment=colour_target(daylight.environment_width,daylight.environment_height,false,false,false,self.radiance_format)
     self.targets.sky=colour_target(daylight.sky_width,daylight.sky_height,false,false,false,self.radiance_format)
     for _,suffix in ipairs({"_previous","_pending","_scratch"}) do
-        self.targets["sky"..suffix]=colour_target(daylight.sky_width,daylight.sky_height,false,false,false,self.radiance_format)
+        self.targets["sky"..suffix]=colour_target(daylight.sky_width,daylight.sky_height,false,false,false,self.radiance_format,suffix~="_previous")
         self.targets["environment"..suffix]=colour_target(daylight.environment_width,daylight.environment_height,false,false,false,self.radiance_format)
     end
     resize(self)
@@ -442,6 +481,7 @@ function init(self)
             self.bake_step=0
             self.weather.stage=0;self.weather.pending=nil;self.weather.forced=true
             self.shadow_cached_fits=nil
+            self.scattering_rig=nil;self.scattering_reuse=false
             self.grade_ready=false;self.exposure_valid=false
             temporal.reset(self.temporal,"context_restored")
             self.report=true

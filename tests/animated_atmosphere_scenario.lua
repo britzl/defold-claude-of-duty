@@ -3,6 +3,16 @@ local runtime=require "game.runtime"
 local settings=require "game.render.settings"
 local capture=require "game.render.capture_controller"
 local M={}
+local function snapshot(stats)
+    -- Native print messages have a 4096-byte limit. Keep this fixture's data
+    -- instead of unrelated material/combat diagnostics from renderer.snapshot.
+    local result={}
+    for _,key in ipairs({"width","height","pipeline","target_count","target_bytes","bake_draws",
+        "solar_hour","requested_hour","weather_time","requested_weather_time","atmosphere_stage",
+        "atmosphere_blend","atmosphere_update_draws","environment_updates","scattering_updates",
+        "scattering_update_draws","temporal_resets","temporal_age","settings"}) do result[key]=stats[key] end
+    return result
+end
 local function report(kind,data)
     local line="ATMOSPHERE "..kind.." "..json.encode(data)
     if html5 then html5.run("console.log("..json.encode(line)..")") else print(line) end
@@ -38,7 +48,7 @@ function M.update(test,self,dt,restart)
         end
         local function shot(name)
             settle();test.waiting=name;test.ack=nil;test.shots=test.shots+1
-            report("SHOT",{id=name,renderer=self.renderer_stats})
+            report("SHOT",{id=name,renderer=snapshot(self.renderer_stats)})
             local limit=0
             repeat
                 if html5 and html5.run("window.__atmosphereCaptureAck || ''")==name then test.ack=name end
@@ -50,12 +60,20 @@ function M.update(test,self,dt,restart)
             configure({temporal_aa=false,auto_exposure=false,motion_blur=0,grain=0,ads_dof=0})
         end
         view("sky_daylight");shot("sky_zero")
+        local scattering=self.renderer_stats.scattering_updates
         configure({weather_time=120});shot("sky_drift")
+        assert(self.renderer_stats.scattering_updates==scattering,"Wind rebuilt clear scattering")
+        -- Compare a cache-hit image with a fresh strip bake at the same pose.
+        configure({hour=17});settle()
+        configure({hour=16.5})
         configure({weather_time=0});shot("sky_return")
+        assert(self.renderer_stats.scattering_updates==scattering+2)
         check("cloud_drift_and_exact_fixed_return")
         configure({view="environment_atlas"});shot("environment_zero")
+        scattering=self.renderer_stats.scattering_updates
         configure({weather_time=120});shot("environment_drift")
         configure({weather_time=0});shot("environment_return")
+        assert(self.renderer_stats.scattering_updates==scattering)
         check("sky_and_filtered_reflections_share_weather")
         view("street");configure({weather_time=1745,fog=false,reflections=false})
         shot("cloud_shadow")
@@ -92,7 +110,7 @@ function M.update(test,self,dt,restart)
         until advanced>=8 and frame>=180
         assert(self.renderer_stats.environment_updates>updates+2)
         assert(peak==2)
-        check("continuous_time_and_clouds_keep_history_and_two_draw_budget",{hours=advanced,frames=frame,renderer=self.renderer_stats})
+        check("continuous_time_and_clouds_keep_history_and_two_draw_budget",{hours=advanced,frames=frame,renderer=snapshot(self.renderer_stats)})
         test.hold=true;runtime.set_paused(ctx,true);frames(35)
         local frozen=self.renderer_stats
         local hour,time,stage=frozen.requested_hour,frozen.requested_weather_time,frozen.atmosphere_stage
@@ -108,7 +126,7 @@ function M.update(test,self,dt,restart)
         end
         check("three_restarts_keep_fixed_render_resources")
         self.view=nil;test.done=true
-        report("PASS",{checks=test.checks,shots=test.shots,renderer=self.renderer_stats})
+        report("PASS",{checks=test.checks,shots=test.shots,renderer=snapshot(self.renderer_stats)})
     end) end
     local ok,message=coroutine.resume(test.job);assert(ok,message)
 end

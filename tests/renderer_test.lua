@@ -19,7 +19,7 @@ test("minimized and tiny windows have bounded valid target dimensions",function(
     assert(not settings.dimensions(0,100) and not settings.dimensions(100,0))
     local d=settings.dimensions(1,3)
     assert(d.bloom_width==1 and d.bloom_height==1)
-    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4*4)
+    assert(settings.target_bytes(1920,1280)==768*1024*8+1920*1280*(8*2+44+4*7)+960*640*12+photo.bytes(1920,1280,false,settings.defaults())+shadows.atlas_size^2*8+shadows.count*shadows.size^2*8+atlas.width*atlas.height*12+(daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*4*4+daylight.sky_width*daylight.sky_height*16)
 end)
 test("HDR requires a qualified backend and format; compatibility remains explicit",function()
     assert(settings.pipeline({family="metal"},1,"auto").hdr)
@@ -94,6 +94,7 @@ vmath={matrix4=value,matrix4_perspective=value,matrix4_orthographic=value,matrix
 camera={get_view=value,get_projection=value}
 local w,h=960,640
 local targets,draws,bindings,messages={},{},{},{}
+local texture_attachments={}
 local active,material,listener
 local depth_mask,depth_func
 local function noop() end
@@ -121,10 +122,16 @@ render.delete_render_target=function(target) assert(not target.deleted);target.d
 render.set_render_target=function(target,options) active=target end
 render.enable_material=function(name) material=name end
 render.disable_material=function() material=nil end
-render.enable_texture=function(name,target) assert(not target.deleted);bindings[name]=target end
-render.disable_texture=function(name) bindings[name]=nil end
+render.enable_texture=function(name,target,attachment) assert(not target.deleted);bindings[name]=target;texture_attachments[name]=attachment end
+render.disable_texture=function(name) bindings[name]=nil;texture_attachments[name]=nil end
 render.set_listener=function(fn) listener=fn end
 render.draw=function(predicate,options)
+    if material=="atmosphere" or material=="atmosphere_copy" then
+        for name,attachment in pairs({scattering_texture=graphics.BUFFER_TYPE_COLOR1_BIT,scattering_fine_texture=graphics.BUFFER_TYPE_COLOR2_BIT}) do
+            assert(texture_attachments[name]==attachment and bindings[name].params[attachment],"Missing clear-sky cache attachment")
+            assert(active.params[attachment].format==graphics.TEXTURE_FORMAT_RGBA)
+        end
+    end
     if material=="shadow_copy" then
         assert(bindings.source_texture and bindings.source_texture==bindings.source_depth,"Missing matching cached colour/depth")
         assert(depth_mask and depth_func==graphics.COMPARE_FUNC_ALWAYS,"Cached depth must overwrite the destination")
@@ -149,7 +156,8 @@ render.draw=function(predicate,options)
         end
     end
     if predicate=="viewmodel" then assert(not bindings.occlusion_texture,"Weapon sampled world AO") end
-    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture}
+    draws[#draws+1]={predicate=predicate,material=material,target=active,scene_texture=bindings.scene_texture,weapon_texture=bindings.weapon_texture,
+        scattering_reuse=material=="atmosphere" and options.constants.bake_region.args[3] or nil}
 end
 msg={post=function(receiver,name,data) messages[#messages+1]={name=name,data=data} end}
 local function renderer_stats()
@@ -463,10 +471,41 @@ test("continuous weather fits command capacity and retains history and allocatio
     assert(self.weather.hour==hour and self.weather.time==time and self.weather.stage==stage)
     on_message(self,"renderer_configure",{weather_speed=0,time_rate=0})
 end)
+test("weather reuses scattering; changed and interrupted celestial bakes invalidate it",function()
+    on_message(self,"capture_configure",{active=true,laboratory=false})
+    local function complete(changes,integrations)
+        on_message(self,"renderer_configure",changes)
+        draws={}
+        for _=1,19 do update(self,1/60);assert(self.weather_draws<=2) end
+        local sky,misses=0,0
+        for _,draw in ipairs(draws) do if draw.material=="atmosphere" then
+            sky=sky+1;if draw.scattering_reuse==0 then misses=misses+1 end
+        end end
+        assert(sky==8 and misses==integrations,"Unexpected scattering work: "..misses)
+        assert(self.scattering_rig==self.weather.rig and self.weather.stage==0)
+    end
+    complete({hour=12,weather_time=0,clouds=true},8)
+    local initial=self.scattering_updates
+    complete({weather_time=120},0)
+    complete({weather_time=0,clouds=false},0)
+    complete({clouds=true},0)
+    assert(self.scattering_updates==initial)
+    -- Return to the cached hour after only three strips have been overwritten.
+    on_message(self,"renderer_configure",{hour=18})
+    for _=1,4 do update(self,1/60) end
+    assert(self.scattering_rig==nil)
+    complete({hour=12},8)
+    assert(self.scattering_updates==initial+1)
+    complete({hour=1.5},8)
+    complete({weather_time=120},0)
+    assert(self.scattering_updates==initial+2)
+end)
 test("context restoration regenerates textures and finalization frees every target once",function()
+    local scattering=self.scattering_updates
     listener(nil,"restored");assert(self.bake_step==0)
-    assert(self.shadow_cached_fits==nil)
+    assert(self.shadow_cached_fits==nil and self.scattering_rig==nil)
     while self.bake_step<atlas.job_count do update(self) end
+    assert(self.scattering_updates==scattering+1 and self.scattering_rig==self.weather.rig)
     assert(self.bake_step==atlas.job_count and self.bake_draws==atlas.draw_count*2)
     final(self)
     for _,target in ipairs(targets) do assert(target.deleted) end

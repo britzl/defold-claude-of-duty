@@ -27,3 +27,4 @@ materials { name: "exposure" material: "/render/exposure.material" }
 materials { name: "lens" material: "/render/lens.material" }
 materials { name: "haze_composite" material: "/render/haze_composite.material" }
 materials { name: "atmosphere_mix" material: "/render/atmosphere_mix.material" }
+materials { name: "atmosphere_copy" material: "/render/atmosphere_copy.material" }

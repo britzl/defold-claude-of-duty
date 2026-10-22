@@ -52,6 +52,21 @@ test("sunset night and opening captures have explicit reproducible lighting",fun
     assert(capture.select("window_shafts").laboratory)
 end)
 local atmosphere=require "game.render.atmosphere"
+test("scattering cache depends on both celestial lights and medium, not weather",function()
+    local a=daylight.rig(16.5)
+    assert(not atmosphere.same_scattering(nil,a))
+    assert(not atmosphere.same_scattering(a,daylight.rig(16.501)))
+    local b=daylight.rig(16.5)
+    b.atmosphere_data[3][3]=0
+    b.atmosphere_data[1]={0,1,0,0};b.atmosphere_data[2]={0,0,0,0};b.atmosphere_data[3][2]=1
+    assert(atmosphere.same_scattering(a,b))
+    b.atmosphere_data[3][1]=2
+    assert(not atmosphere.same_scattering(a,b))
+    for i=4,7 do for c=1,3 do
+        b=daylight.rig(16.5);b.atmosphere_data[i][c]=b.atmosphere_data[i][c]+.001
+        assert(not atmosphere.same_scattering(a,b))
+    end end
+end)
 test("continuous celestial clock wraps and twilight direct handover has no bright discontinuity",function()
     for i=0,24000 do
         local hour=i/1000;local r=daylight.rig(hour)

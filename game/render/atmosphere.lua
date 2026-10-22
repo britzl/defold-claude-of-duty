@@ -1,6 +1,17 @@
 -- Presentation-only weather clock and bounded bake scheduler.
 local daylight=require "game.render.daylight"
 local M={sky_slices=8,environment_slices=9,blend_seconds=.2}
+-- Only these inputs affect at_scatter(): medium density and both celestial
+-- directions/irradiances. Cloud toggles, wind and the displayed key are separate.
+function M.same_scattering(a,b)
+    if not a or not b then return false end
+    local x,y=a.atmosphere_data,b.atmosphere_data
+    if x[3][1]~=y[3][1] then return false end
+    for i=4,7 do
+        for c=1,3 do if x[i][c]~=y[i][c] then return false end end
+    end
+    return true
+end
 function M.new(options)
     return {hour=options.hour,time=options.weather_time,rig=daylight.rig(options.hour),
         shown_time=options.weather_time,clouds=options.clouds,stage=0,updates=0,forced=false}

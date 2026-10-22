@@ -77,5 +77,6 @@ function M.target_bytes(w,h,hdr,baking,options)
     local shadow_size=options and options.shadow_resolution or shadows.size
     return local_lights.shadow_width*local_lights.shadow_height*8+w*h*((colour+4)*2+44+colour*7) + d.occlusion_width*d.occlusion_height*(8+colour) + photo.bytes(w,h,hdr,options or M.defaults()) + (shadow_size*2)^2*8 + shadows.count*shadow_size^2*8
         + atlas.width*atlas.height*4*3 + (baking and atlas.width*atlas.height*4+2*atlas.scratch_size^2*4 or 0) + (daylight.environment_width*daylight.environment_height+daylight.sky_width*daylight.sky_height)*colour*4
+        + daylight.sky_width*daylight.sky_height*8*2 -- packed clear scattering in both sky staging targets
 end
 return M

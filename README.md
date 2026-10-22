@@ -630,6 +630,23 @@ Six persistent staging targets add **12.134 MiB on Metal HDR / 6.067 MiB on the
 encoded WebGL path**, independent of window size. Default high photographic
 settings now own 50 steady / 53 loading targets. Animation allocates no targets,
 does not regenerate material atlases, and finalization frees each target once.
+
+Clear-sky scattering is cached separately from cloud composition. Wind and cloud
+toggles reuse the integral; changes to either celestial light or the atmospheric
+medium rebuild it through the same eight-strip schedule. Interrupted rebuilds
+and context restoration invalidate the cache. Two RGBA8 attachments on each sky
+staging target store 16-bit logarithmic radiance, preserving moonlight on both
+Metal and WebGL. This adds **4.5 MiB** on either backend without adding targets or
+runtime draws. Initial loading adds one publication copy. Full and strip bakes
+use identical texel centres and integer cache decoding for exact addressed
+returns. `renderer.snapshot` exposes `scattering_updates` (completed integral
+bakes) and `scattering_update_draws` (this frame's runtime integration draws).
+The cache change passes 36 atmosphere/renderer Lua checks and the native Metal
+and release WebGL2 animation fixtures, each with 18 captures and 13 pixel gates.
+Fourteen native comparisons against the uncached renderer differ by at most
+3/255 in any colour channel (mean below 0.007/255). These validate image stability,
+not GPU frame-time gains. Cache-specific captures and reports are under
+`build/atmosphere-cache-validation` and `build/atmosphere-cache-browser-validation`.
 The environment keeps six reflection levels, 128 filter samples and its diffuse
 and BRDF rows. Cloud shading uses the same procedural deck as the visible sky;
 fog varies scattering density at low spatial frequencies while retaining the
