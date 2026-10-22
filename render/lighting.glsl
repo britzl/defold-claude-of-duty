@@ -57,16 +57,24 @@ uniform highp vec4 screen_effects; // inverse dimensions, AO/contact enable
 vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec3 geometric)
 {
     reflection_weight=vec3(0);
-    float visibility=shadow_visibility(p,geometric);
+    // Gate on the final shading normal; the geometric normal only sets bias.
+    vec3 sun=normalize(sun_direction.xyz);
+    bool sunlit=dot(n,sun)>0.0;
+    float visibility=1.0;
+    // Diagnostics show shadow coverage even where direct lighting is zero.
+    if(sunlit || shadow_data[17].w>.5) visibility=shadow_visibility(p,geometric);
     if(shadow_data[17].w>.5) return shadow_debug(p,visibility);
     vec2 screen_visibility=vec2(1.0);
 #ifdef WORLD_SCREEN_OCCLUSION
     screen_visibility=mix(vec2(1.0),texture2D(occlusion_texture,gl_FragCoord.xy*screen_effects.xy).rg,screen_effects.zw);
 #endif
-    visibility=min(visibility,screen_visibility.y)*cloud_shadow(p.xz,sun_direction.xyz);
     vec3 v=normalize(eye_position.xyz-p);
-    vec3 sun=normalize(sun_direction.xyz);
-    vec3 result=brdf(albedo,roughness,metal,n,v,sun)*sun_radiance.rgb*visibility;
+    vec3 result=vec3(0);
+    // The direct BRDF is zero on unlit faces, but indirect light still applies.
+    if(sunlit) {
+        visibility=min(visibility,screen_visibility.y)*cloud_shadow(p.xz,sun_direction.xyz);
+        result=brdf(albedo,roughness,metal,n,v,sun)*sun_radiance.rgb*visibility;
+    }
     float indoor=interior_visibility(p),nv=max(dot(n,v),.0001);
     vec3 reflected=environment_specular(reflect(-v,n),lighting_features.y>.5?roughness:0.0);
     vec3 f0=mix(vec3(0.04),albedo,metal);
@@ -93,15 +101,19 @@ vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec
         float inside=step(lo.x,p.x)*step(lo.y,p.y)*step(lo.z,p.z)
             *step(p.x,hi.x)*step(p.y,hi.y)*step(p.z,hi.z);
         if (radius>0.0 && distance_squared<radius*radius && inside>0.5) {
+            vec3 l=delta/max(sqrt(distance_squared),0.001);
+            if(dot(n,l)<=0.0) continue;
             float falloff=pow(1.0-distance_squared/(radius*radius),2.0)/(1.0+distance_squared);
-            result+=brdf(albedo,roughness,metal,n,v,delta/max(sqrt(distance_squared),0.001))*light_colours[i].rgb*falloff*local_visibility(i,p,geometric);
+            result+=brdf(albedo,roughness,metal,n,v,l)*light_colours[i].rgb*falloff*local_visibility(i,p,geometric);
         }
     }
     if(features.z>.5) for(int i=0;i<2;i++) {
         vec3 delta=flash_positions[i].xyz-p;float d2=dot(delta,delta),radius=flash_positions[i].w;
         if(radius>0.0 && d2<radius*radius) {
+            vec3 l=normalize(delta);
+            if(dot(n,l)<=0.0) continue;
             float falloff=pow(1.0-d2/(radius*radius),2.0)/(1.0+d2);
-            result+=brdf(albedo,roughness,metal,n,v,normalize(delta))*flash_colours[i].rgb*falloff;
+            result+=brdf(albedo,roughness,metal,n,v,l)*flash_colours[i].rgb*falloff;
         }
     }
     return result;
