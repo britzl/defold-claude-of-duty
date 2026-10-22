@@ -13,33 +13,52 @@ function M.new(url, surfaces)
             include_triggers = false, ignore = object },
         definition = { type = bullet3d.shape.SHAPE_TYPE_CAPSULE, diameter = 2*T.radius },
         sphere = { type = bullet3d.shape.SHAPE_TYPE_SPHERE },
+        contacts_result = {}, contacts_pool = {},
     }, mt)
 end
 
+function M:begin_step()
+    -- Defold can synchronize kinematic bodies between fixed ticks. Only skip
+    -- duplicate writes within our current movement/synchronization phase.
+    self.body_x=nil
+end
+
 function M:sync(feet, height)
-    if self.height ~= height then
+    local resized = self.height ~= height
+    if resized then
         bullet3d.shape.set_shape(self.shape, { type = bullet3d.shape.SHAPE_TYPE_CAPSULE,
             diameter = 2*T.radius, height = height-2*T.radius })
         self.shape_position.y = height/2
         bullet3d.shape.set_local_transform(self.shape, self.shape_position, self.identity)
         self.height = height
     end
-    self.position.x, self.position.y, self.position.z = feet.x, feet.y, feet.z
-    bullet3d.collision_object.set_position(self.object, self.position)
+    -- This adapter owns the kinematic mover. Query vectors are shared scratch,
+    -- so cache the last BODY coordinates separately from ray/sweep origins.
+    if resized or self.body_x~=feet.x or self.body_y~=feet.y or self.body_z~=feet.z then
+        self.position.x, self.position.y, self.position.z = feet.x, feet.y, feet.z
+        bullet3d.collision_object.set_position(self.object, self.position)
+        self.body_x,self.body_y,self.body_z=feet.x,feet.y,feet.z
+    end
 end
 
 function M:contacts(feet, height)
     self:sync(feet, height)
-    local out = {}
-    for _, c in ipairs(bullet3d.world.contact_test(self.world, self.object, self.filter)) do
-        out[#out+1] = { distance = c.distance, nx = c.normal_on_b.x, ny = c.normal_on_b.y, nz = c.normal_on_b.z }
+    -- Contacts are consumed before the next contacts() call. Reuse their flat
+    -- Lua view, but always ask Bullet again: other bodies can move between calls.
+    local out,pool = self.contacts_result,self.contacts_pool
+    local count=0
+    for i, c in ipairs(bullet3d.world.contact_test(self.world, self.object, self.filter)) do
+        local value=pool[i] or {};pool[i]=value;out[i]=value;count=i
+        value.distance,value.nx,value.ny,value.nz=c.distance,c.normal_on_b.x,c.normal_on_b.y,c.normal_on_b.z
     end
+    for i=#out,count+1,-1 do out[i]=nil end
     return out
 end
 
 function M:fits(feet, height)
     -- Contact distances distinguish penetration from harmless touching.
-    for _, contact in ipairs(self:contacts(feet, height)) do
+    self:sync(feet, height)
+    for _, contact in ipairs(bullet3d.world.contact_test(self.world, self.object, self.filter)) do
         if contact.distance < -0.0001 then return false end
     end
     return true

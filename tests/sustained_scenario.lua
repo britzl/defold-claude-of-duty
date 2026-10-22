@@ -37,12 +37,16 @@ local function percentiles(samples)
     for i,v in ipairs(samples) do values[i]=v;sum=sum+v end
     table.sort(values)
     local function p(f) return values[math.max(1,math.ceil(#values*f))] or 0 end
-    return {samples=#values,mean_ms=sum/math.max(1,#values),p50_ms=p(.5),p95_ms=p(.95),p99_ms=p(.99),worst_ms=p(1)}
+    return {samples=#values,mean_ms=sum/math.max(1,#values),average_fps=sum>0 and #values*1000/sum or 0,
+        p50_ms=p(.5),p95_ms=p(.95),p99_ms=p(.99),worst_ms=p(1)}
 end
 function M.new()
     if html5 then sys.set_error_handler(function(_,message,stack)
         html5.run('console.error('..json.encode('ERROR: '..tostring(message)..'\n'..tostring(stack))..')') end) end
     local options=html5 and json.decode(html5.run('JSON.stringify(window.__SUSTAINED_OPTIONS__ || {})')) or {}
+    options.renderer=options.renderer or json.decode(sys.get_config_string('sustained.renderer','{}'))
+    if options.no_ai==nil then options.no_ai=sys.get_config_int('sustained.no_ai',0)==1 end
+    if options.no_origin_index==nil then options.no_origin_index=sys.get_config_int('sustained.no_origin_index',0)==1 end
     return {options=options,created=socket.gettime(),warmup=options.warmup or sys.get_config_number('sustained.warmup',60),
         duration=options.seconds or sys.get_config_number('sustained.seconds',300),samples={},reached={},distance=0,
         grenades=0,kills=0,restarts=0,shots=0,reloads=0,stalls=0,history={}}
@@ -65,6 +69,8 @@ function M.update(t,self,dt,restart)
         t.loaded_seconds=now-t.created
         ui.focus(self,true);ui.pause(self,false)
         ui.quality_mode(self,t.options.preset or sys.get_config_string('sustained.preset','high'))
+        for key,value in pairs(t.options.renderer) do ui.configure(self,{kind='renderer',key=key,value=value}) end
+        if t.options.no_origin_index then for registry in pairs(self.bullet_origin_indices) do self.bullet_origin_indices[registry]=nil end end
         t.goal=1;t.path,t.start=route(ctx.world.navigation,destinations[1],destinations[2]);t.goal=2;t.node=1
         player.reset(ctx,t.start,0);t.previous={x=t.start.x,z=t.start.z};t.reached[destinations[1]]=1
         t.node_started=now;t.last_restart=now;t.last_shots=ctx.weapons.sim.fired
@@ -72,7 +78,7 @@ function M.update(t,self,dt,restart)
     end
     -- Keep the encounter going while retaining damage events, suppression and AI.
     self.focused=true;require('game.runtime').set_paused(ctx,false)
-    ctx.ai.damage_scale=0;ctx.player.actor.health=100
+    ctx.ai.enabled=not t.options.no_ai;ctx.ai.damage_scale=0;ctx.player.actor.health=100
     local elapsed=now-t.started
     local delta=(now-t.last)*1000;t.last=now
     if elapsed>=t.warmup and elapsed<t.warmup+t.duration then t.samples[#t.samples+1]=delta end
@@ -133,7 +139,7 @@ function M.update(t,self,dt,restart)
     end
     if elapsed>=t.warmup+t.duration then
         t.done=true;input.release_source(ctx.input,'benchmark')
-        local r={engine=sys.get_engine_info(),system=sys.get_sys_info(),warmup_seconds=t.warmup,sample_seconds=t.duration,
+        local r={engine=sys.get_engine_info(),system=sys.get_sys_info(),warmup_seconds=t.warmup,sample_seconds=t.duration,options=t.options,
             frame_metric='wall-clock engine update intervals; presentation timestamps unavailable',frames=percentiles(t.samples),
             raw_frame_ms=t.samples,quality=Q.snapshot(self.quality),loaded_seconds=t.loaded_seconds,
             reached=t.reached,distance=t.distance,shots=t.shots,reloads=t.reloads,grenades=t.grenades,kills=t.kills,restarts=t.restarts,

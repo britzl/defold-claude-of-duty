@@ -19,10 +19,14 @@ def main():
     p.add_argument('--warmup',type=float,default=60)
     p.add_argument('--seconds',type=float,default=300)
     p.add_argument('--preset',choices=['auto','low','medium','high','ultra'],default='high')
+    p.add_argument('--renderer',type=json.loads,default={},help='JSON renderer overrides for diagnostic cost comparisons')
+    p.add_argument('--no-ai',action='store_true',help='Diagnostic only: disable AI behavior; retain skeleton/hitbox updates and change the combat workload')
+    p.add_argument('--no-origin-index',action='store_true',help='Diagnostic only: use the previous full collider scan')
     p.add_argument('--window-width',type=int,default=640,help='Logical window pixels; 640 on the target Retina Mac gives 1280 framebuffer pixels')
     p.add_argument('--window-height',type=int,default=360)
     args=p.parse_args()
     if args.runs<1 or args.warmup<0 or args.seconds<=0:p.error('runs and seconds must be positive; warmup must be nonnegative')
+    if not isinstance(args.renderer,dict):p.error('renderer must be a JSON object')
     args.output.mkdir(parents=True,exist_ok=True)
     executable=args.executable.resolve()
     reports=[]
@@ -34,7 +38,9 @@ def main():
         with log_path.open('w') as log:
             process=subprocess.Popen([str(executable),f'--config=sustained.output={destination}',
                 f'--config=sustained.warmup={args.warmup}',f'--config=sustained.seconds={args.seconds}',
-                f'--config=sustained.preset={args.preset}',f'--config=display.width={args.window_width}',f'--config=display.height={args.window_height}'],stdout=log,stderr=subprocess.STDOUT,
+                f'--config=sustained.preset={args.preset}',f'--config=sustained.renderer={json.dumps(args.renderer,separators=(",",":"))}',
+                f'--config=sustained.no_ai={int(args.no_ai)}',f'--config=sustained.no_origin_index={int(args.no_origin_index)}',
+                f'--config=display.width={args.window_width}',f'--config=display.height={args.window_height}'],stdout=log,stderr=subprocess.STDOUT,
                 cwd=executable.parent,env={**os.environ,'DM_SERVICE_PORT':'dynamic'})
             try:
                 deadline=started+args.warmup+args.seconds+150

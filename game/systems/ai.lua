@@ -26,8 +26,8 @@ local function muzzle(e)
     local local_point=transform.point(e.palette[rig.index.HandR],{x=socket.x*scale,y=socket.y*scale,z=socket.z*scale})
     return transform.point(transform.root(e.position,e.yaw),local_point)
 end
-local function sample(e)
-    local out=animation.sample(e)
+local function sample(e,out)
+    out=animation.sample(e,out)
     out.time,out.phase,out.walk,out.aim,out.pitch=e.age,e.phase,e.walk,e.aim,e.pitch
     out.recoil,out.death,out.crouch=e.recoil,e.death,e.crouch
     return out
@@ -200,7 +200,7 @@ function M.fixed_update(ctx,dt)
     if ai.enabled and ctx.player.enabled then grenades.squads(ctx,dt) end
     for _,id in ipairs(ai.order) do
         local e=ai.actors[id]
-        e.previous=V.copy(e.position);e.previous_yaw=e.yaw;e.previous_pose=sample(e)
+        e.previous=V.copy(e.position);e.previous_yaw=e.yaw;e.previous_pose=sample(e,e.previous_pose)
         local query=service and service.api.query(service,e) or e.query
         if query then
             if not e.actor.alive then
@@ -298,7 +298,10 @@ function M.fixed_update(ctx,dt)
             -- presentation. Hit volumes copy the transforms they retain.
             e.simulation_pose=e.simulation_pose or {}
             if e.ragdoll then e.palette=e.ragdoll.palette
-            elseif e.actor.alive then e.palette,e.joints=rig.pose(sample(e),e.simulation_pose) end
+            elseif e.actor.alive then
+                e.current_pose=sample(e,e.current_pose)
+                e.palette,e.joints=rig.pose(e.current_pose,e.simulation_pose)
+            end
             if profiler then profiler.scope_end();profiler.scope_begin("ai.hitboxes") end
             if service and e.actor.alive then service.api.sync(service,e) end
             if profiler then profiler.scope_end() end
@@ -328,7 +331,9 @@ function M.present(ctx)
     for _,id in ipairs(ctx.ai.order) do
         local e=ctx.ai.actors[id]
         if profiler then profiler.scope_begin("soldiers.pose") end
-        local state=animation.interpolate(e.previous_pose,sample(e),alpha)
+        e.current_pose=sample(e,e.current_pose)
+        local state=animation.interpolate(e.previous_pose,e.current_pose,alpha,e.interpolated_pose)
+        e.interpolated_pose=state
         local p={x=V.lerp(e.previous.x,e.position.x,alpha),y=V.lerp(e.previous.y,e.position.y,alpha),z=V.lerp(e.previous.z,e.position.z,alpha)}
         e.presentation_pose=e.presentation_pose or {}
         local palette

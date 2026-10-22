@@ -195,6 +195,7 @@ local function accelerate(m, input, dt)
 end
 
 function M.update(m, input, dt, query)
+    if query.begin_step then query:begin_step() end
     m.jumped, m.landed = false, false
     m.travel = 0
     m.yaw = m.yaw - (input.look_x or 0)*T.mouse_sensitivity

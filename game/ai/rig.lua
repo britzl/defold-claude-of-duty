@@ -6,6 +6,7 @@ local V = require "game.weapons.math"
 local variants=require "game.ai.variants"
 local IK=require "game.ai.ik"
 local M = {}
+local sides={"R","L"}
 local function elbow(s,w,pole)
     local axis=V.normalize({x=w.x-s.x,y=w.y-s.y,z=w.z-s.z})
     local d=math.min(.29+.255-.0001,V.length({x=w.x-s.x,y=w.y-s.y,z=w.z-s.z}))
@@ -47,9 +48,13 @@ M.count=#M.bones
 function M.pose(state,scratch)
     scratch=scratch or {}
     local rotations,worlds,palette=scratch.rotations or {},scratch.worlds or {},scratch.palette or {}
-    local angles={}
+    local angles=scratch.angles or {};scratch.angles=angles
+    scratch.ik=scratch.ik or {}
+    for i=1,M.count do
+        local a=angles[i] or {};angles[i]=a;a[1],a[2],a[3]=0,0,0
+    end
     local function add(name,x,y,z)
-        local i=M.index[name];local a=angles[i] or {0,0,0};angles[i]=a
+        local i=M.index[name];local a=angles[i]
         a[1],a[2],a[3]=a[1]+(x or 0),a[2]+(y or 0),a[3]+(z or 0)
     end
     local death=V.smooth(state.death or 0);local live=1-death
@@ -74,7 +79,7 @@ function M.pose(state,scratch)
     add("Head",-.07*aim+.12*crouch-pitch*.25,math.sin((state.time or 0)*.7)*.07*(1-aim)+yaw*.15,0)
     add("Neck",-.07*hurt,0,0)
     add("ClavicleR",.12*crouch,0,0);add("ClavicleL",.12*crouch,0,0)
-    for _,side in ipairs({"R","L"}) do
+    for _,side in ipairs(sides) do
         local swing=math.sin(phase+(side=="R" and 0 or math.pi))
         local stride=walk*(1-crouch*.55)
         add("UpLeg"..side,swing*(.42+.30*run)*stride-.8*vault,0,0)
@@ -102,12 +107,12 @@ function M.pose(state,scratch)
     end
     local pelvis=(state.pelvis or 0)*live
     for i,bone in ipairs(M.bones) do
-        local a=angles[i] or {0,0,0}
+        local a=angles[i]
         local m=T.rotation(a[1],a[2],a[3],rotations[i]);rotations[i]=m
         local p=bone.local_position;m[4],m[8],m[12]=p.x,p.y,p.z
         if i==1 then
-            local fall=T.rotation(death*math.pi*.49,0,death*.10)
-            m=T.mul(fall,m)
+            scratch.fall=T.rotation(death*math.pi*.49,0,death*.10,scratch.fall)
+            scratch.root_rotation=T.mul(scratch.fall,m,scratch.root_rotation);m=scratch.root_rotation
             m[8]=.98-.77*death-.70*crouch-.10*hurt+breathe*.3+math.abs(math.sin(phase))*.025*walk+pelvis+.10*vault
             m[12]=.005+.38*death+.12*crouch+.03*hurt
         end
@@ -119,7 +124,7 @@ function M.pose(state,scratch)
     -- Lower the pelvis enough to reach planted ankles without stretching knees.
     local reach_drop=0
     if live>0 and vault<.001 then
-        for _,side in ipairs({"R","L"}) do
+        for _,side in ipairs(sides) do
             local foot=state.feet and state.feet[side]
             if foot and foot.weight>0 then
                 local hip=T.origin(worlds[M.index["UpLeg"..side]])
@@ -137,7 +142,7 @@ function M.pose(state,scratch)
     end
     scratch.reach_drop=reach_drop
     -- Correct feet after the additive layers, before solving the carried weapon.
-    for _,side in ipairs({"R","L"}) do
+    for _,side in ipairs(sides) do
         local foot=state.feet and state.feet[side]
         local solve=live>0 and vault<.001 and ((foot and foot.weight>1e-6) or (not foot and (crouch>0 or hurt>0)))
         if solve then
@@ -145,14 +150,14 @@ function M.pose(state,scratch)
             local target=foot and foot.target or {x=side=="R" and .103 or -.103,y=.088,z=.022}
             local weight=foot and foot.weight or 1
             target={x=V.lerp(at.x,target.x,weight*live),y=V.lerp(at.y,target.y,weight*live),z=V.lerp(at.z,target.z,weight*live)}
-            IK.solve(worlds,M.bones,M.index["UpLeg"..side],M.index["Leg"..side],M.index["Foot"..side],target,{x=side=="R" and .10 or -.10,y=.05,z=-1})
+            IK.solve(worlds,M.bones,M.index["UpLeg"..side],M.index["Leg"..side],M.index["Foot"..side],target,{x=side=="R" and .10 or -.10,y=.05,z=-1},scratch.ik)
             local normal=foot and foot.normal or {x=0,y=1,z=0}
             -- Source caps sole tilt at 0.35 radians; reject steep wall normals.
             local ny=math.max(math.cos(.35),normal.y)
             local horizontal=math.sqrt(normal.x^2+normal.z^2)
             local limit=math.sqrt(math.max(0,1-ny*ny))
             local k=horizontal>1e-7 and math.min(1,limit/horizontal) or 0
-            IK.orient(worlds,M.bones,M.index["Foot"..side],T.between({x=0,y=1,z=0},V.normalize({x=normal.x*k,y=ny,z=normal.z*k})))
+            IK.orient(worlds,M.bones,M.index["Foot"..side],T.between({x=0,y=1,z=0},V.normalize({x=normal.x*k,y=ny,z=normal.z*k})),scratch.ik)
         end
     end
     -- A rigid weapon frame follows the chest. Both hands solve to its sockets.
@@ -163,8 +168,8 @@ function M.pose(state,scratch)
     layer=T.mul(layer,T.identity(-pivot.x,-pivot.y,-pivot.z))
     gun=T.mul(gun,layer)
     local right=T.point(gun,M.grip_r)
-    IK.solve(worlds,M.bones,M.index.UpperArmR,M.index.ForearmR,M.index.HandR,right,{x=.35,y=-1,z=.45})
-    IK.orient(worlds,M.bones,M.index.HandR,gun)
+    IK.solve(worlds,M.bones,M.index.UpperArmR,M.index.ForearmR,M.index.HandR,right,{x=.35,y=-1,z=.45},scratch.ik)
+    IK.orient(worlds,M.bones,M.index.HandR,gun,scratch.ik)
     -- Use the solved hand frame so the support hand always follows the mesh.
     local hand=worlds[M.index.HandR]
     gun=T.mul(hand,T.identity(-M.grip_r.x,-M.grip_r.y,-M.grip_r.z))
@@ -203,8 +208,8 @@ function M.pose(state,scratch)
             y=V.lerp(support.y,V.lerp(from.y,to.y,w),weight),
             z=V.lerp(support.z,V.lerp(from.z,to.z,w),weight)}
     end
-    IK.solve(worlds,M.bones,M.index.UpperArmL,M.index.ForearmL,M.index.HandL,support,{x=-.55,y=-1,z=.2})
-    IK.orient(worlds,M.bones,M.index.HandL,gun)
+    IK.solve(worlds,M.bones,M.index.UpperArmL,M.index.ForearmL,M.index.HandL,support,{x=-.55,y=-1,z=.2},scratch.ik)
+    IK.orient(worlds,M.bones,M.index.HandL,gun,scratch.ik)
     scratch.support_error=V.length({x=worlds[M.index.HandL][4]-support.x,y=worlds[M.index.HandL][8]-support.y,z=worlds[M.index.HandL][12]-support.z})
     scratch.support_target=support;scratch.weapon_frame=gun
     local scale=variants.get(state.variant).scale
@@ -267,18 +272,26 @@ for _,side in ipairs({"R","L"}) do
             orientation={x.x,y.x,z.x,0,x.y,y.y,z.y,0,x.z,y.z,z.z,0}}
     end
 end
-function M.volumes(palette,position,yaw,id,variant)
+-- Reused records belong to one actor; callers retaining a snapshot omit scratch.
+function M.volumes(palette,position,yaw,id,variant,scratch)
+    scratch=scratch or {}
     local definition=variants.get(variant);local scale=definition.scale
-    local root=T.root(position,yaw)
-    local out={}
+    local root=T.root(position,yaw,scratch.root);scratch.root=root
+    local out=scratch.volumes or {};scratch.volumes=out
+    local point=scratch.point or {};scratch.point=point
     for i,box in ipairs(M.hitboxes) do
-        local transform=T.mul(root,palette[M.index[box.bone]])
-        local center=T.point(transform,{x=box.center.x*scale,y=box.center.y*scale,z=box.center.z*scale})
-        if box.orientation then transform=T.mul(transform,box.orientation) end
+        local shape=out[i] or {};out[i]=shape
+        scratch.transform=T.mul(root,palette[M.index[box.bone]],scratch.transform)
+        point.x,point.y,point.z=box.center.x*scale,box.center.y*scale,box.center.z*scale
+        local center=T.point(scratch.transform,point,scratch.center);scratch.center=center
+        local transform=shape.transform or {};shape.transform=transform
+        if box.orientation then T.mul(scratch.transform,box.orientation,transform)
+        else for k=1,12 do transform[k]=scratch.transform[k] end end
         transform[4],transform[8],transform[12]=center.x,center.y,center.z
-        out[i]={id=id.."/"..box.name,actor=id,surface="flesh",headshot=box.headshot,
-            region=box.region,part=box.name,damage_scale=box.damage_scale,
-            x=center.x,y=center.y,z=center.z,w=box.w*scale*(box.region=="head" and 1 or definition.bulk),h=box.h*scale,d=box.d*scale*(box.region=="head" and 1 or definition.bulk),transform=transform}
+        if shape.actor~=id then shape.id=id.."/"..box.name;shape.actor=id end
+        shape.surface,shape.headshot,shape.region,shape.part,shape.damage_scale="flesh",box.headshot,box.region,box.name,box.damage_scale
+        shape.x,shape.y,shape.z=center.x,center.y,center.z
+        shape.w,shape.h,shape.d=box.w*scale*(box.region=="head" and 1 or definition.bulk),box.h*scale,box.d*scale*(box.region=="head" and 1 or definition.bulk)
     end
     return out
 end

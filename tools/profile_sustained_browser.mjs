@@ -6,7 +6,9 @@ import {resolve,join,extname,sep} from 'node:path';
 const args=Object.fromEntries(process.argv.slice(2).map(s=>s.slice(2).split(/=(.*)/s).slice(0,2)));
 if(!args.bundle) throw new Error('Supply --bundle=/path/to/HTML5/bundle');
 const runs=Number(args.runs??3);
-const options={warmup:Number(args.warmup??60),seconds:Number(args.seconds??300),preset:args.preset??'high'};
+const options={warmup:Number(args.warmup??60),seconds:Number(args.seconds??300),preset:args.preset??'high',
+  renderer:JSON.parse(args.renderer??'{}'),no_ai:args['no-ai']==='1',no_origin_index:args['no-origin-index']==='1'};
+if(!options.renderer||typeof options.renderer!=='object'||Array.isArray(options.renderer))throw new Error('renderer must be a JSON object');
 if(!Number.isInteger(runs)||runs<1||!Number.isFinite(options.warmup)||options.warmup<0||!Number.isFinite(options.seconds)||options.seconds<=0)
   throw new Error('runs and seconds must be positive; warmup must be nonnegative');
 if(!['auto','low','medium','high','ultra'].includes(options.preset))throw new Error('Invalid preset');
@@ -39,6 +41,18 @@ try {
       const page=await browser.newPage({viewport:{width:1280,height:762},deviceScaleFactor:1});
       const session=await browser.newBrowserCDPSession();
       await page.addInitScript(options=>{window.__SUSTAINED_OPTIONS__=options},options);
+      if(args['callback-timing']==='1')await page.addInitScript(()=>{
+        const request=window.requestAnimationFrame;
+        const times=[];window.__BENCHMARK_CALLBACK_MS__=times;
+        let finished=false;
+        window.requestAnimationFrame=function(callback){return request.call(window,time=>{
+          const start=performance.now();
+          try {callback(time)} finally {
+            if(window.__SUSTAINED_RESULT__)finished=true;
+            if(!finished)times.push(performance.now()-start);
+          }
+        })};
+      });
       page.on('pageerror',e=>errors.push(e.message));
       page.on('console',m=>{const t=m.text();if(t.includes('ERROR:')||/GL_INVALID_|GL_OUT_OF_MEMORY|WebGL:.*error/i.test(t))errors.push(t);if(t.startsWith('SUSTAINED'))console.log(t)});
       const start=Date.now();
@@ -61,6 +75,10 @@ try {
       result.process_rss_samples=memory;result.process_peak_rss_mib=Math.max(...memory.map(s=>s.rss_mib));
       result.memory_scope='Sum of isolated Chromium browser, renderer and GPU processes; includes browser overhead';
       result.browser=browser.version();result.errors=errors;result.bundle_sha256=bundle;result.process_elapsed_seconds=(Date.now()-start)/1000;
+      if(args['callback-timing']==='1') {
+        result.callback_wall_ms=await page.evaluate(n=>window.__BENCHMARK_CALLBACK_MS__.slice(-n),result.frames.samples);
+        result.callback_metric='requestAnimationFrame callback wall duration, including synchronous driver waits; not pure CPU or GPU time';
+      }
       result.webgl=await page.evaluate(()=>{const gl=document.querySelector('canvas').getContext('webgl2'),d=gl.getExtension('WEBGL_debug_renderer_info');return {version:gl.getParameter(gl.VERSION),renderer:gl.getParameter(d?d.UNMASKED_RENDERER_WEBGL:gl.RENDERER)}});
       await writeFile(join(output,`run-${run}.json`),JSON.stringify(result,null,2)+'\n');
       await page.locator('canvas').screenshot({path:join(output,`run-${run}.png`)});

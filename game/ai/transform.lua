@@ -1,7 +1,13 @@
 -- Rigid, row-major 3x4 transforms. Pure Lua so skinning and hit volumes share
 -- exactly the same tested math on every engine backend.
 local M = {}
-function M.identity(x,y,z) return {1,0,0,x or 0, 0,1,0,y or 0, 0,0,1,z or 0} end
+function M.identity(x,y,z,out)
+    out=out or {}
+    out[1],out[2],out[3],out[4]=1,0,0,x or 0
+    out[5],out[6],out[7],out[8]=0,1,0,y or 0
+    out[9],out[10],out[11],out[12]=0,0,1,z or 0
+    return out
+end
 function M.rotation(x,y,z,out)
     local a,b,c,d,e,f=math.cos(x or 0),math.sin(x or 0),math.cos(y or 0),math.sin(y or 0),math.cos(z or 0),math.sin(z or 0)
     if not out then return {c*e+d*b*f,-c*f+d*b*e,d*a,0, a*f,a*e,-b,0, -d*e+c*b*f,d*f+c*b*e,c*a,0} end
@@ -20,21 +26,26 @@ function M.mul(a,b,out)
     end
     return out
 end
-function M.point(m,p)
-    return {x=m[1]*p.x+m[2]*p.y+m[3]*p.z+m[4],
-        y=m[5]*p.x+m[6]*p.y+m[7]*p.z+m[8], z=m[9]*p.x+m[10]*p.y+m[11]*p.z+m[12]}
+function M.point(m,p,out)
+    out=out or {}
+    out.x,out.y,out.z=m[1]*p.x+m[2]*p.y+m[3]*p.z+m[4],
+        m[5]*p.x+m[6]*p.y+m[7]*p.z+m[8],m[9]*p.x+m[10]*p.y+m[11]*p.z+m[12]
+    return out
 end
 function M.direction(m,p)
     return {x=m[1]*p.x+m[2]*p.y+m[3]*p.z,
         y=m[5]*p.x+m[6]*p.y+m[7]*p.z, z=m[9]*p.x+m[10]*p.y+m[11]*p.z}
 end
-function M.inverse(m)
-    return {m[1],m[5],m[9],-(m[1]*m[4]+m[5]*m[8]+m[9]*m[12]),
-        m[2],m[6],m[10],-(m[2]*m[4]+m[6]*m[8]+m[10]*m[12]),
-        m[3],m[7],m[11],-(m[3]*m[4]+m[7]*m[8]+m[11]*m[12])}
+function M.inverse(m,out)
+    -- As with mul, the destination must be distinct from the source.
+    out=out or {}
+    out[1],out[2],out[3],out[4]=m[1],m[5],m[9],-(m[1]*m[4]+m[5]*m[8]+m[9]*m[12])
+    out[5],out[6],out[7],out[8]=m[2],m[6],m[10],-(m[2]*m[4]+m[6]*m[8]+m[10]*m[12])
+    out[9],out[10],out[11],out[12]=m[3],m[7],m[11],-(m[3]*m[4]+m[7]*m[8]+m[11]*m[12])
+    return out
 end
-function M.root(position,yaw)
-    local m=M.rotation(0,yaw,0)
+function M.root(position,yaw,out)
+    local m=M.rotation(0,yaw,0,out)
     m[4],m[8],m[12]=position.x,position.y,position.z
     return m
 end

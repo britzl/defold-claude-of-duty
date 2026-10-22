@@ -43,7 +43,8 @@ function M.create(a,e)
     go.set(item.url,"vertices",resource_id)
     item.prepass=msg.url(nil,item.mesh,"prepass")
     go.set(item.prepass,"vertices",resource_id)
-    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant)
+    item.volume_scratch={}
+    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant,item.volume_scratch)
     for _,shape in ipairs(volumes) do
         local id=factory.create(a.hit_factory,vector(shape))
         local url=msg.url(nil,id,"collision")
@@ -88,13 +89,15 @@ function M.query(a,e)
         item.query.visible=visible;item.query.walkable=walkable
         for _,h in ipairs(item.hits) do h.object=assert(bullet3d.get_collision_object(h.url)) end
     end
+    -- Also invalidate when behavior is disabled and capsule.update is skipped.
+    item.query:begin_step()
     return item.query
 end
 function M.sync(a,e)
     local item=a.instances[e.id]
     if not item.query or item.disabled then return end
     item.query:sync(e.position,e.motion.height)
-    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant)
+    local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant,item.volume_scratch)
     for i,shape in ipairs(volumes) do
         local hit=item.hits[i]
         a.by_id[hit.id]=shape

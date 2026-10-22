@@ -164,11 +164,181 @@ compiled bundle hashes are retained in `build/quality-performance-native` and
 `build/quality-performance-environment.json`. The runners are reproducible; build
 outputs are local evidence and are not committed.
 
+For FPS investigations, `frames.average_fps` is total sampled updates divided by
+their total wall-clock duration (`1000 / frames.mean_ms`), rather than an average
+of instantaneous FPS. Both runners accept `--renderer='{"local_shadows":false}'`
+to override individual settings after selecting a preset. Overrides select Custom
+quality so Auto cannot undo the comparison. Native `--no-ai` / `--no-origin-index`
+and browser `--no-ai=1` / `--no-origin-index=1` are diagnostic controls: the first
+disables AI behavior while retaining skeleton/hitbox updates and changes combat;
+the second restores the full collider-origin scan. Neither is a production option.
+Browser `--callback-timing=1` additionally records animation-frame callback wall
+durations, including synchronous driver waits; these are not pure CPU/GPU timings.
+Compare equal warm-up/sample durations and repeat the unchanged control to expose
+run-to-run variation before attributing an FPS improvement to a setting.
+
 One earlier release-browser quality fixture stalled at the loading screen for
 180 seconds without a reported script/GL error. Subsequent debug and release
 runs completed the shared checks, and all sustained release loads completed.
 Its cause remains unconfirmed; the observed failure and screenshot are preserved
 in `build/quality-browser-startup-timeout`.
+
+### Average FPS investigation (2026-10-21–22)
+
+The current production revision `f82f862` already includes the bullet-origin
+index. This investigation adds diagnostic benchmark controls; it does not change
+production gameplay or rendering. Nineteen release runs completed with zero
+traversal stalls. The machine was the M3 Pro / 18 GiB Mac described above, with
+Defold 1.14.0 release (`d295ed4edff2e49072719835713e625f409849f1`).
+All results in the following table use a 1280×720 output, 30-second warm-up and
+90-second sample, with live traversal, firing, reloads, grenades and encounter
+restarts. FPS means measured engine updates per wall-clock second.
+
+| Backend / setting | Runs | Average FPS | Individual FPS | p95 update interval |
+| --- | ---: | ---: | --- | --- |
+| Native Metal, High | 2 | 104.4 | 101.0, 107.8 | 14.7–16.8 ms |
+| Native Metal, Auto | 1 | 106.5 | 106.5 | 15.2 ms |
+| Chrome 155.0.8059.85, High | 2 | 31.8 | 31.6, 32.0 | 53.0–54.0 ms |
+| Chrome 155.0.8059.85, Auto | 1 | 39.4 | 39.4 | 41.0 ms |
+
+Auto is the startup default. Native Auto moved to Ultra; browser Auto moved to
+Low (768×432 scene, 1280×720 output). Multi-run averages divide total frames by
+total sampled duration. Native and browser scheduling differ, so these are not
+verified presented-frame or pure GPU comparisons.
+
+The strongest diagnostic was AI behavior: in Chrome 155, a High run with behavior
+disabled reached **59.1 FPS**, between the two unchanged High controls above.
+Skeleton and hit-volume updates remain active, but behavior, animation poses and
+combat change. This identifies a CPU-work target; it is **not** an optimization
+speedup that can be obtained while preserving the encounter. Callback wall
+durations averaged 31.1–31.5 ms in High and 14.9 ms with behavior disabled; these
+include synchronous driver waits.
+
+An earlier screen used cached Chrome 149.0.7827.55 with 15-second warm-up and
+45-second samples. Its unchanged controls varied substantially:
+
+| Diagnostic setting | Average FPS |
+| --- | ---: |
+| High control, before / after | 26.6 / 22.0 |
+| AI behavior disabled | 70.5 |
+| Scene scale 0.5 (one-quarter as many scene pixels) | 21.1 |
+| Local-light shadows disabled | 21.7 |
+| Ambient occlusion and contact shadows disabled | 24.0 |
+| Volumetric fog disabled | 25.3 |
+| Motion blur and ADS depth of field disabled | 22.4 |
+| Previous full collider-origin scan | 20.6 |
+
+These screens do not establish a reliable benefit from cutting individual visual
+effects or scene resolution, nor quantify the index's whole-game FPS benefit.
+Power reporting changed from Battery to AC and back during the initial suite;
+small differences are inconclusive. The Chrome 155 repeat recorded Battery Power
+before and after every run. The initial Chrome 149 long High runs were also noisy
+(15.8 and 24.0 FPS) and are retained separately, not pooled with Chrome 155.
+
+Three separate native debug profiles (600 idle, 915 sprint and 1,333 firing frames)
+at 1280×720 locate the CPU work. These are main-thread elapsed scopes, including
+synchronous waits, rather than release FPS measurements:
+
+| Work | Mean elapsed time per frame across profiles |
+| --- | --- |
+| Whole main-thread frame | 8.64–9.31 ms |
+| Fixed AI plus soldier presentation | 3.35–4.13 ms (39–46% of the frame) |
+| AI capsule movement | 1.25–1.38 ms |
+| Simulation/presentation poses, hit volumes and bone uploads combined | 1.47–1.70 ms |
+| Player weapon updates during firing | 0.107 ms |
+
+The movement and pose rows are parts of the AI/presentation total, not additional
+costs. The investigation ranked these changes:
+
+1. **Reuse pose, IK and hit-volume buffers.** `game/ai/ik.lua` allocates temporary
+   transforms in each descendant rotation, while `game/ai/animation.lua` copies
+   pose/foot tables and `game/ai/rig.lua` rebuilds hit-volume records. Keep separate
+   simulation, current-presentation and previous-presentation storage to preserve
+   collision and motion-vector behavior. A standalone Lua 5.4.6 check measured
+   60.7 KiB allocated per planted-foot walking pose even with reused pose scratch,
+   plus 13.1 KiB per actor hit-volume update. These are microdiagnostic allocations,
+   not measured Defold heap traffic or guaranteed time savings.
+2. **Remove redundant capsule-query work.** `game/player/bullet.lua:sync` sets the
+   Bullet position unconditionally. Recovery/clearance queries, the end of
+   `game/player/capsule.lua:update`, and `game/ai/defold.lua:sync` can synchronize
+   the same final transform repeatedly. Skip unchanged transforms where ownership
+   permits, reuse query scratch/results within their validity window, and avoid
+   copying all contact records just to answer a clearance question. Preserve
+   tangent-contact filtering and the stair/slope/overlap regression behavior.
+3. **Revisit local-shadow caching after the CPU changes.** The renderer submits
+   12 static and 12 skinned local-shadow passes each frame. Caching static faces
+   is a concrete candidate, but the current feature screen did not establish an
+   FPS gain; it has lower priority than the measured character costs.
+
+Re-run matched release workloads after each implementation, with unchanged High
+controls and a stable power source. The evidence does not qualify thermal
+stability or sustained 60 FPS in the browser. Raw samples, screenshots, options,
+power observations, bundle hashes and CPU scopes are under
+`build/fps-investigation`; `report.json` combines the results. The local
+`run_matrix.py`, `run_current_browser.py` and `profile_cpu.py` preserve the exact
+investigation commands. Harness syntax checks and all completed release runs
+passed; an initial oversized framebuffer probe and a retried debug setup timeout
+are excluded from the baseline and retained in that evidence directory.
+
+### Character CPU optimizations (2026-10-22)
+
+The first two investigation priorities are implemented. Pose evaluation reuses
+angle arrays and IK matrix workspaces. IK caches each bone's descendants and
+applies pivot rotations directly to their matrices. Animation sampling/interpolation
+writes into separate previous, current and interpolated actor snapshots. Hit volumes
+reuse actor-owned records and transforms. Calls without an output workspace still
+produce independent snapshots. Rendering retains its separate current/previous
+palette buffers for motion vectors.
+
+Capsule queries skip duplicate body-position writes within a movement phase.
+The cache is invalidated every fixed tick, including when AI behavior is disabled,
+so engine-side synchronization between ticks cannot leave a stale mover. Ray and
+sweep origins use separate scratch from the cached body coordinates. Contacts
+reuse their flat Lua records, and clearance checks inspect Bullet contact
+distances directly. Every contact/clearance query still queries Bullet; sweep
+selection, tangent filtering, simulation frequency and traversal rules remain
+unchanged.
+
+The final release comparison used the same M3 Pro, Defold 1.14.0 and Chrome 155,
+fixed High quality at 1280×720, with AC power confirmed at each run boundary.
+Each backend ran before/after/after/before in fresh processes: 30 seconds warm-up
+and 90 seconds measurement per run. Combined FPS is total frames divided by
+total sampled wall time.
+
+| Backend | Before FPS (individual runs) | After FPS (individual runs) | Change |
+| --- | ---: | ---: | ---: |
+| Native Metal | 101.5 (107.2, 95.8) | 104.1 (107.8, 100.5) | +2.6% |
+| Chrome WebGL2 / ANGLE Metal | 30.6 (30.3, 30.9) | 38.5 (38.4, 38.6) | +25.7% |
+
+Browser p95 frame intervals improved from 55–57 ms to 42–44 ms. Native p95
+intervals were 14.9/19.2 ms before and 14.6/17.2 ms after. The native gain is
+small relative to its run variation; the browser gain repeated closely. These
+are engine-update rates measured by wall clock; presentation and GPU duration
+are unmeasured. Live combat can diverge, and the host was not thermally controlled.
+All eight runs retained High quality and completed without stalls or errors.
+The final report, individual runs, source hashes and validation evidence are in
+`build/character-optimization/final/report.json` and its sibling files.
+
+The standalone Lua 5.4.6 check, with garbage collection stopped and buffers warmed,
+measured the following allocations. These are not measured Defold heap traffic:
+
+| Operation | Before | After |
+| --- | ---: | ---: |
+| Idle/aiming pose | 32.17 KiB | 13.88 KiB |
+| Walking pose with planted feet | 60.69 KiB | 27.69 KiB |
+| Actor hit-volume update with reusable workspace | 13.11 KiB | 0.00 KiB |
+
+Validation passed 129 Lua checks across animation, presentation, movement, vaults,
+AI, navigation, squads, grenades, ragdolls and ballistics. New
+`tests/character_buffers_test.lua` and `tests/capsule_query_test.lua` cover snapshot
+ownership, disappearing optional fields, one-shot completion, query scratch,
+fixed-step cache invalidation, changing contacts and tangent-floor filtering.
+A 360-pose comparison against the original modules matched all 287,280 palette,
+joint and hit-volume values exactly across the three variants and mixed clips.
+The native `movement_smoke.py` and `movement_features_smoke.py` scenarios passed;
+the shared soldier fixture passed all 11 checks and 15 captures on native Metal
+and release Chrome WebGL2. Evidence is retained in `build/character-optimization`
+and `build/soldier-native-validation`.
 
 ## HUD combat feedback (2026-10-21)
 

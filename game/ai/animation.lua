@@ -4,9 +4,13 @@ local T=require "game.ai.transform"
 local variants=require "game.ai.variants"
 local M={}
 local function wrap(v) return (v+math.pi)%(2*math.pi)-math.pi end
-local function clone(value)
+local clips={"turn","reload","vault","throw"}
+local function clone(value,out)
     if type(value)~="table" then return value end
-    local out={};for k,v in pairs(value) do out[k]=clone(v) end;return out
+    out=type(out)=="table" and out or {}
+    for k in pairs(out) do if value[k]==nil then out[k]=nil end end
+    for k,v in pairs(value) do out[k]=clone(v,out[k]) end
+    return out
 end
 function M.init(e)
     e.animation={feet={},pelvis=0,turn_time=-1,turn_direction=1,reload_time=-1,reload_duration=2.4,
@@ -116,27 +120,32 @@ function M.step(e,dt,query)
     a.pelvis=a.pelvis+(wanted-a.pelvis)*math.min(1,dt*16)
     a.targets=feet;a.previous=V.copy(e.position);a.previous_yaw=e.yaw
 end
-function M.sample(e)
+-- Optional destinations are caller-owned snapshots, never the live animation.
+function M.sample(e,out)
+    out=out or {}
     local a=e.animation
-    if not a then return {} end
+    if not a then for k in pairs(out) do out[k]=nil end;return out end
     local hit=a.hit_time<=.5 and math.exp(-a.hit_time*7.5)*math.min(1,a.hit_time*22)*a.hit_strength or 0
-    return {variant=e.variant or "vanguard",run=e.run or 0,wounded=V.clamp((.45-e.actor.health/e.actor.max_health)/.25,0,1),
-        aim_yaw=e.aim_yaw or 0,feet=clone(a.targets),pelvis=a.pelvis,hit=hit,hit_region=a.hit_region,hit_side=a.hit_side,
-        turn=math.max(0,a.turn_time)/.42,turn_weight=a.turn_time>=0 and 1 or 0,turn_direction=a.turn_direction,
-        reload=math.max(0,a.reload_time)/a.reload_duration,reload_weight=a.reload_time>=0 and 1 or 0,
-        throw=math.max(0,a.throw_time)/a.throw_duration,throw_weight=a.throw_time>=0 and 1 or 0,
-        vault=math.max(0,a.vault_time)/a.vault_duration,vault_weight=a.vault_time>=0 and 1 or 0,vault_hand=clone(a.vault_hand)}
+    out.variant,out.run,out.wounded=e.variant or "vanguard",e.run or 0,V.clamp((.45-e.actor.health/e.actor.max_health)/.25,0,1)
+    out.aim_yaw,out.feet,out.pelvis=e.aim_yaw or 0,clone(a.targets,out.feet),a.pelvis
+    out.hit,out.hit_region,out.hit_side=hit,a.hit_region,a.hit_side
+    out.turn,out.turn_weight,out.turn_direction=math.max(0,a.turn_time)/.42,a.turn_time>=0 and 1 or 0,a.turn_direction
+    out.reload,out.reload_weight=math.max(0,a.reload_time)/a.reload_duration,a.reload_time>=0 and 1 or 0
+    out.throw,out.throw_weight=math.max(0,a.throw_time)/a.throw_duration,a.throw_time>=0 and 1 or 0
+    out.vault,out.vault_weight,out.vault_hand=math.max(0,a.vault_time)/a.vault_duration,a.vault_time>=0 and 1 or 0,clone(a.vault_hand,out.vault_hand)
+    return out
 end
-function M.interpolate(previous,current,alpha)
-    local out={}
+function M.interpolate(previous,current,alpha,out)
+    out=type(out)=="table" and out or {}
+    for key in pairs(out) do if current[key]==nil then out[key]=nil end end
     for key,value in pairs(current) do
         local from=previous and previous[key]
         if type(value)=="number" and type(from)=="number" then out[key]=V.lerp(from,value,alpha)
-        elseif type(value)=="table" then out[key]=M.interpolate(from,value,alpha)
+        elseif type(value)=="table" then out[key]=M.interpolate(from,value,alpha,out[key])
         else out[key]=value end
     end
     -- A completed one-shot blends toward its end, never backwards to frame 0.
-    for _,clip in ipairs({"turn","reload","vault","throw"}) do
+    for _,clip in ipairs(clips) do
         if previous and previous[clip.."_weight"]==1 and current[clip.."_weight"]==0 then
             out[clip]=V.lerp(previous[clip],1,alpha)
         end
