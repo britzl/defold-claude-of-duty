@@ -210,6 +210,7 @@ function init(self)
     end
     if sys.get_config_int("animated_atmosphere_validation.enabled",0)==1 then self.animated_atmosphere_validation=require("tests.animated_atmosphere_scenario").new() end
     if sys.get_config_int("effects_validation.enabled",0)==1 then self.effects_validation=require("tests.effects_scenario").new() end
+    if sys.get_config_int("combat_review.enabled",0)==1 then self.combat_review=require("tests.combat_review_scenario").new() end
     if sys.get_config_int("grenades_validation.enabled",0)==1 then
         self.grenades_validation=require("tests.grenades_scenario").new()
     end
@@ -581,6 +582,7 @@ function update(self, dt)
     if self.hud_validation then require("tests.hud_scenario").update(self.hud_validation,self,dt,restart_encounter) end
     if self.soldier_validation then require("tests.soldier_scenario").update(self.soldier_validation,self,dt,restart_encounter) end
     if self.effects_validation then require("tests.effects_scenario").update(self.effects_validation,self,dt,restart_encounter) end
+    if self.combat_review then require("tests.combat_review_scenario").update(self.combat_review,self,dt,restart_encounter) end
     if self.grenades_validation then require("tests.grenades_scenario").update(self.grenades_validation,self,dt,restart_encounter) end
     if self.ai_tactics_validation then require("tests.ai_tactics_scenario").update(self.ai_tactics_validation,self,dt,restart_encounter) end
     if self.physics_validation then require("tests.physics_scenario").update(self.physics_validation,self,dt,restart_encounter) end

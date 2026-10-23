@@ -59,7 +59,8 @@ The generated world now contains **5,072 shapes, 477,018 vertices and 66 mesh
 batches**, up from 4,556 / 414,432 / 65. Vertex streams occupy **38,161,296
 bytes**, an increase of about **4.8 MiB**. The 1,224 colliders, 196 navigation
 nodes and 201 edges are unchanged. Atlas dimensions and render-target counts
-are unchanged. The additional geometry has not had a sustained performance run.
+are unchanged. A later [combat review](#combat-profiling-and-motion-review-2026-10-23)
+records fresh High sustained measurements with this geometry.
 
 The twelve focused Lua suites pass 129 checks. Attachment/support checks cover
 the generated dressing and 32 additional architecture seeds. Native validation
@@ -110,7 +111,8 @@ vertices** and the two shared arms from 15,096 to **21,936 vertices**. Combined
 vertex streams occupy **2,128,464 bytes** before engine overhead. Including the
 existing effect slots, the adapter still owns **50 objects and 50 buffers**, now
 with 51,882 vertices. No draw calls, textures or render targets were added;
-the extra geometry cost has not been qualified by a sustained performance run.
+the later [combat review](#combat-profiling-and-motion-review-2026-10-23) measures
+the combined refinements under sustained High combat.
 
 The 12 viewmodel, 19 weapon, 28 renderer and 16 combat-FX Lua checks pass, as does
 the soldier presentation suite. The native animation fixture passes all 19
@@ -633,7 +635,8 @@ adapters, including test courses. Adding or deleting colliders disables reuse
 through two controller update boundaries so deferred physics changes cannot
 inherit pre-change clearance. Any future mutation of static world geometry must
 invalidate this revision; movers that collide with dynamic bodies must not opt in.
-Ground support is always sampled again on the next fixed tick.
+The 2026-10-23 follow-up below also reuses positive ground support across ticks
+under these same static-world guards; unversioned adapters still sample it again.
 
 The flat-plane regression reduces a settled, unchanged stationary tick from two
 ground sweeps plus two contact tests to one ground sweep. Ordinary walking drops
@@ -665,6 +668,96 @@ Native movement, movement features, shared traversal and AI tactics fixtures all
 passed, including dynamic obstruction, six-actor engagement and restart cycles.
 The release Chrome WebGL2 traversal fixture also passed all 13 checks; evidence
 is in `build/capsule-reuse-validation/browser-traversal`.
+
+### Combat profiling and motion review (2026-10-23)
+
+The post-refinement baseline uses Defold release `a81dbb0`, High quality and an
+actual 1280×720 framebuffer on the M3 Pro / 18 GiB Mac. Native Metal and Chrome
+155 WebGL2/ANGLE Metal each ran sequentially for 60 seconds of warm-up and
+300 seconds of live combat. Results are **wall-clock engine update intervals**;
+they are not verified presentation timestamps or isolated CPU/GPU timings.
+
+| Release run | Mean update ms | p95 ms | p99 ms | Worst ms | Peak process RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Native baseline | 8.98 | 14.27 | 20.66 | 88.83 | 267.6 |
+| Native support reuse | 9.01 | 13.85 | 20.14 | 1,063.94 | 263.1 |
+| Browser baseline | 26.95 | 47.00 | 70.00 | 150.00 | 1,241.6 |
+| Browser support reuse | 21.39 | 35.00 | 44.00 | 123.00 | 1,214.4 |
+
+Each row is one fresh process. All four runs complete with zero route stalls,
+all nine traversal targets reached, about 779–788 metres travelled,
+1,381–1,383 shots, 60 reloads, 29 grenades and seven restarts. Both backends
+retain 51 render targets. Browser RSS includes its browser, renderer and GPU
+processes; native RSS is the game process. The native final run includes an
+unattributed 1.06-second hitch 262 seconds into sampling. Its overall throughput
+is unchanged. Browser timing improves in this pair but still misses the budget;
+one before/after pair cannot isolate host variation or prove a release speedup.
+These runs refresh the High baseline, not the three-run/per-preset qualification.
+
+A shorter reversed-order browser control (optimized build first, then baseline;
+30-second warm-up + 90-second sample each) records mean **20.73 vs 21.92 ms**
+and p95 **33 vs 35 ms**, respectively, with zero route stalls. That is about
+5.4% lower mean update time in the optimized build for this shorter workload.
+The much larger difference between the five-minute rows cannot all be assigned
+to this change: live combat and host conditions vary. Controls are retained in
+`browser-control-after` and `browser-control-before` under the evidence root.
+
+Separate native debug captures now expose `capsule.contacts` and `capsule.sweep`.
+AI capsule sweeps cost 0.78–0.80 ms/frame in the firing/reloading workload.
+The controller now carries its successful final ground-support proof into the
+next tick, subject to the existing exact position, height, query and static-world
+revision checks. A miss cannot authorize reuse. Movement still queries the new
+position; jumps, stance changes and world edits retain the normal invalidation
+paths. Saved surface and ground-normal data remain available for movement/foley.
+
+In two before/after profile repetitions, AI sweeps fell from **2.63–2.64 to
+1.63 per actor update**. Whole AI capsule movement fell from **174–176 to
+133–141 µs/update** (about 20–24%). Total Main/Step time did not show a reliable
+gain in those debug samples. A nearest-hit-only sweep experiment showed no
+measurable benefit and was discarded. Ten query-reuse checks, cached/uncached
+movement comparison and all 13 native and 13 release-browser traversal checks
+pass, including dynamic obstruction and pause/resume vaulting.
+
+Reproducible review tools:
+
+```sh
+# Native motion replay; open the project in Defold first.
+PYTHONPATH=automation-bridge-python python3 tests/combat_review_capture.py \
+  --output captures/combat-review/native
+# Bundle a release wasm-web build with tests/combat_review.project first.
+PLAYWRIGHT_MODULE=/path/to/playwright node tools/capture_combat_review.mjs \
+  --bundle=/path/to/bundle --output=captures/combat-review/browser
+# Uses the reference's existing capture API without modifying its source.
+node tools/capture_reference_motion.mjs \
+  --source=/path/to/Claude-of-Duty-main --output=captures/combat-review/threejs
+# Requires Pillow and the editor bridge.
+PYTHONPATH=automation-bridge-python python3 tests/motion_review_smoke.py \
+  --output captures/combat-review/temporal
+```
+
+The shared replay exercises walking/sprinting/turning, all three weapons'
+ADS/fire/reload/inspect actions, wall impacts, a live soldier, ragdoll settling and
+an explosion. The native recording uses sampled engine framebuffer images;
+the browser uses Playwright video. Both have capture overhead and are excluded
+from performance measurements. The reference tool records 51 fixed-step weapon
+and single-explosion stages. Cameras, lighting and FOV are not matched, so these
+are action reviews rather than exact visual-parity acceptance.
+
+Three focused native temporal sweeps retain continuous history across 61 samples
+each. Foliage, shadow-distance and combat-effects views show no history resets
+or large image discontinuities; maximum adjacent mean RGB differences are
+0.43, 3.15 and 5.54 on a 0–255 scale. Held framebuffer samples cannot certify
+full-rate shimmer or ghosting. Reports and raw profiler trees are retained in
+`build/combat-review-2026-10-23`; valid captures are under
+`captures/combat-review-2026-10-23/{native-final,browser-final,threejs-single,temporal}`.
+Earlier capture attempts in adjacent folders are diagnostic only.
+
+The browser runner accepts optional `--cpu-profile=1` and `--gpu-timing=1`
+diagnostics. These add overhead and must not be mixed with baseline runs.
+The sampled main thread spends about 10% in `checkFramebufferStatus`; remaining
+large Wasm frames are unsymbolized. WebGL timer queries span command submission
+and may include queue starvation, so they do not isolate shader-pass cost.
+Browser graphics/driver work remains a profiling target.
 
 ## HUD combat feedback (2026-10-21)
 

@@ -233,7 +233,16 @@ function M.update(m, input, dt, query)
     -- even for unversioned queries. Ground snapping may change the position.
     local clear_x, clear_y, clear_z, clear_height = p.x, p.y, p.z, m.height
     local was_grounded = m.grounded
-    m.grounded = m.velocity.y <= 0 and ground(m, query, T.ground_probe)
+    -- The previous final support is still valid at this exact position when
+    -- the query sees only unchanged static geometry. Consume the same guarded
+    -- proof as clearance; a miss never authorizes reuse. Movement below still
+    -- samples its new position, and jumps/stance changes invalidate support.
+    local supported = reusable and clearance.grounded
+    if supported then
+        m.ground.x,m.ground.y,m.ground.z=clearance.nx,clearance.ny,clearance.nz
+        m.surface=clearance.surface
+    end
+    m.grounded = m.velocity.y <= 0 and (supported or ground(m, query, T.ground_probe))
     local support_x, support_y, support_z, support_height = p.x, p.y, p.z, m.height
     m.coyote = m.grounded and T.coyote_time or math.max(0, m.coyote-dt)
     m.jump_buffer = input.jump and T.jump_buffer or math.max(0, m.jump_buffer-dt)
@@ -299,6 +308,9 @@ function M.update(m, input, dt, query)
         if revision ~= nil and query:clearance_revision() == revision then
             clearance.valid, clearance.query, clearance.revision = true, query, revision
             clearance.x, clearance.y, clearance.z, clearance.height = p.x, p.y, p.z, m.height
+            clearance.grounded=m.grounded
+            clearance.nx,clearance.ny,clearance.nz=m.ground.x,m.ground.y,m.ground.z
+            clearance.surface=m.surface
         end
     end
     lean.update(m, input, dt, query)

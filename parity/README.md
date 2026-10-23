@@ -82,6 +82,39 @@ across the hosted versions. They do not establish animation, temporal stability,
 combat-effect or performance parity, and the hosted Kaigen source/build match
 remains unverified.
 
+## Combat motion review — 2026-10-23
+
+The post-refinement native and release-browser builds complete the same replay:
+walk/sprint/turn, rifle/SMG/pistol ADS/fire/reload/inspect, wall impacts, a live
+soldier, ragdoll settling and one explosion. Reports retain phase timestamps,
+engine/build fingerprints and bounded effect/physics counts. Both recordings
+finish with one sleeping ragdoll (18 bodies / 17 constraints), expired transient
+explosion particles and 51 render targets. The traversal fixture separately
+passes all 13 checks on both backends.
+
+Native frame samples show the expected aim alignment, lowered reload poses,
+support-hand return, soldier death/settling and flash/debris-to-smoke transition.
+The Three.js archive supplies 51 fixed-step weapon/reload and single-explosion
+stages through its existing capture API. The reference has a stronger ring/dot
+reticle and more conspicuous explosion smoke in these views. Camera composition,
+FOV, lighting and weapon occlusion differ, so this is a comparison finding,
+not proof of an effect lifetime or rendering failure. No cosmetic adjustment is
+based solely on those unmatched frames.
+
+Three native camera sweeps (far material foliage, shadow distance and combat
+effects) retain continuous TAA history across 61 samples each, with no resets
+or large frame-wide discontinuities. This checks coarse continuity; sampled
+framebuffer images held between camera steps do not establish full-rate foliage
+shimmer, shadow stability or disocclusion/ghosting acceptance. Native framebuffer
+capture and browser video overhead also exclude these recordings from timing.
+Controlled Kaigen motion comparison remains open.
+
+Valid local evidence is in
+`captures/combat-review-2026-10-23/{native-final,browser-final,threejs-single,temporal}`.
+Earlier capture attempts in adjacent directories are excluded. See
+[combat profiling](../README.md#combat-profiling-and-motion-review-2026-10-23)
+for the measured capsule optimization, release results and reproduction commands.
+
 ## Quality increment — 2026-10-21
 
 Step 18 adds whole-game presets, a default 60 FPS Auto policy, manual overrides

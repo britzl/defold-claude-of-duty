@@ -40,7 +40,35 @@ try {
       browser=await chromium.launch({headless:args.headed!=='1',executablePath:args.browser,args:['--autoplay-policy=no-user-gesture-required','--use-angle=metal','--ignore-gpu-blocklist','--force-color-profile=srgb','--mute-audio']});
       const page=await browser.newPage({viewport:{width:1280,height:762},deviceScaleFactor:1});
       const session=await browser.newBrowserCDPSession();
+      const cpu=args['cpu-profile']==='1'?await page.context().newCDPSession(page):null;
+      if(cpu){await cpu.send('Profiler.enable');await cpu.send('Profiler.setSamplingInterval',{interval:1000});}
       await page.addInitScript(options=>{window.__SUSTAINED_OPTIONS__=options},options);
+      if(args['gpu-timing']==='1')await page.addInitScript(()=>{
+        const getContext=HTMLCanvasElement.prototype.getContext;
+        window.__BENCHMARK_GPU__={available:false,samples:[],disjoint:0};
+        HTMLCanvasElement.prototype.getContext=function(type,...args){
+          const gl=getContext.call(this,type,...args);
+          if(type!=='webgl2'||!gl||window.__BENCHMARK_GPU__.installed)return gl;
+          const state=window.__BENCHMARK_GPU__;state.installed=true;
+          const ext=gl.getExtension('EXT_disjoint_timer_query_webgl2');
+          state.available=!!ext;if(!ext)return gl;
+          const request=window.requestAnimationFrame.bind(window);let active=false,frame=0;
+          const pending=[];
+          window.requestAnimationFrame=callback=>request(time=>{
+            if(active||gl.isContextLost()){callback(time);return;}
+            const disjoint=gl.getParameter(ext.GPU_DISJOINT_EXT);
+            if(disjoint){state.disjoint++;for(const p of pending)gl.deleteQuery(p.query);pending.length=0;}
+            while(pending.length&&gl.getQueryParameter(pending[0].query,gl.QUERY_RESULT_AVAILABLE)){
+              const p=pending.shift();
+              state.samples.push({elapsed:p.elapsed,ms:gl.getQueryParameter(p.query,gl.QUERY_RESULT)/1e6});gl.deleteQuery(p.query);
+            }
+            if(++frame%10!==0||pending.length>=4||window.__SUSTAINED_RESULT__){callback(time);return;}
+            const query=gl.createQuery();active=true;gl.beginQuery(ext.TIME_ELAPSED_EXT,query);
+            try{callback(time);}finally{gl.endQuery(ext.TIME_ELAPSED_EXT);active=false;pending.push({query,elapsed:performance.now()/1000});}
+          });
+          return gl;
+        };
+      });
       if(args['callback-timing']==='1')await page.addInitScript(()=>{
         const request=window.requestAnimationFrame;
         const times=[];window.__BENCHMARK_CALLBACK_MS__=times;
@@ -57,12 +85,14 @@ try {
       page.on('console',m=>{const t=m.text();if(t.includes('ERROR:')||/GL_INVALID_|GL_OUT_OF_MEMORY|WebGL:.*error/i.test(t))errors.push(t);if(t.startsWith('SUSTAINED'))console.log(t)});
       const start=Date.now();
       await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'domcontentloaded',timeout:120000});
+      let profiling=false;
       const memory=[];let result;
       const deadline=Date.now()+(options.warmup+options.seconds+150)*1000;
       while(Date.now()<deadline) {
         if(errors.length)throw Error(errors.join('\n'));
         result=await page.evaluate(()=>window.__SUSTAINED_RESULT__??null);
         if(result)break;
+        if(cpu&&!profiling&&(Date.now()-start)/1000>=options.warmup+5){await cpu.send('Profiler.start');profiling=true;}
         const {processInfo}=await session.send('SystemInfo.getProcessInfo');
         const ids=processInfo.map(p=>p.id);
         const rss=execFileSync('ps',['-o','rss=','-p',ids.join(',')],{encoding:'utf8'}).trim().split(/\s+/).reduce((sum,n)=>sum+Number(n),0)/1024;
@@ -70,6 +100,11 @@ try {
         await new Promise(r=>setTimeout(r,1000));
       }
       if(!result)throw Error('Sustained fixture timeout: '+JSON.stringify(await page.evaluate(()=>window.__SUSTAINED_LOADING__)));
+      if(cpu&&profiling){
+        const {profile}=await cpu.send('Profiler.stop');
+        await writeFile(join(output,`run-${run}.cpuprofile`),JSON.stringify(profile));
+        result.cpu_profile_scope='Sampled browser main-thread JS/Wasm stacks; diagnostic overhead included; not GPU timing';
+      }
       if(result.engine.is_debug)throw Error('Release engine required');
       if(result.renderer.output_width!==1280||result.renderer.output_height!==720)throw Error('Wrong framebuffer size');
       result.process_rss_samples=memory;result.process_peak_rss_mib=Math.max(...memory.map(s=>s.rss_mib));
@@ -78,6 +113,10 @@ try {
       if(args['callback-timing']==='1') {
         result.callback_wall_ms=await page.evaluate(n=>window.__BENCHMARK_CALLBACK_MS__.slice(-n),result.frames.samples);
         result.callback_metric='requestAnimationFrame callback wall duration, including synchronous driver waits; not pure CPU or GPU time';
+      }
+      if(args['gpu-timing']==='1') {
+        result.gpu_timer=await page.evaluate(()=>window.__BENCHMARK_GPU__);
+        result.gpu_timer_scope='Disjoint-checked WebGL queries around every tenth animation callback; includes submission/queue-starvation time and diagnostic overhead, not isolated shader-pass cost';
       }
       result.webgl=await page.evaluate(()=>{const gl=document.querySelector('canvas').getContext('webgl2'),d=gl.getExtension('WEBGL_debug_renderer_info');return {version:gl.getParameter(gl.VERSION),renderer:gl.getParameter(d?d.UNMASKED_RENDERER_WEBGL:gl.RENDERER)}});
       await writeFile(join(output,`run-${run}.json`),JSON.stringify(result,null,2)+'\n');

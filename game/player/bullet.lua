@@ -64,7 +64,10 @@ function M:contacts(feet, height)
     -- Lua view, but always ask Bullet again: other bodies can move between calls.
     local out,pool = self.contacts_result,self.contacts_pool
     local count=0
-    for i, c in ipairs(bullet3d.world.contact_test(self.world, self.object, self.filter)) do
+    if profiler then profiler.scope_begin("capsule.contacts") end
+    local contacts=bullet3d.world.contact_test(self.world, self.object, self.filter)
+    if profiler then profiler.scope_end() end
+    for i, c in ipairs(contacts) do
         local value=pool[i] or {};pool[i]=value;out[i]=value;count=i
         value.distance,value.nx,value.ny,value.nz=c.distance,c.normal_on_b.x,c.normal_on_b.y,c.normal_on_b.z
     end
@@ -110,7 +113,10 @@ function M:sweep(feet, height, dx, dy, dz)
     self.position.x, self.position.y, self.position.z = feet.x, feet.y+height/2, feet.z
     definition.position, definition.height = self.position, height-2*T.radius
     self.translation.x, self.translation.y, self.translation.z = dx, dy, dz
-    for _, hit in ipairs(bullet3d.world.cast_shape(self.world, definition, self.translation, self.filter)) do
+    if profiler then profiler.scope_begin("capsule.sweep") end
+    local hits=bullet3d.world.cast_shape(self.world, definition, self.translation, self.filter)
+    if profiler then profiler.scope_end() end
+    for _, hit in ipairs(hits) do
         local n = hit.normal
         -- Tangent contacts on a floor must not mask a wall further ahead.
         if dx*n.x+dy*n.y+dz*n.z < -distance*0.0001 then

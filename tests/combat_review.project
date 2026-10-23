@@ -1,0 +1,8 @@
+[combat_review]
+enabled = 1
+[display]
+width = 1280
+height = 720
+high_dpi = 0
+[engine]
+max_time_step = 0.1

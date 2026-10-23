@@ -30,7 +30,8 @@ local function planes(versioned)
     function q:sweep(p,height,dx,dy,dz)
         self.counts.sweep=self.counts.sweep+1
         if dy<0 and p.y>=self.floor and p.y+dy<=self.floor then
-            return {fraction=(self.floor-p.y)/dy,nx=0,ny=1,nz=0}
+            local n=self.normal or {x=0,y=1,z=0}
+            return {fraction=(self.floor-p.y)/dy,nx=n.x,ny=n.y,nz=n.z,surface=self.surface}
         elseif dy>0 and p.y+height+dy>=self.ceiling then
             return {fraction=(self.ceiling-p.y-height)/dy,nx=0,ny=-1,nz=0}
         end
@@ -48,21 +49,21 @@ local function new(versioned)
     return m,q
 end
 
-test('stationary grounded ticks use one support sweep and no duplicate clearance query',function()
+test('stationary grounded ticks reuse support only for unchanged static geometry',function()
     local m,q=new(false)
     local c=tick(m,q)
     assert(c.contacts==1 and c.fits==0 and c.sweep==1)
     assert(m.grounded and m.travel==0 and not m.landed and c.sync==1)
     m,q=new(true)
     c=tick(m,q)
-    assert(c.contacts==0 and c.fits==0 and c.sweep==1)
+    assert(c.contacts==0 and c.fits==0 and c.sweep==0)
 end)
 
 test('walking reuses only the previous final clearance, while displacement still gets checked',function()
     local m,q=new(true)
     for _=1,60 do
         local c=tick(m,q,{move_z=-1})
-        assert(c.contacts==0 and c.fits==1 and c.sweep>=3)
+        assert(c.contacts==0 and c.fits==1 and c.sweep>=2)
         assert(m.grounded and not m.recovery_failed and m.safe.z==m.position.z)
     end
 end)
@@ -104,7 +105,18 @@ test('ground misses still get the longer snap and changing height rechecks groun
     c=tick(m,q,{crouch=true})
     assert(c.contacts==1 and m.height==T.stances.crouch.height)
     c=tick(m,q)
-    assert(c.sweep==2 and c.fits>=1 and m.height==T.stances.stand.height)
+    assert(c.sweep==1 and c.fits>=1 and m.height==T.stances.stand.height)
+end)
+
+test('cached support restores its normal and surface, and upward motion cannot reuse it',function()
+    local m,q=new(true)
+    q.normal={x=.2,y=.98,z=0};q.surface='wood';q.revision=q.revision+1
+    assert(tick(m,q).sweep>0)
+    local c=tick(m,q)
+    assert(c.sweep==0 and m.ground.x==.2 and m.ground.y==.98 and m.surface=='wood')
+    m.velocity.y=2
+    c=tick(m,q)
+    assert(not m.grounded and m.position.y>T.skin and c.sweep>0)
 end)
 
 test('failed clearance and failed recovery cannot authorize the next tick',function()
@@ -128,7 +140,10 @@ test('cached and uncached worlds agree through walking, jump, stance, slide and 
         if i==700 then qa.floor=-.2;qb.floor=-.2;qa.revision=qa.revision+1 end
         tick(a,qa,controls);tick(b,qb,controls)
         for _,axis in ipairs({'x','y','z'}) do
-            assert(a.position[axis]==b.position[axis] and a.velocity[axis]==b.velocity[axis])
+            -- Repeating a no-op vertical snap changes the last few bits of
+            -- floor height (observed 3.5e-18 m); reuse preserves the first snap.
+            assert((axis=='y' and math.abs(a.position[axis]-b.position[axis])<1e-12
+                or a.position[axis]==b.position[axis]) and a.velocity[axis]==b.velocity[axis])
         end
         for _,key in ipairs({'height','grounded','jumped','landed','stance','sliding','travel','recovery_failed'}) do
             assert(a[key]==b[key],key)
