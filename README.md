@@ -38,6 +38,49 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Weapons and hands visual refinement (2026-10-23)
+
+The [three-version visual review](parity/README.md#visual-review--2026-10-23)
+identified silver-looking receivers, faceted barrels/optics and simple gloves
+and sleeves. The three weapons now use smooth curved normals, darker coated
+surfaces and restrained first-person reflections. Chamfers carry an edge-wear
+weight so broad receiver panels retain their coating. Optics gain stepped rims,
+rounded adjustment housings, narrower mounts and a coloured inner rim while
+keeping their open sight picture. Receiver panels, controls, grips and magazines
+have more distinct shapes and materials.
+
+The shared arms now have smoother, irregular sleeve folds, shaped cuffs, rounded
+palms and thumb bases, separate knuckle pads, palm patches and finger seams.
+Filtered fabric detail helps separate cloth from rubber reinforcement. The
+lighting adjustment is scoped to the weapon/arm shader. Existing attachment
+points, 17 joints per arm, ADS alignment and gameplay timings are retained.
+
+The additional detail increases the three weapons from 19,446 to **29,082
+vertices** and the two shared arms from 15,096 to **21,936 vertices**. Combined
+vertex streams occupy **2,128,464 bytes** before engine overhead. Including the
+existing effect slots, the adapter still owns **50 objects and 50 buffers**, now
+with 51,882 vertices. No draw calls, textures or render targets were added;
+the extra geometry cost has not been qualified by a sustained performance run.
+
+The 12 viewmodel, 19 weapon, 28 renderer and 16 combat-FX Lua checks pass, as does
+the soldier presentation suite. The native animation fixture passes all 19
+checks and 19 captures, including firing, tactical/empty reloads, inspection
+interruptions and resource reuse for all three weapons. Its scripted input now
+waits for the UI to resume after each paused capture before sending the next tap.
+Seven frozen native views repeat exactly. Material, indoor-lighting and weapon-AA
+toggles change the expected pixels and restore exactly; weapon AA leaves the
+checked world-only region unchanged.
+The release HTML5 build passes startup and visual switching checks for all three
+weapons with default Auto quality and no browser console warnings/errors. This
+is a browser smoke check, not a rerun of the complete browser animation fixture.
+
+Controlled before/after images at 1280×720, clear sky and automatic exposure are
+retained in `captures/weapons-hands-2026-10-23`, alongside indoor, sunset and night
+views. Native fixture reports are in `build/viewmodel-native-validation` and
+`build/viewmodel-render-validation`. Captures are Git-ignored. These changes
+address the observed appearance gaps; exact reference geometry, animation parity
+and sustained performance remain separate qualification work.
+
 ## Interior illumination (2026-10-23)
 
 The [three-version visual review](parity/README.md#visual-review--2026-10-23)
@@ -1267,6 +1310,10 @@ comparisons and sustained performance remain qualification work.
 
 ## Weapons and first-person animation (2026-10-19)
 
+This records the original step-7 increment. See the
+[2026-10-23 refinement](#weapons-and-hands-visual-refinement-2026-10-23) for the
+current geometry, materials and resource counts.
+
 Step 7 adds generated arm meshes with **17 joints per arm**, body-fixed shoulders,
 two-bone IK and jointed gloved fingers. The same two meshes serve all three weapons.
 The rifle support hand wraps its handguard, the SMG uses its vertical foregrip,
@@ -2362,10 +2409,10 @@ five-second lifetime. Future actor colliders can join the query registry with
 `actor` and optional `headshot` metadata; the firing-range targets exercise it.
 
 `geometry.lua` generates all three models during loading using merged primitive
-recipes and source-scale attachment points. The three weapons contain 19,446
+recipes and source-scale attachment points. The three weapons contain 29,082
 vertices across 24 independently transformable parts. Two shared, generated arm
-meshes add 15,096 vertices with articulated gloves, fingers and two-bone IK.
-Together their vertex streams occupy 1,442,064 bytes before resource overhead.
+meshes add 21,936 vertices with articulated gloves, fingers and two-bone IK.
+Together their vertex streams occupy 2,128,464 bytes before resource overhead.
 See the step-7 section above for motion, hand tracks and visual qualification limits.
 Twenty-four pooled effect meshes provide short-lived impact particles, cases and
 tracers; they have no debris physics. All generated buffers and game objects are
@@ -2377,8 +2424,9 @@ colour target with a separate depth attachment. Its lighting coordinates are
 transformed through the world camera, so the same sun, shadows, environment and
 room light illuminate the weapon and world. The weapon receives no world fog or
 world bloom; both layers go through one exposure and tone-mapping function before
-GUI. The reticle appears only in ADS. Weapon vertex alpha selects the combat
-surface family while the shader writes opaque coverage. World temporal AA and
+GUI. The reticle appears only in ADS. The integer part of weapon vertex alpha
+selects the combat surface family; its fraction carries chamfer wear. The shader
+writes opaque coverage. World temporal AA and
 independent spatial weapon AA are implemented; arms share the latter.
 
 The 19 weapon Lua tests cover timing, inputs, reload interruptions, deterministic

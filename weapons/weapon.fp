@@ -4,6 +4,7 @@ varying highp vec3 var_world;
 varying mediump vec3 var_normal;
 varying mediump vec4 var_color;
 uniform lowp vec4 tint;
+#define VIEWMODEL_SURFACE
 #include "/render/lighting.glsl"
 #include "/render/combat_surface.glsl"
 void main() {

@@ -46,39 +46,52 @@ function M.geometry(side)
     end
     for index,len in ipairs({.33,.30}) do
         joint(index,function()
-            local rings={};local count=index==1 and 10 or 14
+            local rings={};local count=index==1 and 14 or 18
             for i=0,count do
                 local u=i/count
                 local radius=V.lerp(index==1 and .044 or .034,index==1 and .036 or .024,u)*scale
-                radius=radius*(i>0 and i<count and (i%2==0 and .93 or 1.04) or 1)
-                rings[#rings+1]={len*u,radius,radius*.87}
+                local envelope=math.sin(u*math.pi)
+                local fold=math.sin(u*(index==1 and 8 or 12)*math.pi+.6)*.12
+                    +math.sin(u*19*math.pi)*.035
+                radius=radius*(1+fold*envelope)
+                rings[#rings+1]={len*u,radius,radius*(.88+.035*math.sin(u*13)),
+                    .002*math.sin(u*10)*envelope,.0015*math.sin(u*17)*envelope}
             end
-            G.profile(b,rings,"tan",12)
-            if index==1 then G.bevel(b,0,.031,-.29,.046,.012,.057,.004,"dark")
+            G.profile(b,rings,"tan",16)
+            if index==1 then G.ellipsoid(b,0,.031,-.29,.046,.012,.057,"pad")
             else
-                G.profile(b,{{.276,.026*scale,.023*scale},{.297,.026*scale,.023*scale},{.300,.023*scale,.020*scale}},"glove",12)
-                G.bevel(b,0,.021,-.287,.028,.006,.018,.002,"dark")
+                G.profile(b,{{.267,.025*scale,.022*scale},{.273,.029*scale,.025*scale},
+                    {.284,.029*scale,.025*scale},{.288,.026*scale,.022*scale},
+                    {.293,.028*scale,.024*scale},{.300,.024*scale,.020*scale}},"glove",16)
+                G.bevel(b,0,.024,-.280,.027,.005,.014,.002,"pad")
+                G.box(b,0,.027,-.280,.019,.001,.002,"seam")
             end
         end)
     end
     joint(3,function()
         G.profile(b,{{0,.023*scale,.017*scale},{.025,.031*scale,.019*scale},
-            {.065,.040*scale,.019*scale},{.094,.039*scale,.014*scale},{.099,.032*scale,.012*scale}},"glove",12)
-        G.bevel(b,0,.019,-.055,.058,.007,.046,.003,"dark")
-        for i=1,4 do G.bevel(b,xs[i]*scale,.014,-.087,.015,.009,.018,.003,"polymer") end
+            {.065,.041*scale,.019*scale},{.089,.040*scale,.016*scale},{.099,.033*scale,.012*scale}},"glove",16)
+        G.ellipsoid(b,.023*scale,-.004,-.033,.032*scale,.029*scale,.055*scale,"glove")
+        G.ellipsoid(b,0,.019,-.040,.036,.006,.023,"pad")
+        G.ellipsoid(b,0,-.017,-.048,.062,.008,.061,"pad")
+        for i=1,4 do G.ellipsoid(b,xs[i]*scale,.017,-.080,.014,.010,.028,"pad") end
+        for _,s in ipairs({-1,1}) do G.box(b,s*.038*scale,.002,-.063,.0013,.009,.038,"seam") end
     end)
     for f=1,4 do for j=1,3 do
         joint(3+(f-1)*3+j,function()
             local r=(.0105-(j-1)*.0015)*(f==4 and .9 or 1)*scale
             local len=lengths[f][j]*scale
-            G.profile(b,{{-.001,r*.87,r*.8},{.003,r,r*.92},{len-.003,r*.85,r*.8},{len,r*.65,r*.65}},"glove",8)
-            G.bevel(b,0,r*.82,-len*.43,r*1.4,.003,len*.5,.001,"dark")
+            G.profile(b,{{-.001,r*.87,r*.8},{.003,r,r*.92},{len-.003,r*.85,r*.8},{len,r*.65,r*.65}},"glove",10)
+            G.ellipsoid(b,0,r*.82,-len*.43,r*1.35,.003,len*.5,"pad",8,3)
+            if j<3 then for _,s in ipairs({-1,1}) do
+                G.box(b,s*r*.88,0,-len*.45,.0009,.0012,len*.62,"seam")
+            end end
         end)
     end end
     for j,len in ipairs({.050,.032}) do
         joint(15+j,function()
             local r=(j==1 and .0115 or .0102)*scale
-            G.profile(b,{{0,r,r*.9},{len*scale*.7,r*.88,r*.8},{len*scale,r*.68,r*.65}},"glove",8)
+            G.profile(b,{{0,r,r*.9},{len*scale*.7,r*.88,r*.8},{len*scale,r*.68,r*.65}},"glove",10)
         end)
     end
     -- Authored left hand; mirror local geometry for the right hand and reverse

@@ -47,7 +47,26 @@ test('shared arms have finite outward geometry, complete palettes and bounded al
             assert(area>0,'inverted or degenerate arm triangle')
         end
     end
-    assert(total<16000);print('ARMS vertices',total,'bytes',total*44)
+    assert(total<24000);print('ARMS vertices',total,'bytes',total*44)
+end)
+
+test('curved profiles share unit normals across triangle and radial seams',function()
+    for _,shape in ipairs({'tube','sleeve'}) do
+        local b=geometry.batch()
+        if shape=='tube' then geometry.tube(b,0,0,0,.02,.015,.1,'metal',24)
+        else geometry.profile(b,{{0,.03,.02},{.04,.035,.023},{.1,.024,.018}},'tan',16) end
+        local smooth={}
+        for i=1,#b.positions,3 do
+            local n={b.normals[i],b.normals[i+1],b.normals[i+2]}
+            near(n[1]^2+n[2]^2+n[3]^2,1,1e-7)
+            -- Caps intentionally have a hard crease against the smooth sides.
+            if math.abs(n[3])<.95 then
+                local key=string.format('%.7f/%.7f/%.7f',b.positions[i]+1,b.positions[i+1]+1,b.positions[i+2]+1)
+                if smooth[key] then for c=1,3 do near(n[c],smooth[key][c],1e-7) end end
+                smooth[key]=n
+            end
+        end
+    end
 end)
 
 test('ADS sights align after cant, idle sway, lag and recoil on every weapon',function()

@@ -50,6 +50,10 @@ vec3 brdf(vec3 albedo,float roughness,float metal,vec3 n,vec3 v,vec3 l)
     float g=ggx_g1(nv,a2)*ggx_g1(nl,a2);
     vec3 f0=mix(vec3(0.04),albedo,metal);
     vec3 f=f0+(1.0-f0)*pow(1.0-max(dot(h,v),0.0),5.0);
+#ifdef VIEWMODEL_SURFACE
+    // Matte coatings/fabric have a restrained lobe; exposed metal keeps its F0.
+    f*=mix(.28,1.0,metal);
+#endif
     return ((1.0-f)*(1.0-metal)*albedo/PI + d*g*f/max(4.0*nv*nl,0.001))*nl;
 }
 #ifdef WORLD_SCREEN_OCCLUSION
@@ -83,6 +87,10 @@ vec3 lighting(vec3 albedo,float roughness,float metal,float ao,vec3 p,vec3 n,vec
     vec3 f0=mix(vec3(0.04),albedo,metal);
     vec2 integrated=environment_brdf(nv,roughness);
     vec3 specular_weight=clamp(f0*integrated.x+integrated.y,0.0,1.0);
+#ifdef VIEWMODEL_SURFACE
+    // The body and weapon occlude much of the reflected sky hemisphere.
+    specular_weight*=mix(.28,1.0,metal)*.4;
+#endif
     vec3 diffuse=environment_row(n,environment_layout.z+1.0)*indirect.x;
     // Restrained warm bounce from sunlit surfaces on the opposite side; diffuse
     // only, gated indoors along with the sky. Material cavities are applied once.

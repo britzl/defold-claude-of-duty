@@ -43,7 +43,8 @@ function M.update(test,self,dt,restart)
         local function button(key,on)
             test.buttons[key]=on;input.button(ctx.input,key,on and {pressed=true} or {released=true})
         end
-        local function tap(key) button(key,true);ticks(1);button(key,false) end
+        -- Queue a true tap: one rendered frame may contain several fixed ticks.
+        local function tap(key) button(key,true);button(key,false);ticks(1) end
         local function idle() wait(function() return ctx.weapons.clip==nil end) end
         local function check(name)
             test.checks=test.checks+1;report('CHECK',{name=name,state=weapons.snapshot(ctx)})
@@ -52,6 +53,8 @@ function M.update(test,self,dt,restart)
             test.hold=true;runtime.set_paused(ctx,true);msg.post('/hud#gui','disable');frames(6)
             test.shots=test.shots+1;report('SHOT',{id=name});frames(45)
             runtime.set_paused(ctx,false);test.hold=false;msg.post('/hud#gui','enable')
+            -- Let the UI clear paused inputs before the next scripted press.
+            wait(function() return self.input_active and not ctx.paused end)
         end
         local function fresh(id)
             test.buttons={}
@@ -101,7 +104,9 @@ function M.update(test,self,dt,restart)
             check(id..'_empty_transfer_and_chamber')
             tap('inspect');wait(function() return w.clip_time/w.clip_duration>=.52 end)
             capture(id..'_inspect');fired=w.sim.fired;tap('fire')
-            assert(w.sim.fired==fired+1 and w.clip==nil);check(id..'_inspect_interruption')
+            assert(w.sim.fired==fired+1 and w.clip==nil,json.encode({before=fired,after=weapons.snapshot(ctx),
+                alive=ctx.player.actor.alive,enabled=ctx.player.enabled,paused=ctx.paused,
+                focused=self.focused,input_active=self.input_active,intent=w.intent}));check(id..'_inspect_interruption')
             ticks(40)
             -- Interrupt an empty reload after transfer, with no reserve left.
             inventory.mag=0;inventory.chambered=false;inventory.reserve=d.magSize

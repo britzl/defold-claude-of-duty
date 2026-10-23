@@ -58,8 +58,14 @@ The first follow-up, interior illumination, is implemented: separate diffuse
 room fill, stronger skylight in the roofless ruin and bounded reflected lamp
 light make day and night interiors more readable. See the implementation and
 validation details in [README.md](../README.md#interior-illumination-2026-10-23).
-The other findings remain open. This improves the identified gap without claiming
-exact reference lighting parity.
+The weapons/hands follow-up is also implemented: smooth curved normals, darker
+coatings, restrained first-person reflections, layered optics and shaped gloves
+and sleeves. Native animation checks retain the existing aim and attachment
+contracts. See [weapon/hand refinement](../README.md#weapons-and-hands-visual-refinement-2026-10-23)
+for validation and the increased vertex budget. Controlled before/after captures
+are in `captures/weapons-hands-2026-10-23`.
+The other findings remain open. These improvements do not claim exact reference
+lighting, geometry or motion parity.
 
 Original review evidence and controls are retained
 locally in `captures/visual-review-2026-10-23/review.json`, with
