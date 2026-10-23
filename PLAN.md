@@ -1,10 +1,14 @@
 # Defold port implementation plan
 
-Created: 2026-10-13. Updated: 2026-10-21. Target engine: Defold 1.14.0.
+Created: 2026-10-13. Updated: 2026-10-23. Target engine: Defold 1.14.0.
 
 Implement a runtime-generated Defold port of Claude of Duty, with Lua gameplay systems and a custom render pipeline. Introduce a portable native extension only where measured geometry, animation or audio requirements justify it. The current acceptance platforms are Mac native and desktop browser, targeting 60 FPS (user decision, 2026-10-15). Keep input and graphics adaptable; physical mobile qualification is deferred outside the current gate.
 
 The target is feature and presentation parity with the local Three.js and Kaigen versions: the recognizable market street, procedural soldiers, three weapons, movement, combat, audio and interface. Preserve runtime generation wherever practical rather than making pre-baked art and audio the default. Equivalent behavior and appearance matter; engine-specific implementations do not have to be copied.
+
+**Playable Kaigen reference:** [Claude of Duty — hosted HTML5 build](https://kaigen3d.com/demos/claude-of-duty/). The user confirmed its availability on 2026-10-23. Use this build for hands-on gameplay, visual and audio reference. See [Kaigen availability](parity/README.md#kaigen-availability) for source provenance and controlled-capture status.
+
+**Visual follow-up (2026-10-23):** The [three-version visual review](parity/README.md#visual-review--2026-10-23) records gaps in interior illumination, weapons/hands, materials, prop variety, foliage, default sky/lighting and interface styling. Interior illumination now has separate diffuse room fill, roofless-room skylight and bounded reflected lamp light, with native GPU checks. The remaining priorities are weapons/hands, road/wall materials and prop variation, followed by foliage, default sky and interface styling. These are observed appearance gaps within implemented systems; motion/effect parity remains unassessed.
 
 ## Current status and scope
 

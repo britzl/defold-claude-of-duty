@@ -622,7 +622,7 @@ local function update_lights(self,camera,dt)
             local lo,hi=light.minimum,light.maximum
             local colour,power=light.colour or {1,.76,.48},(light.intensity or 16)*slot.gain
             lights[#lights+1]={position=vmath.vector4(light.x,light.y,light.z,light.radius),
-                colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,0),
+                colour=vmath.vector4(colour[1]*power,colour[2]*power,colour[3]*power,light.bounce or 0),
                 minimum=vmath.vector4(lo.x,lo.y,lo.z,0),maximum=vmath.vector4(hi.x,hi.y,hi.z,0)}
         else
             lights[#lights+1]={position=vmath.vector4(),colour=vmath.vector4(),minimum=vmath.vector4(),maximum=vmath.vector4()}

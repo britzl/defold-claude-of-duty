@@ -195,9 +195,10 @@ function M.lighting_volumes(layout,b)
     return {
         {id=b.id,minimum={b.x-b.w/2,base-layout.slab-.3,b.z-b.d/2},
             maximum={b.x+b.w/2,base+b.floors*layout.storey-.06,b.z+b.d/2},
-            params={require("game.render.daylight").indirect[3],.06,layout.wall,1},
+            params={b.ruin and .75 or require("game.render.daylight").indirect[3],.06,layout.wall,1},
             doorway={b.x+b.side*b.w/2,b.door.z,base,b.side},
-            aperture={b.door.width,b.door.height,3,0}},
+            -- Diffuse room fill includes unresolved bounces; open roofs admit more sky.
+            aperture={b.door.width,b.door.height,3,b.ruin and .85 or .60}},
         {id=b.id.."/awning",minimum={a.x-a.w/2,base-.5,a.z-a.d/2},
             maximum={a.x+a.w/2,a.y+.035,a.z+a.d/2},params={.45,.03,.25,0}},
     }
@@ -208,8 +209,9 @@ function M.lights(layout,b)
     local x0,x1,z0,z1=b.x-b.w/2+wall,b.x+b.w/2-wall,b.z-b.d/2+wall,b.z+b.d/2-wall
     local lights={}
     local function room(id,lo,hi,near,far,floor,colour)
+        -- Low-energy diffuse bounces keep lamp shadows readable, also at night.
         lights[#lights+1]={id=b.id.."/"..id,kind="room",x=(lo+hi)/2,y=floor+2.55,z=(near+far)/2,
-            radius=8,intensity=18,colour=colour,
+            radius=8,intensity=18,colour=colour,bounce=.012,
             minimum={x=lo,y=floor,z=near},maximum={x=hi,y=floor+storey-layout.slab,z=far}}
     end
     room("shop",x0,x1,z0,z1,base,{1,.76,.48})

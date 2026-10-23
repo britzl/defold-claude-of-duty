@@ -38,6 +38,40 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Interior illumination (2026-10-23)
+
+The [three-version visual review](parity/README.md#visual-review--2026-10-23)
+identified rooms with near-black ceilings and furniture beside bright lamp-lit
+walls. Interior volumes previously reduced both diffuse skylight and reflected
+sky to 18%. They now separate those responses: enclosed rooms receive 60%
+diffuse fill while retaining the 18% specular gate. The partially roofless E3
+room admits 85% diffuse and 75% reflected sky. Existing doorway and wall-boundary
+feathers still transition to outdoor lighting.
+
+Room lamps also provide a small diffuse bounce inside their existing room bounds,
+using source colour, intensity and transition fades. This keeps lit rooms readable
+at night; disabling the lamps removes their fill. Contact occlusion and direct
+lamp shadows remain. These are coarse indirect-light approximations, not a
+multi-bounce global-illumination solver. Existing uniform channels carry the
+new weights; no additional lights, textures or render targets are allocated.
+
+The 28 renderer, 24 world and six local-light Lua tests pass. The focused native
+Metal GPU check covers diffuse readability, reflected lamp light at night,
+unlit-night darkness, an unchanged exterior doorway, laboratory isolation,
+exact capture restoration and stable target/bake counts:
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/interior_lighting_smoke.py
+```
+
+Its fixed-exposure screenshots and measurements are in
+`captures/rendering/interior-illumination`. Before/after gameplay and inspection
+views, including the upper floors, E2 stairwell and E3 ruin, are retained in
+`captures/interior-illumination-2026-10-23`. Captures are Git-ignored.
+The release HTML5 build also passes startup and a visual F3 room check in the
+browser with default Auto quality and no console warnings/errors. This is a
+browser smoke check, not a full pixel-regression or performance qualification.
+
 ## Larger world batches (2026-10-22)
 
 Dense world cells now share meshes up to 49,152 vertices instead of splitting at

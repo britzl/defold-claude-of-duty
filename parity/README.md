@@ -26,6 +26,50 @@ The complete stress scenario remains unqualified until sustained measurements
 and the missing GPU/CPU, presentation, compilation and thermal evidence are available. Frozen capture frames and an FPS overlay do not satisfy
 this protocol.
 
+## Visual review — 2026-10-23
+
+Fresh Defold captures at revision `78fc82d` (Metal, Ultra gameplay, 1280×720)
+were compared with the playable hosted Kaigen and Three.js builds. Additional
+Three.js stills use adapted level-space cameras from `threejs-baseline-final`;
+their source hash still matches the local archive. Defold was also captured with
+clear sky and automatic exposure to distinguish lighting settings from content.
+
+The observed gaps, in priority order, are:
+
+1. **Interior illumination:** room contents and ceilings fall into near-black
+   shadow beside brightly lit walls, even with automatic exposure. The Three.js
+   room remains readable. Different doorway geometry also contributes.
+2. **Weapons and hands:** broad silver receiver faces, conspicuous facets,
+   flat-looking optics and simple glove/sleeve shapes fall short of both references.
+3. **Materials:** oversized road relief and broad brown plaster mottling obscure
+   the finer surface detail and restrained contrast seen in the references.
+4. **Props and dressing:** repeated market goods, containers and awnings need
+   more varied shapes, cloth profiles, irregular arrangements and small debris.
+5. **Foliage:** sparse dark triangular palm fronds lack the fuller leaf clusters
+   and colour/silhouette variation visible in the Three.js comparison.
+6. **Default sky and lighting:** broad grey cloud cover produces a subdued
+   street; the hosted references have brighter broken clouds and sunlit facades.
+   Defold's clear-sky control improves outdoor lighting substantially.
+7. **Interface styling:** large dark panels and heavy text obscure more of the
+   scene than the references' compact HUD and translucent pause treatment.
+   This is an aesthetic finding, not a missing-functionality claim.
+
+The first follow-up, interior illumination, is implemented: separate diffuse
+room fill, stronger skylight in the roofless ruin and bounded reflected lamp
+light make day and night interiors more readable. See the implementation and
+validation details in [README.md](../README.md#interior-illumination-2026-10-23).
+The other findings remain open. This improves the identified gap without claiming
+exact reference lighting parity.
+
+Original review evidence and controls are retained
+locally in `captures/visual-review-2026-10-23/review.json`, with
+`overview.png`, `weapon-comparison.png`, `interior-comparison.png`,
+`market-comparison.png` and `menus-comparison.png`. Captures are Git-ignored.
+These are still-image findings: cameras, weather and internal resolutions differ
+across the hosted versions. They do not establish animation, temporal stability,
+combat-effect or performance parity, and the hosted Kaigen source/build match
+remains unverified.
+
 ## Quality increment — 2026-10-21
 
 Step 18 adds whole-game presets, a default 60 FPS Auto policy, manual overrides
@@ -394,8 +438,13 @@ automatic pixel score.
 
 ## Kaigen availability
 
+**Playable HTML5 reference:** [Kaigen3D Claude of Duty](https://kaigen3d.com/demos/claude-of-duty/).
+The user confirmed this playable build on 2026-10-23 and requested that it be
+retained for future reference. Use it for hands-on gameplay, visual and audio
+comparison; the missing local engine does not prevent using the hosted game.
+
 The [published demo](https://kaigen3d.com/demos/claude-of-duty/) loaded and rendered
-gameplay on 2026-10-15. Its HTML identifies build `cd0e50316eb8` and asset directory
+gameplay on 2026-10-15. At that time, its HTML identified build `cd0e50316eb8` and asset directory
 `a24065352205d`. This is an available observational reference. Its relationship
 to the local source archive is unverified, and no controlled camera, fixed-frame
 capture or matching laboratory adapter has been verified.

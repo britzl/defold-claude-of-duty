@@ -66,7 +66,9 @@ test("indirect volumes cover every storey but exclude exterior walls and roof te
         end
         assert(not contains(volume,{b.x,layout.street.walk_height+b.floors*layout.storey,b.z},0))
         assert(volume.doorway[1]==b.x+b.side*b.w/2 and volume.aperture[1]==b.door.width)
-        assert(volume.params[1]==daylight.indirect[3])
+        if b.ruin then assert(volume.params[1]>.5)
+        else assert(volume.params[1]==daylight.indirect[3]) end
+        assert(volume.aperture[4]>volume.params[1] and volume.aperture[4]<1)
     end end
 end)
 test("capture lighting metadata and world sun come from the same daylight rig",function()
