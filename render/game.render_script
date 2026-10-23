@@ -499,12 +499,15 @@ function init(self)
     self.volume_count=0
     self.lighting=render.constant_buffer()
     self.lighting.surface_rects=atlas.rects(vmath.vector4)
-    self.lighting.surface_infos={}
-    self.lighting.surface_parameters={}
+    -- Publish complete arrays: growing an empty constant-buffer array can lose
+    -- earlier elements, silently disabling their microdetail and parallax.
+    local surface_infos,surface_parameters={},{}
     for i,s in ipairs(atlas.surfaces) do
-        self.lighting.surface_infos[i]=vmath.vector4(s.metres,s.size,s.relief,s.last_level)
-        self.lighting.surface_parameters[i]=vmath.vector4(s.parallax,s.detail,0,0)
+        surface_infos[i]=vmath.vector4(s.metres,s.size,s.relief,s.last_level)
+        surface_parameters[i]=vmath.vector4(s.parallax,s.detail,0,0)
     end
+    self.lighting.surface_infos=surface_infos
+    self.lighting.surface_parameters=surface_parameters
     self.bake_constants=render.constant_buffer()
     self.sky_constants=render.constant_buffer()
     self.post_constants=render.constant_buffer()

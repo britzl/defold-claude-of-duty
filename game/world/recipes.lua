@@ -20,12 +20,26 @@ end
 
 local function awning(id, x, y, z, width, depth, side)
     side = side or 1
+    local variant=0
+    for i=1,#id do variant=variant+id:byte(i) end
+    local colour=({"awning_red","awning_sage","awning_blue"})[variant%3+1]
+    local sag=.10+(variant%4)*.025
     local strips = math.ceil(depth / 0.3)
     for i = 1, strips do
-        local key = i % 2 == 0 and "awning_red" or "awning_cream"
+        local key = i % 3 == 0 and "awning_cream" or colour
         local sz = z - depth / 2 + (i - 0.5) * depth / strips
-        box(id .. "/stripe/" .. i, key, x, y, sz, width, 0.07, depth / strips)
-        box(id .. "/valance/" .. i, key, x + side * (width / 2 - 0.04), y - 0.17, sz, 0.08, 0.34, depth / strips)
+        -- Four shallow cloth spans share their edges and hang between supports.
+        -- Convex profiles preserve both native/Lua triangulation and shadows.
+        local function height(t) return y+.025-sag*4*t*(1-t)-.045*(i-1)/strips end
+        for j=1,4 do
+            local a,b=(j-1)/4,j/4
+            local xa,xb=x-width/2+a*width,x-width/2+b*width
+            local ya,yb=height(a),height(b)
+            kit.prism(id.."/stripe/"..i.."/"..j,key,
+                {{xa,ya-.018},{xb,yb-.018},{xb,yb+.018},{xa,ya+.018}},sz,depth/strips)
+        end
+        local hem=.15+.055*math.sin(i*1.7+variant)
+        box(id .. "/valance/" .. i, key, x + side * (width / 2 - .015), height(1)-hem/2, sz, .03, hem, depth / strips)
     end
 end
 
@@ -190,11 +204,6 @@ local function structure(layout, detail, seed)
         awning(id .. "/canopy", stall.x, 2.35, stall.z, stall.w + 0.15, depth+.45)
         for _, sign in ipairs({ -1, 1 }) do
             box(id .. "/post/" .. sign, "wood", stall.x + sign * (stall.w / 2 - 0.05), 1.2, stall.z - depth/2-.025, 0.08, 2.4, 0.08)
-        end
-        if detail then
-            for j = 1, 8 do
-                box(id .. "/produce/" .. j, "produce", stall.x - stall.w / 2 + j * stall.w / 9, 0.99, stall.z, 0.16, 0.18, 0.5)
-            end
         end
     end
     for i, crate in ipairs(layout.crates) do

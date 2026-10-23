@@ -147,6 +147,20 @@ function M.new()
             steps[#steps+1]={name=name,id=name}
         end
     end
+    if sys.get_config_string("rendering_validation.suite","")=="visual_refinement" then
+        steps={}
+        for _,name in ipairs({"street","detail","courtyard","material_plaster","material_concrete",
+            "material_asphalt","material_grazing","weathering_facade","material_foliage",
+            "foliage_back","foliage_shadow","sky_daylight","sunset","night","micro_detail","parallax_tile"}) do
+            steps[#steps+1]={name=name,id=name}
+        end
+        for _,pair in ipairs({{"weathering_facade","weathering"},{"material_grazing","normal_maps"},
+            {"sky_daylight","clouds"},{"foliage_shadow","shadows"},{"micro_detail","micro_detail"},{"parallax_tile","parallax"}}) do
+            steps[#steps+1]={name=pair[1],id=pair[1].."_disabled",changes={[pair[2]]=false}}
+            steps[#steps+1]={name=pair[1],id=pair[1].."_return"}
+        end
+        steps[#steps+1]={name="street",id="street_return"}
+    end
     local local_shadow_cache=sys.get_config_string("rendering_validation.suite","")=="local_shadow_cache"
     if local_shadow_cache then
         -- Upload the laboratory before collecting paired temporal histories.
@@ -186,7 +200,8 @@ function M.new()
             end
         end
     end
-    return {steps=steps,index=0,frames=0,intervals={},shot_frame=(weapon_aa or local_shadow_cache or world_batching) and 65 or 45,
+    local visual_refinement=sys.get_config_string("rendering_validation.suite","")=="visual_refinement"
+    return {steps=steps,index=0,frames=0,intervals={},shot_frame=visual_refinement and 85 or (weapon_aa or local_shadow_cache or world_batching) and 65 or 45,
         step_frames=world_batching and 180 or 100}
 end
 function M.update(test,self,dt)

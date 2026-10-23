@@ -76,7 +76,7 @@ end
 local function button(state,id,x,y,w,label)
     local height=state.settings.touch_controls and ((id=="resume" or id=="restart") and 72 or 52) or 36
     local item={id=id,node=box(state,id,x,y,w,height,W.row)}
-    item.label=text(state,id.."_label",x,y,label,1,W.white)
+    item.label=text(state,id.."_label",x,y,label,.82,W.white)
     state.items[#state.items+1]=item
     return item
 end
@@ -184,7 +184,7 @@ end
 local function rebuild(state)
     for _,node in ipairs(state.nodes) do gui.delete_node(node) end
     state.nodes,state.items,state.drag,state.hover={}, {}, nil, nil
-    state.overlay=add(state,W.box("pause_overlay",480,320,960,640,vmath.vector4(.01,.02,.03,.74),"overlay"))
+    state.overlay=add(state,W.box("pause_overlay",480,320,960,640,vmath.vector4(.01,.02,.03,.20),"overlay"))
     gui.set_adjust_mode(state.overlay,gui.ADJUST_STRETCH)
     if state.settings.touch_controls then
         rebuild_touch(state)
@@ -193,10 +193,10 @@ local function rebuild(state)
         return
     end
     state.touch_layout=nil
-    box(state,"pause_panel",480,320,756,576,W.panel)
-    box(state,nil,480,607,756,2,W.accent)
-    text(state,"pause_title",140,567,"PAUSED",1.8,W.white,gui.PIVOT_W)
-    text(state,"pause_subtitle",140,535,"MARKET STREET  /  ENCOUNTER ON HOLD",.85,W.muted,gui.PIVOT_W)
+    box(state,"pause_panel",480,320,724,576,W.panel)
+    box(state,nil,480,607,724,1,W.accent)
+    text(state,"pause_title",140,567,"PAUSED",1.45,W.white,gui.PIVOT_W)
+    text(state,"pause_subtitle",140,535,"MARKET STREET  /  ENCOUNTER ON HOLD",.72,W.muted,gui.PIVOT_W)
     button(state,"resume",300,91,318,"RESUME")
     button(state,"restart",660,91,318,"RESTART ENCOUNTER")
     for i,tab in ipairs(tabs) do
@@ -207,8 +207,8 @@ local function rebuild(state)
         local y=435-(i-1)*((state.tab=="display" or state.tab=="photo") and 25 or 42)
         local item={id="setting_"..spec.key,spec=spec,y=y,
             node=box(state,"setting_"..spec.key,480,y,678,(state.tab=="display" or state.tab=="photo") and 25 or 36,W.row)}
-        text(state,nil,157,y,spec.label,.92,W.white,gui.PIVOT_W)
-        item.value=text(state,"value_"..spec.key,802,y,"",.9,W.accent,gui.PIVOT_E)
+        text(state,nil,157,y,spec.label,.80,W.white,gui.PIVOT_W)
+        item.value=text(state,"value_"..spec.key,802,y,"",.80,W.accent,gui.PIVOT_E)
         if spec.min then
             item.track=box(state,"slider_"..spec.key,615,y,240,30,vmath.vector4(0,0,0,0))
             box(state,nil,615,y,220,3,W.muted)

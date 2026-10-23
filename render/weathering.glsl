@@ -28,8 +28,8 @@ void surface_weather(vec3 p,vec3 normal,float height,inout vec3 albedo,inout vec
     float macro=weather_noise(plane*.31+2.7)*.65+weather_noise(plane*.73+9.1)*.35;
     float broad=weather_noise(plane*.067+21.0);
     bool masonry=surface.x<.5 || (surface.x>4.5 && surface.x<8.5);
-    float strength=masonry?.44:.23;
-    albedo*=1.0+amount*((macro-.5)*strength+(broad-.5)*.28);
+    float strength=masonry?.14:.20;
+    albedo*=1.0+amount*((macro-.5)*strength+(broad-.5)*.10);
     albedo*=mix(vec3(1.0),vec3(1.04,1.0,.94),(broad-.5)*amount);
     packed.r=clamp(packed.r+(macro-.5)*.17*amount,0.04,1.0);
     // Sparse replastering and concrete repairs. Mortar, boards and grout keep
@@ -37,7 +37,7 @@ void surface_weather(vec3 p,vec3 normal,float height,inout vec3 albedo,inout vec
     if(surface.x<.5 || (surface.x>4.5 && surface.x<6.5)) {
         float repair=weather_patch(plane)*vertical*amount;
         float sign=weather_hash(floor(plane/2.2)+52.0)>.48?1.0:-1.0;
-        albedo*=1.0+repair*sign*.18;
+        albedo*=1.0+repair*sign*.10;
         albedo*=mix(vec3(1),sign>0.0?vec3(.975,.988,1.02):vec3(1.03,1.008,.968),repair);
         packed.r=mix(packed.r,max(.3,packed.r-.10),repair);
         bump.xy*=1.0-.25*repair;
@@ -64,7 +64,7 @@ void surface_weather(vec3 p,vec3 normal,float height,inout vec3 albedo,inout vec
     float splash=vertical*(1.0-smoothstep(.05,.60,p.y))*(.55+.45*macro)*amount;
     albedo=mix(albedo,mix(grime_colour,dust_colour,.45),splash*.42);
     packed.r+=splash*.08;packed.g*=1.0-splash*.7;
-    float cavity=(1.0-height)*(1.0-height)*.24*amount;
+    float cavity=(1.0-height)*(1.0-height)*(masonry?.10:.18)*amount;
     float bottom=(1.0-smoothstep(0.0,.13,var_edges.z))*vertical;
     float grime=(bottom*var_masks.y+max(-normal.y,0.0)*.10)*amount;
     albedo=mix(albedo,grime_colour,clamp(cavity+grime*.35,0.0,.38));

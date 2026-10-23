@@ -33,10 +33,10 @@ test("each reduction reads a completed level and copies through independent scra
     end
     assert(#jobs+1==atlas.job_count)
 end)
-test("reference recipes keep physical scale, relief and independent concrete",function()
+test("refined recipes keep physical scale, shallow relief and independent concrete",function()
     local materials=require "game.world.materials"
     assert(materials.concrete.kind~=materials.plaster_sand.kind)
-    for _,entry in ipairs({{0,2.2,.06},{1,3,.075},{2,2,.038},{5,2.5,.09}}) do
+    for _,entry in ipairs({{0,2.2,.028},{1,2.4,.018},{2,2,.038},{5,2.5,.042}}) do
         local s=atlas.surfaces[entry[1]+1]
         assert(s.size==512 and s.metres==entry[2] and s.relief==entry[3])
     end

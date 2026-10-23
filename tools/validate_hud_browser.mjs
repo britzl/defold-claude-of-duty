@@ -6,6 +6,8 @@ import {resolve,join,extname,sep} from 'node:path';
 const args=Object.fromEntries(process.argv.slice(2).map(s=>s.slice(2).split(/=(.*)/s).slice(0,2)));
 if(!args.bundle) throw new Error('Supply --bundle=/path/to/HTML5/bundle');
 const root=resolve(args.bundle), output=resolve(args.output??'build/hud-feedback-browser-validation');
+const engineArgs=JSON.parse(args['engine-args']??'[]');
+if(!Array.isArray(engineArgs) || engineArgs.some(s=>typeof s!=='string')) throw new Error('--engine-args must be a JSON string array');
 await readFile(join(root,'index.html'));
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE??'playwright');
 await mkdir(output,{recursive:true});
@@ -15,7 +17,9 @@ const server=createServer(async(req,res)=>{
     const relative=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
     const path=resolve(root,'.'+(relative==='/'?'/index.html':relative));
     if(!path.startsWith(root+sep)) {res.writeHead(403);res.end();return;}
-    const bytes=await readFile(path);
+    let bytes=await readFile(path);
+    if(path===join(root,'index.html') && engineArgs.length)
+      bytes=bytes.toString().replace('EngineLoader.load(',`CUSTOM_PARAMETERS.engine_arguments.push(...${JSON.stringify(engineArgs)});EngineLoader.load(`);
     res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(bytes);
   } catch {res.writeHead(404);res.end();}
 });

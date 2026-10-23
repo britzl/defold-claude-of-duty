@@ -38,6 +38,56 @@ The combat HUD now includes a compass, generated minimap, damage direction,
 health bar and killfeed. Escape opens a pause menu with audio, display and
 mouse controls; focus loss also pauses the encounter.
 
+## Materials, market and interface refinement (2026-10-23)
+
+The remaining five visual follow-ups are implemented:
+
+- Asphalt has finer aggregate, shallower relief and restrained patches/cracks.
+- Plaster and concrete have lighter, quieter base colour and smaller relief;
+  spatial runoff, base grime and edge wear remain. Surface parameter arrays are
+  uploaded in full so near-camera microdetail and selective parallax work.
+- Market stalls have sagging segmented awnings, varied coloured produce,
+  divided trays, tied sacks, rimmed buckets and small scraps. Stocked shelves
+  use deterministic variation in size, placement and rotation.
+- Palms have two tiers of curved, tapered fronds and more staggered leaflets.
+  Leaf colour is brighter with less baked darkening.
+- Broken cloud banks admit more sunlight. The HUD has smaller map, compass,
+  health and ammo panels; pause menus use lighter text and translucent surfaces.
+  Minimap contacts and objectives share the revised map dimensions.
+
+The generated world now contains **5,072 shapes, 477,018 vertices and 66 mesh
+batches**, up from 4,556 / 414,432 / 65. Vertex streams occupy **38,161,296
+bytes**, an increase of about **4.8 MiB**. The 1,224 colliders, 196 navigation
+nodes and 201 edges are unchanged. Atlas dimensions and render-target counts
+are unchanged. The additional geometry has not had a sustained performance run.
+
+The twelve focused Lua suites pass 129 checks. Attachment/support checks cover
+the generated dressing and 32 additional architecture seeds. Native validation
+covers all 108 actor-to-destination route queries, HUD behaviour and resizing,
+interior lighting, and exact weathering/microdetail/parallax toggle restoration.
+Eleven native inspection views repeat exactly. The release browser fixtures pass
+29 capture stages, six feature-toggle differences and seven exact image returns,
+HUD behaviour/resizing, and native-versus-Lua mesh stream/bounds equality.
+Capture waits allow the staged sky and temporal history to settle before exact
+pixel comparisons.
+
+Reproduce the focused image gates with:
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/visual_refinement_smoke.py final
+PYTHONPATH=automation-bridge-python python3 tests/weathering_smoke.py
+# Run validate_rendering_browser.mjs with rendering_validation.suite=visual_refinement,
+# then validate its output:
+python3 tests/visual_refinement_pixels.py --output build/visual-refinement-browser-render
+```
+
+Controlled 1280×720 native before/after views, clear-sky controls and HUD/menu
+captures are in `captures/visual-refinement-2026-10-23`. Browser results are in
+`build/visual-refinement-browser-{render,hud,mesh}`; logs are in
+`build/visual-refinement-validation`. Captures and build outputs are Git-ignored.
+These address the recorded appearance gaps; exact reference parity and sustained
+performance remain separate qualification work.
+
 ## Weapons and hands visual refinement (2026-10-23)
 
 The [three-version visual review](parity/README.md#visual-review--2026-10-23)

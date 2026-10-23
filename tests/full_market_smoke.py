@@ -73,7 +73,7 @@ def main(quick=False):
         running()
         game.wait_frames(5)
         report['world'] = cmd('world.snapshot')
-        assert report['world']['batches'] < 100 and report['world']['mesh_bytes'] < 32*1024*1024
+        assert report['world']['batches'] < 100 and report['world']['mesh_bytes'] < 40*1024*1024
         assert report['world']['colliders'] < 1240
         assert cmd('ui.snapshot')['map_rectangles'] == report['world']['colliders']
         valid = cmd('world.validate', {'capsules': True})

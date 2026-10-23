@@ -176,23 +176,22 @@ function M.primitive(batch,s,shade)
             quad(point(a,b),point(a,b+math.pi/3),point(a+math.pi/6,b+math.pi/3),point(a+math.pi/6,b))
         end end
     elseif s.kind=="frond" then
-        -- Palm leaflets own their silhouette. Applying the generic broadleaf
-        -- card mask to a narrow frond discarded almost all distant foliage.
-        -- Retain the foliage surface recipe, with opaque two-sided triangles.
-        for i=0,11 do
-            local a,b=i/12,(i+1)/12
-            local ya,za=h*(1-2*a*a),-d+2*d*a
-            local yb,zb=h*(1-2*b*b),-d+2*d*b
-            local r=w*.04
-            quad({-r,ya,za},{-r,yb,zb},{r,yb,zb},{r,ya,za},true)
+        -- Two-sided geometric leaflets stay visible in every depth/shadow pass.
+        -- Staggered narrow blades follow the rib rather than making a flat fan.
+        for i=0,7 do
+            local a,b=i/8,(i+1)/8
+            local ya,za=h*(1-2*a*a+.9*math.sin(math.pi*a)),-d+2*d*a
+            local yb,zb=h*(1-2*b*b+.9*math.sin(math.pi*b)),-d+2*d*b
+            local ra,rb=w*.024*(1-a*.8),w*.024*(1-b*.8)
+            quad({-ra,ya,za},{-rb,yb,zb},{rb,yb,zb},{ra,ya,za},true)
         end
-        for i=1,12 do
-            local t=(i-.5)/12
-            local y,z=h*(1-2*t*t),-d+2*d*t
-            local length=w*(.25+.75*math.sin(math.pi*t))
+        for i=1,18 do
             for _,side in ipairs({-1,1}) do
-                quad({0,y,z},{side*length*.55,y-.025,z-.055},
-                    {side*length,y-h*.17,z+d*.16},{side*length*.4,y-.04,z+.075},true)
+                local t=(i-.5+side*.14)/19
+                local y,z=h*(1-2*t*t+.9*math.sin(math.pi*t)),-d+2*d*t
+                local length=w*(.18+.82*math.sin(math.pi*t))*(.92+.08*math.sin(i*2.4+side))
+                quad({0,y,z},{side*length*.42,y+.018,z+d*.018},
+                    {side*length,y-h*.20,z+d*.14},{side*length*.38,y-.018,z+d*.055},true)
             end
         end
     else

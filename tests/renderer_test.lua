@@ -197,6 +197,7 @@ test("recipes, padded mip chains and filtered environment finish before the worl
         assert(self.lighting.surface_infos[i].args[1]==s.metres)
         assert(self.lighting.surface_infos[i].args[2]==s.size)
         assert(self.lighting.surface_parameters[i].args[1]==s.parallax)
+        assert(self.lighting.surface_parameters[i].args[2]==s.detail)
     end
     assert(#targets==54)
     assert(self.pipeline.hdr and self.pipeline.tone_mapper=="agx_neutral")

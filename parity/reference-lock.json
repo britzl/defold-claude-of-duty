@@ -4,8 +4,8 @@
   "fingerprint_method": "Sorted relative UTF-8 path + NUL + decimal byte length + NUL + file bytes; SHA-256.",
   "sources": {
     "defold": {
-      "sha256": "1953d28535e34d905b96c99e19f2f7b63cef25f2bd63b7114e7a8729e12c37f9",
-      "files": 299,
+      "sha256": "f40d2140e95301a0d5bf8fe975b3cb91f4ae16011474d4e38dbf6b802a72420d",
+      "files": 307,
       "scopes": [
         "game",
         "main",
@@ -20,7 +20,7 @@
         "input",
         "game.project"
       ],
-      "git_revision": "776fe5ce91f0ce26247591e18494ab56960ce4ce",
+      "git_revision": "3c80474afac935f6cd541f95987d22c7780e65b4",
       "revision_status": "Git commit plus working source hash"
     },
     "threejs": {
@@ -1423,7 +1423,7 @@
     },
     "world_seed": 1337
   },
-  "created_utc": "2026-10-21T11:45:48.244736+00:00",
+  "created_utc": "2026-10-23T07:17:13.864999+00:00",
   "evidence": [],
   "parity_qualified": false
 }

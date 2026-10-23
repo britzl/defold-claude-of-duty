@@ -24,38 +24,42 @@ def main():
         path=output/(name+'.png');shutil.copyfile(shot.path,path)
         return Image.open(path).convert('RGB')
     def difference(a,b): return sum(ImageStat.Stat(ImageChops.difference(a,b)).mean)/3
+    # Allow the staged sky/environment publication and screen-space history to
+    # settle at the current renderer's latency before comparing exact pixels.
+    def settle(): game.wait_frames(65)
     try:
         engine.wait_until(lambda: cmd('world.snapshot')['ready'],timeout=45)
         engine.wait_until(lambda: cmd('renderer.snapshot')['ready'],timeout=60)
         cases=[('weathering_facade','weathering',.3),('micro_detail','micro_detail',.05),
                ('parallax_tile','parallax',.01)]
         for shot,feature,minimum in cases:
-            cmd('capture.shot',{'name':shot});game.wait_frames(35)
+            cmd('capture.shot',{'name':shot});settle()
             enabled=save(shot+'-on')
-            cmd('renderer.configure',{feature:False});game.wait_frames(5)
+            cmd('renderer.configure',{feature:False});settle()
             disabled=save(shot+'-off')
             delta=difference(enabled,disabled)
             assert delta>minimum,(feature,delta)
-            cmd('renderer.configure',{feature:True});game.wait_frames(5)
+            cmd('renderer.configure',{feature:True});settle()
             restored=save(shot+'-restored')
             assert ImageChops.difference(enabled,restored).getbbox() is None,feature
             report[feature]={'mean_pixel_change':delta,'exact_restore':True}
             print('PASS',feature,delta,'exact restore',flush=True)
-        cmd('capture.shot',{'name':'weathering_far'});game.wait_frames(35)
+        cmd('capture.shot',{'name':'weathering_far'});settle()
         far=save('far-on')
-        cmd('renderer.configure',{'micro_detail':False,'parallax':False});game.wait_frames(5)
+        cmd('renderer.configure',{'micro_detail':False,'parallax':False});settle()
         far_off=save('far-off')
         w,h=far.size
         # The wall is distant; the foreground floor deliberately retains detail.
         wall=(int(w*.35),int(h*.42),int(w*.65),int(h*.56))
         assert ImageChops.difference(far.crop(wall),far_off.crop(wall)).getbbox() is None,'Detail did not fade on the distant wall'
         print('PASS distant micro normals and parallax fade completely',flush=True)
-        cmd('capture.shot',{'name':'weathering_facade'});game.wait_frames(35)
+        cmd('capture.shot',{'name':'weathering_facade'});settle()
         original=save('anchored-start')
         tick=cmd('capture.snapshot')['simulation_tick']
         for frame in (15,30,45,60,75,90,105,120):
             cmd('capture.frame',{'frame':frame});save('facade-sweep-'+str(frame))
         cmd('capture.frame',{'frame':0})
+        settle()
         assert ImageChops.difference(original,save('anchored-return')).getbbox() is None
         assert cmd('capture.snapshot')['simulation_tick']==tick
         report['anchoring']='Exact pixels after sweep; frozen simulation'

@@ -17,7 +17,7 @@ local function generate(budget, options)
         local jobs = generator.step(world, budget)
         assert(jobs <= budget)
         frames = frames + 1
-        assert(frames < 15000, "Generation did not finish")
+        assert(frames < 18000, "Generation did not finish")
     end
     return world, frames
 end
@@ -428,7 +428,8 @@ test("cover positions have support and clearance; closed shopfronts face the str
         end
     end
     -- Full-map bounds include terrain chunks, five flights and all background rows.
-    assert(world.stats.batches<100 and world.stats.mesh_bytes<32*1024*1024)
+    -- Cloth spans, stock and layered palm crowns use the existing spatial batches.
+    assert(world.stats.batches<100 and world.stats.mesh_bytes<40*1024*1024)
     assert(#world.minimap<1240)
 end)
 

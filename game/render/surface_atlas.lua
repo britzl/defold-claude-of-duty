@@ -2,13 +2,13 @@
 -- mip attachment or texture-array support is required. IDs are stable.
 local M={levels=11,detail_kind=15,foliage_kind=19}
 local definitions={
-    {"plaster",1024,2.2,.06,.014,.75},
-    {"asphalt",1024,3,.075,.014,.65},
+    {"plaster",1024,2.2,.028,.006,.55},
+    {"asphalt",1024,2.4,.018,.003,.48},
     {"wood",1024,2,.038,.008,.60},
     {"metal_brushed",512,.8,.004,0,.20},
     {"fabric",512,.7,.008,0,.35},
-    {"concrete",1024,2.5,.09,.016,.75},
-    {"concrete_floor",1024,2.5,.075,.010,.70},
+    {"concrete",1024,2.5,.042,.008,.58},
+    {"concrete_floor",1024,2.5,.035,.006,.55},
     {"brick",1024,1.35,.055,.024,.70},
     {"tile",1024,1.5,.03,.030,.45},
     {"dirt",1024,2.5,.12,.012,.65},

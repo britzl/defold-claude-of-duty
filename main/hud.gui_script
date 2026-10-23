@@ -9,7 +9,8 @@ local BL = {gui.ANCHOR_LEFT,gui.ANCHOR_BOTTOM}
 local BR = {gui.ANCHOR_RIGHT,gui.ANCHOR_BOTTOM}
 local TOP = {gui.ANCHOR_NONE,gui.ANCHOR_TOP}
 local BOTTOM = {gui.ANCHOR_NONE,gui.ANCHOR_BOTTOM}
-local SIZE, MX, MY = 148, 98, 510
+local map_style = require("game.ui.style").map
+local SIZE, MX, MY = map_style.size, map_style.x, map_style.y
 
 function init(self)
     -- Anchor each cluster once. Children retain their local spacing when the
@@ -30,34 +31,34 @@ function init(self)
         gui.set_alpha(node,0)
         self.damage[#self.damage+1]=node
     end
-    self.title=W.text("title",24,610,"MARKET STREET",1,W.white,gui.PIVOT_W,"hud",TL)
-    W.box("map_border",MX,MY,SIZE+4,SIZE+4,W.muted,"hud",TL)
-    W.box("map_background",MX,MY,SIZE,SIZE,W.panel,"hud",TL)
-    W.text(nil,24,421,"44m  /  NORTH UP",.67,W.muted,gui.PIVOT_W,"hud",TL)
-    W.text("map_north",163,573,"N",.72,W.accent,nil,"markers",TL)
-    self.map_player=W.text("map_player",MX,MY,"^",1.1,W.accent,nil,"markers",TL)
+    self.title=W.text("title",24,610,"MARKET STREET",.78,W.white,gui.PIVOT_W,"hud",TL)
+    W.box("map_border",MX,MY,SIZE+2,SIZE+2,vmath.vector4(.66,.71,.70,.35),"hud",TL)
+    W.box("map_background",MX,MY,SIZE,SIZE,W.hud_panel,"hud",TL)
+    W.text(nil,20,458,"44m  /  NORTH UP",.57,W.muted,gui.PIVOT_W,"hud",TL)
+    W.text("map_north",138,588,"N",.62,W.accent,nil,"markers",TL)
+    self.map_player=W.text("map_player",MX,MY,"^",.95,W.accent,nil,"markers",TL)
     self.compass={}
-    W.box("compass_background",480,600,296,58,vmath.vector4(.025,.047,.06,.58),"hud",TOP)
+    W.box("compass_background",480,608,248,42,vmath.vector4(.025,.04,.045,.24),"hud",TOP)
     for i,label in ipairs({"N","NE","E","SE","S","SW","W","NW"}) do
-        self.compass[i]=W.text("compass_"..label,480,609,label,.8,W.muted,nil,"hud",TOP)
+        self.compass[i]=W.text("compass_"..label,480,616,label,.68,W.muted,nil,"hud",TOP)
     end
-    W.box(nil,480,591,2,6,W.accent,"hud",TOP)
-    self.bearing=W.text("heading",480,578,"000",.85,W.white,nil,"hud",TOP)
-    self.fps=W.text("fps",936,610,"FPS --",.8,W.white,gui.PIVOT_E,"hud",TR)
+    W.box(nil,480,604,1,4,W.accent,"hud",TOP)
+    self.bearing=W.text("heading",480,592,"000",.7,W.white,nil,"hud",TOP)
+    self.fps=W.text("fps",936,610,"FPS --",.62,W.white,gui.PIVOT_E,"hud",TR)
     self.fps_frames,self.fps_elapsed=0,0
-    self.feed=W.text("killfeed",936,572,"",.87,W.white,gui.PIVOT_NE,"hud",TR)
-    W.box(nil,118,55,212,62,W.panel,"hud",BL)
-    self.health=W.text("health",24,66,"HEALTH 100",1.15,W.white,gui.PIVOT_W,"hud",BL)
-    W.box(nil,118,40,188,5,W.muted,"hud",BL)
-    self.health_bar=W.box("health_bar",24,40,188,5,W.accent,"hud",BL)
+    self.feed=W.text("killfeed",936,580,"",.72,W.white,gui.PIVOT_NE,"hud",TR)
+    W.box(nil,108,54,176,48,W.hud_panel,"hud",BL)
+    self.health=W.text("health",24,63,"HEALTH 100",.90,W.white,gui.PIVOT_W,"hud",BL)
+    W.box(nil,99,40,150,3,W.muted,"hud",BL)
+    self.health_bar=W.box("health_bar",24,40,150,3,W.accent,"hud",BL)
     gui.set_pivot(self.health_bar,gui.PIVOT_W)
-    self.stance=W.text("stance",24,102,"STAND",.75,W.muted,gui.PIVOT_W,"hud",BL)
-    W.box(nil,754,55,388,62,W.panel,"hud",BR)
-    self.ammo=W.text("ammo",936,64,"",1,W.white,gui.PIVOT_E,"hud",BR)
-    self.ammo_hint=W.text(nil,936,40,"R  RELOAD   /   1  2  3  WEAPONS",.72,W.muted,gui.PIVOT_E,"hud",BR)
-    self.weapon_status=W.text("weapon_status",480,132,"",.9,W.accent,nil,"hud",BOTTOM)
+    self.stance=W.text("stance",24,92,"STAND",.63,W.muted,gui.PIVOT_W,"hud",BL)
+    W.box(nil,794,54,308,48,W.hud_panel,"hud",BR)
+    self.ammo=W.text("ammo",936,62,"",.90,W.white,gui.PIVOT_E,"hud",BR)
+    self.ammo_hint=W.text(nil,936,40,"R  RELOAD   /   1  2  3  WEAPONS",.60,W.muted,gui.PIVOT_E,"hud",BR)
+    self.weapon_status=W.text("weapon_status",480,120,"",.75,W.accent,nil,"hud",BOTTOM)
     self.grenade_warning=W.text("grenade_warning",480,173,"",1,W.red,nil,"hud",BOTTOM)
-    self.hint=W.text("input_hint",480,17,"CLICK TO CAPTURE MOUSE  /  ESC MENU",.73,W.white,nil,"hud",BOTTOM)
+    self.hint=W.text("input_hint",480,17,"CLICK TO CAPTURE MOUSE  /  ESC MENU",.62,W.white,nil,"hud",BOTTOM)
     self.crosshair={}
     for i=1,4 do self.crosshair[i]=W.box("crosshair_"..i,480,320,i<3 and 5 or 1,i<3 and 1 or 5,W.white) end
     self.hit=W.text("hitmarker",480,320,"x",1.3,W.white)
@@ -103,7 +104,7 @@ local function update_hud(self,state)
         gui.set_text(self.health,string.format("%s %d",state.regenerating and "RECOVERING" or "HEALTH",math.ceil(state.health)))
         gui.set_color(self.health,state.low_health and W.red or W.white)
         gui.set_color(self.health_bar,state.low_health and W.red or W.accent)
-        gui.set_size(self.health_bar,vmath.vector3(math.max(.01,188*state.health/100),5,0))
+        gui.set_size(self.health_bar,vmath.vector3(math.max(.01,150*state.health/100),3,0))
     end
     if state.ammo~=previous.ammo then gui.set_text(self.ammo,state.ammo) end
     if state.weapon_status~=previous.weapon_status then gui.set_text(self.weapon_status,state.weapon_status) end
@@ -145,7 +146,7 @@ local function update_hud(self,state)
         for i,node in ipairs(self.compass) do
             local delta=((i-1)*45-state.heading+180)%360-180
             gui.set_enabled(node,math.abs(delta)<=65)
-            W.position(node,480+delta*2,609,TOP)
+            W.position(node,480+delta*1.65,616,TOP)
         end
     end
     if state.yaw~=previous.yaw then gui.set_euler(self.map_player,vmath.vector3(0,0,math.deg(state.yaw))) end

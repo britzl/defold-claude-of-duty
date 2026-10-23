@@ -64,8 +64,14 @@ and sleeves. Native animation checks retain the existing aim and attachment
 contracts. See [weapon/hand refinement](../README.md#weapons-and-hands-visual-refinement-2026-10-23)
 for validation and the increased vertex budget. Controlled before/after captures
 are in `captures/weapons-hands-2026-10-23`.
-The other findings remain open. These improvements do not claim exact reference
-lighting, geometry or motion parity.
+The remaining material, dressing, foliage, sky and interface findings now have
+an implementation follow-up: finer asphalt, quieter plaster/concrete, varied
+market goods and awnings, fuller palms, broken clouds and compact translucent
+HUD/menu panels. Complete surface-parameter uploads restore close-up microdetail
+and parallax. See [market/interface refinement](../README.md#materials-market-and-interface-refinement-2026-10-23)
+for native/browser checks and the additional 4.8 MiB of geometry. Controlled
+before/after captures are in `captures/visual-refinement-2026-10-23`.
+These improvements do not claim exact reference lighting, geometry or motion parity.
 
 Original review evidence and controls are retained
 locally in `captures/visual-review-2026-10-23/review.json`, with

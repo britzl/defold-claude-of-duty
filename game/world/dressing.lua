@@ -11,13 +11,18 @@ local function barrel(id,x,y,z)
     for _,h in ipairs({.12,.75}) do kit.solid("cylinder",id.."/band/"..h,"metal",x,y+h,z,.68,.045,.68) end
 end
 local function goods(id,x,y,z,n,along_z,span)
+    local random=rng.new(1337,id)
     local spacing=span and math.min(.32,(span-.23)/(n-1)) or .32
     for i=1,n do
         local offset=(i-(n+1)/2)*spacing
         local px,pz=x+(along_z and 0 or offset),z+(along_z and offset or 0)
+        px,pz=px+(random()-.5)*.035,pz+(random()-.5)*.08
+        local h=.18+random()*.16
         if i%3==0 then
-            kit.solid("cylinder",id.."/can/"..i,"metal_painted",px,y+.12,pz,.15,.24,.15)
-        else kit.solid("bevel",id.."/box/"..i,i%2==0 and "awning_cream" or "wood",px,y+.13,pz,.23,.26,.24) end
+            kit.solid("cylinder",id.."/jar/"..i,"awning_cream",px,y+h/2,pz,.17,h,.17,nil,nil,{taper=.78})
+            kit.solid("cylinder",id.."/neck/"..i,"metal_painted",px,y+h+.02,pz,.09,.04,.09)
+        else kit.solid("bevel",id.."/box/"..i,i%2==0 and "awning_sage" or "wood",px,y+h/2,pz,.23,h,.24,
+            nil,nil,{rotation_y=(random()-.5)*.35,bevel=.025}) end
     end
 end
 local function rubble(id,x,y,z,radius,count,random)
@@ -116,7 +121,7 @@ local function furnish(layout,b,detail,seed)
         end
         if level>0 then
             local u=b.upper
-            goods(p.."/desk/goods",u.desk.x,fy+.81,u.desk.z,3,true)
+            goods(p.."/desk/goods",u.desk.x,fy+.8,u.desk.z,3,true)
             box(p.."/bed/blanket","awning_red",u.bed.x,fy+.61,u.bed.z-.25,u.bed.w-.12,.025,u.bed.d*.55)
             for i=1,3 do box(p.."/cabinet/drawer/"..i,"metal",u.cabinet.x,fy+i*.42,u.cabinet.z-u.cabinet.d/2-.015,.25,.035,.035) end
             kit.rug(p.."/rug",u.rug.x,fy+.025,u.rug.z,u.rug.w*.9,u.rug.d*.9)
@@ -212,10 +217,14 @@ function M.generate(layout,detail,seed,supports)
     for i,p in ipairs(d.palms or {}) do
         local id="dressing/palm/"..i;local x,z,s=p[1],p[2],p[3];local y=base(x)
         kit.solid("cylinder",id.."/trunk","wood",x,y+3.3*s,z,.35*s,6.6*s,.35*s,"wood",nil,{taper=.7})
-        for j=0,8 do
-            local a=j*math.pi*2/9
-            kit.solid("frond",id.."/frond/"..j,"foliage",x+math.sin(a)*1.7*s,y+5.95*s,z+math.cos(a)*1.7*s,
-                1.1*s,1.3*s,3.4*s,nil,nil,{rotation_y=a})
+        for j=0,14 do
+            local upper=j>=9
+            local a=(upper and (j-9)*math.pi/3+.35 or j*math.pi*2/9)+i*.47
+            local length=(upper and 2.45 or 3.7)*(1+.07*math.sin(j*2.1+i))*s
+            local drop=(upper and .55 or 1.55)*s
+            -- Every stem starts at the crown; a shorter raised tier fills its centre.
+            kit.solid("frond",id.."/frond/"..j,"foliage",x+math.sin(a)*length/2,y+6.6*s-drop/2,z+math.cos(a)*length/2,
+                (upper and 1.05 or 1.3)*s,drop,length,nil,nil,{rotation_y=a})
         end
         if detail then for j=1,9 do kit.solid("cylinder",id.."/ring/"..j,"wood",x,y+j*.65*s,z,.37*s,.08,.37*s) end end
     end
@@ -253,10 +262,34 @@ function M.generate(layout,detail,seed,supports)
     -- Cluster crates, sacks, trays and small refuse at the authored stalls.
     for i,p in ipairs(layout.stalls) do
         local id="dressing/stall/"..i
-        box(id.."/tray","wood",p.x,.965,p.z,p.w-.25,.13,.65)
-        goods(id.."/stock",p.x,1.03,p.z,5,false,p.w-.25)
-        kit.solid("bevel",id.."/sack","burlap",p.x+.5,.29,p.z+.75,.55,.58,.48)
-        kit.solid("cylinder",id.."/bucket","metal",p.x-.6,.2,p.z+.72,.35,.4,.35,nil,nil,{taper=1.12})
+        local random=rng.new(seed,id)
+        local width=p.w-.25
+        box(id.."/tray","wood",p.x,.93,p.z,width,.06,.65)
+        for _,side in ipairs({-1,1}) do
+            box(id.."/tray/rim/"..side,"wood",p.x,1.005,p.z+side*.315,width,.15,.025)
+        end
+        for j=0,2 do box(id.."/tray/divider/"..j,"wood",p.x-width/2+j*width/2,1.005,p.z,.025,.15,.65) end
+        for j=1,12 do
+            local col,row=(j-1)%6,math.floor((j-1)/6)
+            local px=p.x-width/2+(col+.5)*width/6+(random()-.5)*.035
+            local pz=p.z+(row-.5)*.26+(random()-.5)*.04
+            local h=.12+random()*.055
+            local material=({"produce_red","produce_green","produce_gold"})[(i+math.floor(col/3))%3+1]
+            kit.solid("bevel",id.."/fruit/"..j,material,px,.96+h/2,pz,.14,h,.15,nil,nil,
+                {bevel=.07,rotation_y=random()*math.pi})
+        end
+        local sx=p.x+math.min(.5,p.w*.26)
+        kit.solid("bevel",id.."/sack","burlap",sx,.29,p.z+.75,.55,.58,.48,nil,nil,{bevel=.19,rotation_y=(random()-.5)*.35})
+        kit.solid("cylinder",id.."/sack/tie","wood",sx+.035,.59,p.z+.75,.13,.065,.12,nil,nil,{taper=.55})
+        local bx=p.x-math.min(.6,p.w*.32)
+        kit.solid("cylinder",id.."/bucket","metal_painted",bx,.2,p.z+.72,.35,.4,.35,nil,nil,{taper=1.12})
+        kit.solid("cylinder",id.."/bucket/inside","dark",bx,.402,p.z+.72,.34,.008,.34)
+        kit.solid("torus",id.."/bucket/rim","metal",bx,.41,p.z+.72,.40,.035,.40)
+        -- Refuse stays tucked beneath existing tables, clear of authored routes.
+        for j=1,3 do
+            kit.box(id.."/paper/"..j,"awning_cream",p.x+(random()-.5)*width,.009,p.z+(random()-.5)*.6,
+                .12+random()*.12,.012,.14,nil,nil,{rotation_y=random()*math.pi})
+        end
     end
     for i,p in ipairs({{-19,8.9},{19.6,3.1},{-20.4,-11.3},{26.5,-26.5}}) do
         -- Fixed solid crates/covers already own these wall-side footprints;

@@ -66,7 +66,7 @@ try {
         assert(complete,'Mesh browser fixture timed out');assert.deepEqual(run.errors,[]);
         assert.equal(run.ready.backend,config.backend);assert.equal(run.result.actors,6);
         if(config.verify) assert(run.fixture_pass,'Missing native primitive/ownership checks');
-        assert.equal(run.batches.length,65);assert.equal(run.ready.stats.vertices,414432);
+        assert.equal(run.batches.length,66);assert.equal(run.ready.stats.vertices,477018);
         const baseline=report.runs.find(r=>r.backend==='lua');
         if(baseline) assert.deepEqual(run.batches,baseline.batches,'Installed mesh streams/bounds differ');
         if(!config.verify && !report.runs.some(r=>!r.verify && r.backend===config.backend))

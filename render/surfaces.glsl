@@ -6,165 +6,48 @@ float surface_ramp(float a,float b,float x) { return a<b?smoothstep(a,b,x):1.0-s
 
 void plaster_surface(vec2 uv, out vec3 alb, out float h, out float rough, out float metal, out float ao){
   const vec2 P = vec2(8.0);
-  vec2 p = uv * P + 5.0 * 5.3;
+  vec2 p = uv * P + 26.5;
+  // A neutral lime finish lets the building palette carry the facade colour.
+  // Large stains belong to geometry-anchored weathering, not every atlas tile.
+  float trowel = owFbm01(owShear(p * 1.5, 1.0, 3.0), owShearPer(P * 1.5, 3.0), 5, 0.55);
+  float skim = owFbm01(p * 12.0, P * 12.0, 4, 0.5);
+  float macro = owFbm01(p * 0.6, P * 0.6, 3, 0.6);
+  vec3 c = mix(owSRGB(vec3(.755,.747,.717)), owSRGB(vec3(.735,.720,.681)), macro);
+  c *= .96 + .08 * skim + (trowel-.5)*.10;
+  h = .70 + (trowel-.5)*.07 + (skim-.5)*.022;
+  rough = .83 + (skim-.5)*.08;
+  metal = 0.0; ao = 1.0;
 
-  // trowel: broad sweeps, anisotropic, with a fine skim on top
-  vec2 sw = owShear(p * 1.5, 1.0, 3.0);
-  float trowel = owFbm01(sw, owShearPer(P * 1.5, 3.0), 5, 0.55);
-  float skim   = owFbm01(p * 12.0, P * 12.0, 5, 0.5);
-  float micro  = owFbm01(p * 24.0, P * 24.0, 3, 0.5);
-  float macro  = owFbm01(p * 0.6, P * 0.6, 3, 0.6);
+  vec2 lapUv = owShear(p * .75, 1.0, 1.0);
+  float lapF = lapUv.y + owFbm01(p * 1.1, P * 1.1, 3, .6)*1.4;
+  float lapR = owHash11(mod(floor(lapF),6.0)*1.71+11.5);
+  float lapEdge = (1.0-surface_ramp(0.0,.05,fract(lapF)))*(.35+.65*lapR);
+  c *= .97+.06*lapR;
+  h += lapEdge*.012;
+  rough += (lapR-.5)*.04;
 
-  vec3 cBase = owSRGB(vec3(0.598, 0.578, 0.538));
-  vec3 cWarm = owSRGB(vec3(0.512, 0.462, 0.395));
-  vec3 cGrey = owSRGB(vec3(0.382, 0.378, 0.372));
-  vec3 c = mix(cBase, cWarm, surface_ramp(0.3, 0.8, macro));
-  c *= 0.94 + 0.12 * skim;
-  c = mix(c, cGrey, surface_ramp(0.45, 0.95, trowel) * 0.42);
-  c = mix(c, cBase * 1.10, surface_ramp(0.55, 0.15, trowel) * 0.30);
+  vec4 tooth = owWorley(p*20.0,P*20.0,1.0);
+  float grain = surface_ramp(.46,.06,tooth.x)*(.4+.6*step(.32,tooth.z));
+  h += grain*.016;
+  c *= 1.0+(grain-.2)*.065;
+  rough += (tooth.z-.5)*.06;
+  vec4 ph = owWorley(p*22.0,P*22.0,1.0);
+  float hole = surface_ramp(.24,0.0,ph.x)*step(.86,ph.w);
+  h -= hole*.035; ao -= hole*.23;
 
-  h = 0.70 + (trowel - 0.5) * 0.10 + (skim - 0.5) * 0.030 + (micro - 0.5) * 0.012;
-  rough = 0.80 + (skim - 0.5) * 0.12 - surface_ramp(0.5, 0.9, trowel) * 0.10;
-  ao = 1.0;
-  metal = 0.0;
+  float hair = owCracks(p*9.0,P*9.0,.9,.012,.70);
+  float crack = owCracks(p*4.5+17.0,P*4.5,.8,.014,.77);
+  h -= hair*.018+crack*.09;
+  ao -= hair*.09+crack*.30;
+  c *= 1.0-hair*.08-crack*.28;
 
-  // ---- skim-coat laps ------------------------------------------------------
-  // A plasterer works the wall in ~40 cm passes, and every pass sets a hair
-  // lighter or darker than the one before with a faint arris where the trowel
-  // lifted off. This is the mid-frequency signal that separates plaster from
-  // paint at 2-5 m — without it the wall is one value plus a sprinkle of specks.
-  vec2 lapUv = owShear(p * 0.75, 1.0, 1.0);
-  float lapF = lapUv.y + owFbm01(p * 1.1, P * 1.1, 3, 0.6) * 1.4;
-  float lapI = floor(lapF);
-  float lapT = fract(lapF);
-  float lapR = owHash11(mod(lapI,6.0) * 1.71 + 5.0 * 2.3);
-  c *= 0.885 + 0.240 * lapR;
-  rough += (lapR - 0.5) * 0.10;
-
-  /**
-   * THE 0.1-1 m BAND. A wall seen from 2-3 m fills the frame with about half a
-   * metre of itself, which is a hole in the frequency budget: the macro layer
-   * varies over 4-12 m and the detail map over 10 mm, so between them the
-   * surface has nothing and measures a standard deviation of 5 over a
-   * 260x240 patch — a flat colour with a sprinkle of specks. These three
-   * bands (damp bloom, hand-height soiling, and a soft dirt wash) sit at
-   * 15-90 cm and are what actually makes a plastered wall read as plaster.
-   */
-  // NB the contrast expansion. A 4-octave fbm01 spans about 0.3-0.7, never
-  // 0-1, so writing 0.86 + 0.30 * n gives a +/-6% wash and not the +/-20%
-  // the numbers suggest — the same trap the macro layer documents. Every band
-  // here is re-centred and expanded before it is used.
-  float dampB = owFbm01(owWarp(p * 1.6 + 3.7, P * 1.6, 0.7, 3), P * 1.6, 4, 0.58);
-  dampB = clamp((dampB - 0.5) * 2.6 + 0.5, 0.0, 1.0);
-  c *= 0.80 + 0.42 * dampB;
-  rough += (dampB - 0.5) * 0.12;
-  float soil2 = owFbm01(owWarp(p * 3.4 + 21.0, P * 3.4, 0.55, 3), P * 3.4, 4, 0.55);
-  soil2 = clamp((soil2 - 0.5) * 2.4 + 0.5, 0.0, 1.0);
-  c *= 0.875 + 0.26 * soil2;
-  float wash = owFbm01(p * 8.0 + 6.0, P * 8.0, 4, 0.5);
-  wash = clamp((wash - 0.5) * 2.2 + 0.5, 0.0, 1.0);
-  c *= 0.925 + 0.155 * wash;
-  float lapEdge = (1.0 - surface_ramp(0.0, 0.05, lapT)) * (0.35 + 0.65 * lapR);
-  h += lapEdge * 0.022 - (lapR - 0.5) * 0.014;
-  c *= 1.0 + lapEdge * 0.07;
-
-  // ---- sand tooth: the 0.5-2 mm grain of the finish coat, with a matching
-  //      height channel. Without this the wall is paint, not plaster.
-  // 6-9 mm float grain. The finer 1-2 mm tooth is the shared detail map's
-  // job: at 2.2 m over 1024 texels one texel is 2.1 mm, so anything past
-  // K = 22 here is a sub-texel hash that bakes as dither and mips to grey.
-  vec4 tooth = owWorley(p * 20.0, P * 20.0, 1.0);
-  float grain = surface_ramp(0.46, 0.06, tooth.x);
-  float grainSel = 0.40 + 0.60 * step(0.32, tooth.z);
-  h += grain * grainSel * 0.030;
-  ao -= grain * 0.07;
-  c *= 1.0 + (grain * grainSel - 0.20) * 0.16;
-  rough += (tooth.z - 0.5) * 0.11 + grain * 0.05;
-  // dust and shadow sit in the troughs between grains
-  float trough = surface_ramp(0.52, 0.86, tooth.x);
-  c = mix(c, c * 0.84, trough * 0.40);
-
-  // pinholes from the float
-  vec4 ph = owWorley(p * 22.0, P * 22.0, 1.0);
-  float hole = surface_ramp(0.24, 0.0, ph.x) * step(0.80, ph.w);
-  h -= hole * 0.06;
-  ao -= hole * 0.4;
-
-  // hairline crazing — a fine, wide-spread net
-  float hair = owCracks(p * 9.0, P * 9.0, 0.9, 0.016, 0.52);
-  hair += owCracks(p * 16.0 + 6.0, P * 16.0, 0.95, 0.015, 0.62) * 0.5;
-  hair = clamp(hair, 0.0, 1.0);
-  h -= hair * 0.030;
-  ao -= hair * 0.18;
-  c = mix(c, c * 0.80, hair * 0.45);
-
-  // structural cracks — few, wide, branching
-  float crack = owCracks(p * 4.5 + 17.0, P * 4.5, 0.8, 0.018, 0.62);
-  h -= crack * 0.16;
-  ao -= crack * 0.6;
-  c = mix(c, owSRGB(vec3(0.300, 0.278, 0.250)), crack * 0.8);
-
-  // blown plaster: patches spalled off, revealing render/brick beneath
-  float blowMask = owFbm01(owWarp(p * 1.05 + 9.0, P * 1.05, 1.1, 3), P * 1.05, 4, 0.55);
-  float blow = surface_ramp(0.775, 0.845, blowMask);
-  float blowEdge = surface_ramp(0.745, 0.790, blowMask) - blow;
-  vec3 substrate = mix(owSRGB(vec3(0.360, 0.245, 0.195)), owSRGB(vec3(0.430, 0.400, 0.360)),
-                       owFbm01(p * 9.0, P * 9.0, 4, 0.5));
-  substrate *= 0.85 + 0.3 * owFbm01(p * 20.0, P * 20.0, 3, 0.5);
-  c = mix(c, substrate, blow * 0.85);
-  h -= blow * 0.13;
-  ao -= blow * 0.26;
-  rough += blow * 0.10;
-  // the lip of the blown patch is bright and sharp
-  c += blowEdge * 0.06;
-  h += blowEdge * 0.02;
-
-  // ---- chipped patches: 6-9 cm flakes knocked off the skim, showing the darker
-  //      browncoat. Deliberately FEWER and LARGER than a fine speckle: a dense
-  //      sprinkle of 3 cm dark dots on a facade reads as fly dirt, not as damage,
-  //      and it is the one thing that survives at every distance and so gives the
-  //      whole wall a screen-space texture.
-  vec4 ck = owWorley(owWarp(p * 4.2 + 13.0, P * 4.2, 0.6, 3), P * 4.2, 0.95);
-  float ckSel = step(0.930, ck.w);
-  float ckSize = 0.22 + 0.20 * ck.z;
-  float ckShape = surface_ramp(ckSize, ckSize * 0.3,
-                             ck.x * (0.70 + 0.60 * owFbm01(p * 16.0, P * 16.0, 3, 0.5)));
-  float chip = ckSel * ckShape;
-  // The browncoat is the same family as the finish, just darker and coarser —
-  // a chip is a shallow flake, not a hole punched in the wall.
-  vec3 coat = mix(c, owSRGB(vec3(0.392, 0.336, 0.284)), 0.52);
-  coat *= 0.90 + 0.20 * owFbm01(p * 18.0, P * 18.0, 3, 0.5);
-  c = mix(c, coat, chip * 0.58);
-  h -= chip * 0.05;
-  ao -= chip * 0.26;
-  rough += chip * 0.09;
-  float ckLip = max(ckSel * (surface_ramp(ckSize * 1.25, ckSize, ck.x) - ckShape), 0.0);
-  c *= 1.0 + ckLip * 0.10;
-  h += ckLip * 0.010;
-
-  // water staining: tide marks and slow brown bleed
-  float stain = owFbm01(vec2(p.x * 1.6, p.y * 3.2), vec2(P.x * 1.6, P.y * 3.0), 5, 0.6);
-  float tide = surface_ramp(0.60, 0.78, stain) * (1.0 - surface_ramp(0.78, 0.94, stain));
-  c = mix(c, owSRGB(vec3(0.400, 0.330, 0.245)), tide * 0.45);
-  c *= 1.0 - surface_ramp(0.50, 0.95, stain) * 0.34;
-  rough += tide * 0.05;
-
-  // black mould in the damp corners
-  float mould = surface_ramp(0.72, 0.95, owFbm01(p * 4.0 + 25.0, P * 4.0, 5, 0.6)) *
-                surface_ramp(0.45, 0.8, stain);
-  c = mix(c, owSRGB(vec3(0.085, 0.090, 0.080)), mould * 0.7);
-  rough += mould * 0.08;
-
-  // grime in recesses
-  float cavity = 1.0 - surface_ramp(0.48, 0.72, h);
-  c = mix(c, owSRGB(vec3(0.22, 0.21, 0.19)), cavity * 0.30);
-
-  alb = clamp(c, vec3(0.02), vec3(0.88));
-  rough = clamp(rough, 0.35, 0.99);
-  ao = clamp(ao, 0.15, 1.0);
-  h = clamp(h, 0.0, 1.0);
+  vec4 ck = owWorley(owWarp(p*4.2+13.0,P*4.2,.6,3),P*4.2,.95);
+  float chip = step(.965,ck.w)*surface_ramp(.24,.07,ck.x);
+  c = mix(c,owSRGB(vec3(.52,.49,.43)),chip*.45);
+  h -= chip*.05; ao -= chip*.18; rough += chip*.06;
+  alb = clamp(c,vec3(.02),vec3(.88));
+  rough = clamp(rough,.55,.99); ao = clamp(ao,.4,1.0); h = clamp(h,0.0,1.0);
 }
-
 
 void concrete_surface(vec2 uv, float floor_variant, out vec3 alb, out float h, out float rough, out float metal, out float ao){
   const vec2 P = vec2(8.0);
@@ -177,9 +60,9 @@ void concrete_surface(vec2 uv, float floor_variant, out vec3 alb, out float h, o
   float fine  = owFbm01(p * 18.0, P * 18.0, 4, 0.5);
   float micro = owFbm01(p * 26.0, P * 26.0, 3, 0.5);
 
-  vec3 cLight = owSRGB(vec3(0.520, 0.512, 0.492));
-  vec3 cMid   = owSRGB(vec3(0.395, 0.392, 0.385));
-  vec3 cDark  = owSRGB(vec3(0.255, 0.253, 0.258));
+  vec3 cLight = owSRGB(vec3(0.640, 0.635, 0.615));
+  vec3 cMid   = owSRGB(vec3(0.560, 0.558, 0.545));
+  vec3 cDark  = owSRGB(vec3(0.440, 0.438, 0.425));
   vec3 c = mix(cMid, cLight, surface_ramp(0.35, 0.85, macro));
   c = mix(c, cDark, surface_ramp(0.55, 0.95, mid) * 0.55);
   c *= 0.93 + 0.14 * fine;
@@ -188,10 +71,10 @@ void concrete_surface(vec2 uv, float floor_variant, out vec3 alb, out float h, o
   // contrast-expanded: see the note in PLASTER
   float pourB = owFbm01(owWarp(p * 1.5 + 8.3, P * 1.5, 0.6, 3), P * 1.5, 4, 0.58);
   pourB = clamp((pourB - 0.5) * 2.5 + 0.5, 0.0, 1.0);
-  c *= 0.82 + 0.38 * pourB;
+  c *= 0.95 + 0.10 * pourB;
   float wash = owFbm01(p * 7.0 + 2.0, P * 7.0, 4, 0.5);
   wash = clamp((wash - 0.5) * 2.2 + 0.5, 0.0, 1.0);
-  c *= 0.925 + 0.155 * wash;
+  c *= 0.97 + 0.06 * wash;
 
   h = 0.62 + (fine - 0.5) * 0.035 + (mid - 0.5) * 0.05;
   rough = 0.70 + (mid - 0.5) * 0.16 + (micro - 0.5) * 0.07;
@@ -357,10 +240,10 @@ void asphalt_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
   // Angularity comes from warping the worley domain: round cells become
   // faceted, which is what separates asphalt from a pebble beach.
   vec2 ap = owWarp(p, P, 0.10, 3);
-  vec4 big = owWorley(ap * 12.0, P * 12.0, 1.0);
+  vec4 big = owWorley(ap * 18.0, P * 18.0, 1.0);
   float bigM = surface_ramp(0.40, 0.16, big.x);
   float bigExposed = bigM * surface_ramp(0.30, 0.62, owFbm01(p * 2.2 + 3.0, P * 2.0, 4, 0.5) + big.w * 0.5);
-  vec4 small = owWorley(ap * 22.0 + 7.0, P * 22.0, 1.0);
+  vec4 small = owWorley(ap * 26.0 + 7.0, P * 26.0, 1.0);
   float smallM = surface_ramp(0.36, 0.10, small.x);
   float smallExposed = smallM * step(0.30, small.w);
   vec4 grit = owWorley(ap * 28.0 + 3.0, P * 28.0, 1.0);
@@ -372,17 +255,16 @@ void asphalt_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
   vec3 stone = mix(stoneA, stoneB, big.z);
   stone = mix(stone, stoneC, step(0.90, big.w));
 
-  // Stones are read by their relief and their specular, not by their tint:
-  // colour contrast is roughly halved and the height contribution raised.
-  c = mix(c, stone, bigExposed * 0.52);
-  c = mix(c, mix(stoneA, stoneC, small.z), smallExposed * 0.22);
+  // Embedded aggregate has millimetre relief; sparse bright grains carry detail.
+  c = mix(c, stone, bigExposed * 0.32);
+  c = mix(c, mix(stoneA, stoneC, small.z), smallExposed * 0.18);
   c = mix(c, mix(stoneB, stoneA, grit.z), gritM * 0.14);
-  h += bigExposed * 0.15 * (0.6 + 0.6 * big.z) + smallExposed * 0.065 + gritM * 0.022;
+  h += bigExposed * 0.055 * (0.6 + 0.6 * big.z) + smallExposed * 0.028 + gritM * 0.012;
   rough += bigExposed * (0.10 - 0.22 * big.z) + smallExposed * (0.06 - 0.14 * small.z);
 
   // voids between the aggregate — where the binder has ravelled out
   float voidM = surface_ramp(0.50, 0.85, big.x) * surface_ramp(0.28, 0.6, small.x);
-  h -= voidM * 0.10;
+  h -= voidM * 0.04;
   ao -= voidM * 0.14;
 
   // ---- tyre polish: two smooth bands where wheels track ----
@@ -397,10 +279,10 @@ void asphalt_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
   vec4 rep = owWorley(owWarp(p * 0.5 + 13.0, P * 0.5, 1.6, 3), P * 0.5, 0.9);
   float inPatch = step(0.72, rep.w);
   float patchEdge = (1.0 - surface_ramp(0.0, 0.06, rep.y - rep.x)) * inPatch;
-  c = mix(c, cFresh * (0.85 + 0.35 * fine), inPatch * 0.20);
+  c = mix(c, cFresh * (0.85 + 0.35 * fine), inPatch * 0.14);
   rough = mix(rough, 0.84, inPatch * 0.22);
-  h -= patchEdge * 0.07;
-  ao -= patchEdge * 0.20;
+  h -= patchEdge * 0.035;
+  ao -= patchEdge * 0.12;
   c = mix(c, cFresh * 0.5, patchEdge * 0.35);
   // tar bleeding out of the seam, glossy
   float tar = patchEdge * surface_ramp(0.4, 0.7, owFbm01(p * 6.0, P * 6.0, 3, 0.5));
@@ -408,12 +290,12 @@ void asphalt_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
   c = mix(c, owSRGB(vec3(0.055, 0.055, 0.058)), tar * 0.7);
 
   // ---- alligator cracking + long thermal cracks ----
-  float gator = owCracks(p * 3.4, P * 3.4, 0.9, 0.032, 0.56);
-  float thermal = owCracks(p * 0.9 + 41.0, P * 0.9, 0.75, 0.05, 0.70);
+  float gator = owCracks(p * 3.4, P * 3.4, 0.9, 0.022, 0.72);
+  float thermal = owCracks(p * 0.9 + 41.0, P * 0.9, 0.75, 0.035, 0.78);
   float crack = clamp(gator + thermal, 0.0, 1.0);
-  h -= crack * 0.16;
+  h -= crack * 0.09;
   ao -= crack * 0.30;
-  c = mix(c, owSRGB(vec3(0.045, 0.043, 0.042)), crack * 0.85);
+  c = mix(c, owSRGB(vec3(0.045, 0.043, 0.042)), crack * 0.60);
   rough += crack * 0.12;
 
   // ---- oil stains, dark and slightly glossy ----
@@ -1585,7 +1467,7 @@ void foliage_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
 
   float bestCover = 0.0;
   float bestDepth = 0.0;
-  vec3 bestCol = owSRGB(vec3(0.14,0.26,0.075));
+  vec3 bestCol = owSRGB(vec3(0.22,0.34,0.11));
   float bestH = 0.0;
   float bestVein = 0.0;
 
@@ -1613,9 +1495,9 @@ void foliage_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
           float vein = 1.0 - surface_ramp(0.0, 0.05, abs(e.y * s.y));
           float sideV = surface_ramp(0.75, 1.0, abs(fract(e.x * 5.0 + e.y * 2.0) * 2.0 - 1.0));
           vein = clamp(vein + sideV * 0.45 * cover, 0.0, 1.0);
-          vec3 cYoung = owSRGB(vec3(0.180, 0.330, 0.090));
-          vec3 cOld   = owSRGB(vec3(0.095, 0.185, 0.060));
-          vec3 cDry   = owSRGB(vec3(0.390, 0.320, 0.110));
+          vec3 cYoung = owSRGB(vec3(0.30, 0.46, 0.15));
+          vec3 cOld   = owSRGB(vec3(0.17, 0.30, 0.095));
+          vec3 cDry   = owSRGB(vec3(0.46, 0.39, 0.19));
           vec3 lc = mix(cYoung, cOld, r2.z);
           lc = mix(lc, cDry, surface_ramp(0.55, 1.0, r2.w) * 0.8);
           // blotches and mildew spots
@@ -1640,7 +1522,7 @@ void foliage_surface(vec2 uv, out vec3 alb, out float h, out float rough, out fl
   foliage_height = mix(.5,bestH,bestCover);
   rough = clamp(0.62 + (1.0 - bestVein) * 0.14 + (fine - 0.5) * 0.10, 0.35, 0.95);
   metal = 0.0;
-  ao = clamp(0.55 + bestDepth * 0.45, 0.3, 1.0);
+  ao = clamp(0.80 + bestDepth * 0.20, 0.3, 1.0);
 }
 
 void surface_sample(vec2 uv, float kind, out vec3 albedo, out float height, out vec3 packed) {

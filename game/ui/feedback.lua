@@ -1,4 +1,5 @@
 -- Bounded, engine-independent combat presentation. Never owns combat state.
+local map_style=require("game.ui.style").map
 local events=require "game.events"
 local defs=require "game.weapons.defs"
 local weapons=require "game.systems.weapons"
@@ -129,7 +130,7 @@ function M.items(ctx,width,height)
     for _,id in ipairs(ctx.ai.order) do
         local e=ctx.ai.actors[id]
         if e.actor.alive and #result.contacts<M.contacts then
-            local p=M.map_point(e.position,out.position,148,22,false)
+            local p=M.map_point(e.position,out.position,map_style.size,22,false)
             if p then p.id=id;result.contacts[#result.contacts+1]=p end
         end
     end
@@ -174,7 +175,7 @@ function M.items(ctx,width,height)
     for i,v in ipairs(s.objectives) do
         local p=M.project(v.position,out,width,height,100)
         p.label=v.label;p.name=v.name
-        local map=M.map_point(v.position,out.position,148,22,true)
+        local map=M.map_point(v.position,out.position,map_style.size,22,true)
         p.map_x,p.map_y,p.floor=map.x,map.y,map.floor
         result.objectives[i]=p
     end

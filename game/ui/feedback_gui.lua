@@ -1,3 +1,4 @@
+local map_style=require("game.ui.style").map
 local W=require "game.ui.widgets"
 local limits=require "game.ui.feedback"
 local M={}
@@ -17,16 +18,16 @@ function M.new(TL,BR,BOTTOM,TOP)
             local v={nodes={}}
             local function add(n) v.nodes[#v.nodes+1]=n;return n end
             if kind=="contacts" then
-                v.label=add(text(id,98,510,"o",.85,W.red,TL))
+                v.label=add(text(id,map_style.x,map_style.y,"o",.85,W.red,TL))
             elseif kind=="arcs" then
                 for j=1,7 do add(box(id.."_"..j,480,320,10,3,W.red,"damage")) end
             elseif kind=="numbers" then v.label=add(text(id,480,320,"",1.1,W.white))
             elseif kind=="objectives" then
                 v.glyph=add(text(id,480,320,"",1,W.accent))
                 v.label=add(text(id.."_label",480,296,"",.65,W.accent))
-                v.map=add(text(id.."_map",98,510,"",.7,W.accent,TL))
+                v.map=add(text(id.."_map",map_style.x,map_style.y,"",.7,W.accent,TL))
             else
-                v.back=add(box(id.."_back",480,320,110,48,W.panel))
+                v.back=add(box(id.."_back",480,320,110,48,W.hud_panel))
                 v.glyph=add(text(id,480,320,"!",1.1,W.red))
                 v.title=add(text(id.."_title",480,320,"GRENADE",.65,W.red))
                 v.label=add(text(id.."_label",480,300,"",.7,W.red))
@@ -37,7 +38,7 @@ function M.new(TL,BR,BOTTOM,TOP)
             enable(v,false);s.pools[kind][i]=v
         end
     end
-    s.banner=text("elimination_banner",480,521,"",1.15,W.white,TOP)
+    s.banner=text("elimination_banner",480,521,"",.95,W.white,TOP)
     s.banner_sub=text("elimination_detail",480,500,"",.72,amber,TOP)
     s.prompt=text("interaction_prompt",480,215,"",.9,W.white,BOTTOM)
     s.prompt_sub=text("interaction_detail",480,193,"",.7,W.muted,BOTTOM)
@@ -87,7 +88,7 @@ function M.item(s,d)
     local v=s.pools[d.kind][d.index]
     if not v then return end
     if d.kind=="contacts" then
-        W.position(v.label,98+d.x,510+d.y,s.TL)
+        W.position(v.label,map_style.x+d.x,map_style.y+d.y,s.TL)
         gui.set_text(v.label,d.floor==1 and "^" or d.floor==-1 and "v" or "o")
     elseif d.kind=="arcs" then
         local bell={.1,.28,.62,1,.62,.28,.1}
@@ -106,7 +107,7 @@ function M.item(s,d)
         gui.set_text(v.glyph,d.offscreen and "^" or "["..d.label.."]")
         gui.set_euler(v.glyph,vmath.vector3(0,0,d.offscreen and d.angle or 0))
         gui.set_text(v.label,string.format("%s %dm",d.name,math.floor(d.distance+.5)))
-        W.position(v.map,98+d.map_x,510+d.map_y,s.TL)
+        W.position(v.map,map_style.x+d.map_x,map_style.y+d.map_y,s.TL)
         gui.set_text(v.map,d.label..(d.floor==1 and "^" or d.floor==-1 and "v" or ""))
     else
         place(v.back,d.x,d.y-10);place(v.glyph,d.x-43,d.y+3);place(v.title,d.x+4,d.y+3);place(v.label,d.x,d.y-16)

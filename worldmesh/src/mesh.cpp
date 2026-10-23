@@ -161,15 +161,17 @@ struct Primitive {
                 quad(torus(a,b),torus(a,b+PI/3),torus(a+PI/6,b+PI/3),torus(a+PI/6,b));
             }
         } else if (s.kind=="frond") {
-            for (int i=0;i<12;++i) {
-                double a=i/12.0,b=(i+1)/12.0;
-                double ya=h*(1-2*a*a),za=-d+2*d*a,yb=h*(1-2*b*b),zb=-d+2*d*b,r=w*.04;
-                quad(Vec{{-r,ya,za}},Vec{{-r,yb,zb}},Vec{{r,yb,zb}},Vec{{r,ya,za}},true);
+            for (int i=0;i<8;++i) {
+                double a=i/8.0,b=(i+1)/8.0;
+                double ya=h*(1-2*a*a+.9*std::sin(PI*a)),za=-d+2*d*a,yb=h*(1-2*b*b+.9*std::sin(PI*b)),zb=-d+2*d*b;
+                double ra=w*.024*(1-a*.8),rb=w*.024*(1-b*.8);
+                quad(Vec{{-ra,ya,za}},Vec{{-rb,yb,zb}},Vec{{rb,yb,zb}},Vec{{ra,ya,za}},true);
             }
-            for (int i=1;i<=12;++i) {
-                double t=(i-.5)/12,y=h*(1-2*t*t),z=-d+2*d*t,length=w*(.25+.75*std::sin(PI*t));
-                for (int side=-1;side<=1;side+=2)
-                    quad(Vec{{0,y,z}},Vec{{side*length*.55,y-.025,z-.055}},Vec{{side*length,y-h*.17,z+d*.16}},Vec{{side*length*.4,y-.04,z+.075}},true);
+            for (int i=1;i<=18;++i) for (int side=-1;side<=1;side+=2) {
+                double t=(i-.5+side*.14)/19,y=h*(1-2*t*t+.9*std::sin(PI*t)),z=-d+2*d*t;
+                double length=w*(.18+.82*std::sin(PI*t))*(.92+.08*std::sin(i*2.4+side));
+                quad(Vec{{0,y,z}},Vec{{side*length*.42,y+.018,z+d*.018}},
+                    Vec{{side*length,y-h*.20,z+d*.14}},Vec{{side*length*.38,y-.018,z+d*.055}},true);
             }
         } else {
             dmArray<Vec> rings[4];
