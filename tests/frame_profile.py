@@ -84,7 +84,7 @@ def main():
         return game.command(name, data or {})['result']
 
     def state():
-        return {n: cmd(n + '.snapshot') for n in ('gameplay', 'ai', 'renderer', 'weapons', 'ui')}
+        return {n: cmd(n + '.snapshot') for n in ('gameplay', 'ai', 'renderer', 'weapons', 'ui', 'combat_fx')}
 
     def reset():
         cmd('gameplay.restart')

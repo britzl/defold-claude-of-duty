@@ -163,7 +163,12 @@ function M.update(test,self,dt,restart)
         end
         check("sixty_seconds_pool_pressure_and_three_restarts",stressed)
         world.final(stage);ctx.world.views.effects_fixture=nil;self.view=nil
-        test.done=true;report("PASS",{checks=test.checks,shots=test.shots,renderer=self.renderer_stats,effects=visual.snapshot(a)})
+        -- The complete renderer snapshot exceeds the native logger's line
+        -- limit. Keep the acceptance receipt small enough to parse intact.
+        test.done=true;report("PASS",{checks=test.checks,shots=test.shots,
+            renderer={combat_transparency=self.renderer_stats.combat_transparency,pipeline=self.renderer_stats.pipeline,
+                output_width=self.renderer_stats.output_width,output_height=self.renderer_stats.output_height},
+            effects=visual.snapshot(a)})
     end) end
     local ok,message=coroutine.resume(test.job);assert(ok,message)
 end

@@ -822,6 +822,68 @@ the eight raw captures and source/binary hashes in `profile`, `native` and
 options/bundle hashes. The Lua reference and C++ port must be updated together
 when adding or changing pose layers; the shared parity suite guards drift.
 
+### Combat effects presentation reuse (2026-10-23)
+
+`game/render/combat_fx_defold.lua` now retains the exact position, rotation
+inputs, scale and shader parameters last submitted for each of its 220 pooled
+objects. Unchanged properties skip their `go.set*` calls and temporary vmath
+values. Camera revisions update billboards and spark projections even between
+60 Hz effect ticks; decals retain their surface orientation. Spark projection
+also depends on velocity, and all cached values account for in-place edits,
+slot recycling, hidden effects, fixtures and resets. The inverse camera rotation
+is shared by sparks. Tint updates occur only when colour or material variant
+changes. The caches are bounded by the existing pool sizes.
+
+Haze is counted during the existing visibility scan, removing the per-frame
+diagnostic `fx.snapshot()` allocation and four-pool recount. Pending muzzle
+events reuse their queue. Effect simulation, collision rays, emission recipes,
+quality settings and pool sizes retain their existing behavior.
+
+Four new scopes separate `effects.simulate`, `effects.pending_fire`,
+`effects.present` and `effects.haze_count` beneath `late.combat_fx`. The baseline
+includes the same instrumentation. Matched native debug Metal runs use the same
+Defold 1.14.0 (`a81dbb0`) engine binary, native pose evaluation, LuaJIT enabled,
+High quality, 1280×720 and six actors. Each version has two firing/reloading and
+two sprinting runs in reversed workload order: **9,575 complete frames** total.
+The M3 Pro stayed on battery (84–77%). Weighted means are **ms per rendered frame**:
+
+| Scope | Firing/reloading before → after | Sprinting before → after |
+| --- | ---: | ---: |
+| **late.combat_fx** | **0.394 → 0.226 (−42.6%)** | **0.162 → 0.125 (−23.1%)** |
+| Effect presentation | 0.326 → 0.171 | 0.135 → 0.097 |
+| Effect simulation, including fragment rays | 0.052 → 0.049 | 0.018 → 0.022 |
+| Separate haze count/reporting | 0.0097 → 0.0006 | 0.0049 → 0.0005 |
+
+The child rows are subdivisions of the total. Haze counting itself now occurs
+inside presentation; the remaining haze scope only publishes count changes.
+Firing totals improve in both repetitions (0.382/0.406 → 0.237/0.215 ms), as do
+sprinting totals (0.163/0.161 → 0.126/0.124 ms). Whole Main/Step averages were
+8.963 → 8.663 ms firing and 8.394 → 8.398 ms sprinting. Frame pacing, live-combat
+variation and profiler overhead prevent attributing all whole-frame changes to
+this optimization; release FPS and browser performance remain unmeasured.
+
+`tests/combat_fx_presentation_test.lua` compares submitted transforms/materials
+with the unconditional presentation formulas and asserts zero repeated property
+writes on unchanged frames. Six cases cover camera-only changes, mutable inputs,
+hidden/recycled effects, pending muzzle events, quality/fixture/reset transitions,
+and 144 Hz presentation through effect expiry. Seven Lua suites pass, including
+the existing 16 effect tests. Native Metal and release Chrome WebGL2 each pass
+all **13 behavior checks, 15 captures and 8 pixel gates**, including exact
+effects-off/on and heat-off/on returns, opaque occlusion, transparent sorting,
+fragment collisions, a minute of pool pressure and three resets. The fixture's
+completion receipt is now compact enough for the native logger's line limit.
+
+Reproduce with `lua tests/combat_fx_test.lua`,
+`lua tests/combat_fx_presentation_test.lua`, and
+`PYTHONPATH=automation-bridge-python python3 tests/effects_smoke.py`. The browser
+fixture uses `tests/effects_browser.project` and `tools/validate_effects_browser.mjs`;
+`tests/effects_pixels.py` checks either capture directory. The frame profiling
+runner now saves combat-effect state alongside its other before/after receipts.
+Evidence is in `build/combat-fx-2026-10-23`: `before-profile`, `after-profile`,
+`summary.json`, `analyze.py`, unit logs and native/browser capture reports.
+The first native run's truncated completion log is retained separately; the
+final `native` report parses and passes all gates.
+
 ### Capsule query reuse (2026-10-22)
 
 The controller now reuses positive ground support within a fixed tick when the

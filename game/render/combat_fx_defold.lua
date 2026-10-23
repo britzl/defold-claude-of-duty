@@ -12,6 +12,61 @@ end
 local function visible(part,value)
     if part.visible~=value then msg.post(part.url,value and "enable" or "disable");part.visible=value end
 end
+-- This adapter exclusively owns the pooled objects. Retain the exact Lua
+-- inputs last submitted, rather than comparing double inputs with float vmath
+-- outputs. This also notices in-place fixture edits and recycled pool slots.
+local function present(a,part,e,camera_rotation)
+    local c=part.presented or {};part.presented=c
+    local p=e.position
+    if c.px~=p.x or c.py~=p.y or c.pz~=p.z then
+        go.set_position(vmath.vector3(p.x,p.y,p.z),part.id)
+        c.px,c.py,c.pz=p.x,p.y,p.z
+    end
+    local angle=e.seed*6.2831853+e.spin*(e.duration-e.life)
+    local stretch=1
+    if e.kind==K.spark then
+        local v=e.velocity
+        if c.spark_camera~=a.camera_revision or c.vx~=v.x or c.vy~=v.y or c.vz~=v.z then
+            if a.inverse_revision~=a.camera_revision then
+                a.camera_inverse=vmath.conj(camera_rotation);a.inverse_revision=a.camera_revision
+            end
+            local projected=vmath.rotate(a.camera_inverse,vmath.vector3(v.x,v.y,v.z))
+            c.spark_angle=math.atan2(projected.y,projected.x)
+            c.stretch=1+math.min(12,vmath.length(projected)*.8)
+            c.spark_camera=a.camera_revision;c.vx,c.vy,c.vz=v.x,v.y,v.z
+        end
+        angle,stretch=c.spark_angle,c.stretch
+    end
+    if e.decal then
+        local n=e.normal
+        if not c.decal or c.angle~=angle or c.nx~=n.x or c.ny~=n.y or c.nz~=n.z then
+            local r=V.forward_rotation(n)
+            go.set_rotation(vmath.quat(r.x,r.y,r.z,r.w)*vmath.quat_rotation_z(angle),part.id)
+            c.angle=angle;c.nx,c.ny,c.nz=n.x,n.y,n.z
+        end
+    elseif c.decal or c.angle~=angle or c.camera_revision~=a.camera_revision then
+        go.set_rotation(camera_rotation*vmath.quat_rotation_z(angle),part.id)
+        c.angle=angle;c.camera_revision=a.camera_revision
+    end
+    c.decal=e.decal
+    local size,opacity=fx.appearance(e)
+    local sx=size*stretch
+    if c.sx~=sx or c.sy~=size then
+        go.set_scale(vmath.vector3(sx,size,size),part.id);c.sx,c.sy=sx,size
+    end
+    local age=1-e.life/e.duration
+    if c.kind~=e.kind or c.opacity~=opacity or c.seed~=e.seed or c.age~=age then
+        go.set(part.url,"particle",vmath.vector4(e.kind,opacity,e.seed,age))
+        c.kind,c.opacity,c.seed,c.age=e.kind,opacity,e.seed,age
+    end
+    if part.group~="haze" then
+        local colour,variant=e.colour,e.variant or 0
+        if c.r~=colour[1] or c.g~=colour[2] or c.b~=colour[3] or c.variant~=variant then
+            go.set(part.url,"tint",vmath.vector4(colour[1],colour[2],colour[3],variant))
+            c.r,c.g,c.b,c.variant=colour[1],colour[2],colour[3],variant
+        end
+    end
+end
 function M.new(ctx)
     local a={state=new_state(ctx),parts={},pending={},ctx=ctx}
     -- World-only rays never put a decal on a moving corpse or fragment.
@@ -93,6 +148,7 @@ function M.configure(a,options)
     a.options=options;fx.configure(a.state,options)
 end
 function M.update(a,dt,camera_rotation,muzzle,capture,enabled,camera_position,sun)
+    if profiler then profiler.scope_begin("effects.simulate") end
     if not capture then
         local env
         if a.ctx.world.ready and enabled then
@@ -100,38 +156,33 @@ function M.update(a,dt,camera_rotation,muzzle,capture,enabled,camera_position,su
             env={position=camera_position,forward=forward,sun=sun}
         end
         fx.update(a.state,a.ctx.world.ready and dt or 0,a.query,env)
-        for _,direction in ipairs(a.pending) do fx.fire(a.state,muzzle,direction,false) end
-        a.pending={}
     end
+    if profiler then profiler.scope_end();profiler.scope_begin("effects.pending_fire") end
+    if not capture then
+        for i,direction in ipairs(a.pending) do fx.fire(a.state,muzzle,direction,false);a.pending[i]=nil end
+    end
+    if profiler then profiler.scope_end();profiler.scope_begin("effects.present") end
     local state=a.fixture or a.state
     local show=enabled and (not capture or a.fixture~=nil)
+    if a.camera_x~=camera_rotation.x or a.camera_y~=camera_rotation.y
+        or a.camera_z~=camera_rotation.z or a.camera_w~=camera_rotation.w then
+        a.camera_x,a.camera_y,a.camera_z,a.camera_w=camera_rotation.x,camera_rotation.y,camera_rotation.z,camera_rotation.w
+        a.camera_revision=(a.camera_revision or 0)+1
+    end
+    local haze=0
     for i,part in ipairs(a.parts) do
         local e=state[part.group][part.index]
         visible(part,show and e.life>0)
         if part.visible then
-            local size,opacity=fx.appearance(e)
-            go.set_position(vmath.vector3(e.position.x,e.position.y,e.position.z),part.id)
-            local q=camera_rotation
-            if e.decal then
-                local r=V.forward_rotation(e.normal);q=vmath.quat(r.x,r.y,r.z,r.w)
-            end
-            local angle=e.seed*6.2831853+e.spin*(e.duration-e.life)
-            -- Sparks stretch along their projected velocity, shrinking as they cool.
-            local stretch=1
-            if e.kind==K.spark then
-                local v=vmath.rotate(vmath.conj(camera_rotation),vmath.vector3(e.velocity.x,e.velocity.y,e.velocity.z))
-                angle=math.atan2(v.y,v.x);stretch=1+math.min(12,vmath.length(v)*.8)
-            end
-            go.set_rotation(q*vmath.quat_rotation_z(angle),part.id)
-            go.set_scale(vmath.vector3(size*stretch,size,size),part.id)
-            go.set(part.url,"particle",vmath.vector4(e.kind,opacity,e.seed,1-e.life/e.duration))
-            if part.group~="haze" then go.set(part.url,"tint",vmath.vector4(e.colour[1],e.colour[2],e.colour[3],e.variant or 0)) end
+            present(a,part,e,camera_rotation)
+            if part.group=="haze" then haze=haze+1 end
         end
     end
-    local haze=show and fx.snapshot(state).haze or 0
+    if profiler then profiler.scope_end();profiler.scope_begin("effects.haze_count") end
     if haze~=a.haze_count then
         a.haze_count=haze;msg.post("@render:","renderer_combat_state",{haze=haze})
     end
+    if profiler then profiler.scope_end() end
 end
 function M.snapshot(a)
     local s=fx.snapshot(a.fixture or a.state);s.fixture=a.fixture~=nil
