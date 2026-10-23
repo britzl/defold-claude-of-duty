@@ -616,6 +616,123 @@ Raw trees and counters are retained in `build/frame-profile-2026-10-22-current`
 and `build/frame-profile-2026-10-22-unpolled`; diagnostic controls and their runner
 are in `build/frame-profile-pacing`.
 
+### Detailed AI and animation profile (2026-10-23)
+
+Finer scopes now separate foot-ground rays, AI decisions, animation sampling and
+interpolation, nine pose-evaluation stages, IK solving/rotation, hit volumes and
+palette conversion/submission. Four fresh native debug Metal captures (two
+firing/reloading and two sprinting, reversed order) contain **4,617 complete
+Main/Step frames** at High, 1280×720, six AI actors and AC power. LuaJIT was enabled
+before and after every selected run. Sources and engine hashes are recorded.
+
+The following groups are disjoint, in **ms per rendered frame across all actors**:
+
+| AI / soldier work | Firing/reloading | Sprinting |
+| --- | ---: | ---: |
+| Capsule movement, including collision sweeps | 0.839 | 0.804 |
+| Foot-ground queries | 0.644 | 0.499 |
+| Leg IK | 0.358 | 0.309 |
+| Both arms' IK | 0.272 | 0.229 |
+| Other pose math | 0.293 | 0.227 |
+| Palette conversion, transforms and submission | 0.339 | 0.334 |
+| Hitbox synchronization | 0.128 | 0.101 |
+| Perception, steering and navigation | 0.130 | 0.082 |
+| Other animation/AI work and dynamics presentation | 0.562 | 0.287 |
+| **AI / soldier block** | **3.566** | **2.873** |
+| **Whole Main/Step** | **9.170** | **8.558** |
+
+The useful subdivisions in the firing workload are:
+
+- Bullet's native `cast_ray_closest` consumes **0.612 ms** of the **0.644 ms**
+  foot-ground scope (95%). There are two foot rays per actor fixed update,
+  averaging 13.2 rays per rendered frame. Capsule movement separately includes
+  **0.473 ms** in native sweeps and **0.366 ms** in the remaining controller work.
+- Pose math costs **0.923 ms** across simulation and presentation. Leg and arm
+  IK account for **0.630 ms**, or 68%. Within IK, `ik.solve` self time is
+  **0.448 ms**; rotating bone subtrees costs **0.048 ms** across all solve/orient
+  callers. These nested details must not be added to the table again.
+- The three palette `go.set` calls per actor consume **0.275 ms**; matrix
+  conversion is **0.032 ms**. This measures CPU submission, not GPU skinning.
+- Perception is **0.019 ms**, steering **0.059 ms**, navigation **0.052 ms**.
+  Animation interpolation is **0.031 ms**.
+
+The largest new presentation-pose spike is **5.201 ms**: **2.153 ms** in leg IK,
+**0.817 ms** in right-arm IK and **0.930 ms** in left-arm IK (75% combined).
+This localizes elapsed time; it does not distinguish computation, allocation/GC
+or scheduling within those scopes, and does not retroactively explain the
+earlier 10.86 ms spike. Foot-query reuse and avoiding unnecessary repeated IK
+solves are the first optimization candidates; behavior changes are not part of
+this instrumentation.
+
+These debug timings include profiler overhead and waits. The existing
+256-contact-cap warning appeared in both the baseline and selected fresh run.
+Paused/failed runs, a run overlapping Lua validation, and a rebooted diagnostic
+process with substantially different Lua timings are excluded. Eight Lua suites
+pass with balanced profiler scopes, including animation, presentation, AI,
+ragdolls and capsule-query/reuse checks.
+
+`--unattended` explicitly ignores OS focus callbacks in the owned debug profiling
+process through `profiling.configure`; ordinary runs retain their focus rules.
+The harness saves before/after state receipts, including LuaJIT status.
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/frame_profile.py \
+  --output build/ai-animation-profile-new --scenarios firing sprint --unattended
+```
+
+Selected evidence is under `build/ai-animation-profile-2026-10-23/fresh`, with
+raw trees, `report.json`, `breakdown.json` and per-workload pose-spike details.
+The parent directory contains `summary.json`, `analyze.py` and validation logs.
+
+### Planted-foot and unchanged IK reuse (2026-10-23)
+
+Planted feet now retain positive, supported ground hits when the query adapter
+proves its static collision revision unchanged. Query/ray identity, filter/world
+validity, horizontal ray position and length must still match. A lower ray origin
+can reuse the original clear span only while the ray contains that first hit;
+a higher origin queries the newly exposed space. Misses, unsupported contacts,
+swings, vaults, teleports and pending world edits discard the proof. Cached hits
+are copied so adapters can safely overwrite their result buffers.
+
+Each pose evaluator also caches two-bone IK rotation deltas by the exact three
+joint origins, target, pole, chain indices and immutable rig identity. Reuse
+applies those deltas to the current bone transforms, preserving independently
+changed orientations and descendants. Moving roots retain only their origin
+until it settles, limiting cache bookkeeping on continuously animated chains.
+An advancing animation clock bypasses IK cache bookkeeping entirely; settled
+samples resume exact geometric checks. Simulation and presentation own separate
+caches. No pose quantization or reduced animation update frequency is used.
+
+Matched native debug Metal captures contain 4,559 before and 4,640 after frames,
+with the same engine, High 1280×720, six actors, AC power and LuaJIT enabled.
+Each workload ran twice in reversed order within each build. Values below are
+milliseconds per rendered frame; the first two rows are included in AI/soldiers:
+
+| Work | Firing before → after | Sprinting before → after |
+| --- | ---: | ---: |
+| Foot-ground query scope | 0.625 → 0.236 | 0.505 → 0.238 |
+| Leg and arm IK stages | 0.600 → 0.617 | 0.505 → 0.518 |
+| Total AI/soldiers | 3.445 → 3.241 | 2.828 → 2.698 |
+| Whole Main/Step | 9.079 → 9.004 | 8.548 → 8.550 |
+
+Foot hits were reused on 63.3% / 56.8% of requests, reducing query-scope time
+by 62.2% / 52.9%. Total AI/soldier cost fell 5.9% / 4.6%. Continuously advancing
+poses bypassed IK caching in these captures; IK stages rose 0.017 / 0.013 ms.
+Repeated-pose tests confirm all four solves are reused with exact transforms.
+The cache benefits unchanged chains; it cannot skip changing poses.
+Whole-frame elapsed time is largely unchanged under pacing, so these debug
+scope savings are not a release-FPS claim.
+
+Validation passes 102 checks across nine Lua suites (including eleven new reuse
+checks with exact cached/fresh transform comparisons and invalidation coverage),
+plus all 11 native soldier checks and 15 captures. No console errors occurred;
+the existing 256-contact-cap warning remains. `tests/animation_reuse_test.lua`
+covers the new guards. Matched traces, source hashes, the comparison driver,
+`summary.json`, Lua logs and native validation are retained under
+`build/animation-reuse-2026-10-23`. Use `matched-before` and `final-after` for the
+comparison, and `final-native-validation` for native checks. The earlier `after`
+and `matched-after` captures predate the final guards and are diagnostic only.
+
 ### Capsule query reuse (2026-10-22)
 
 The controller now reuses positive ground support within a fixed tick when the

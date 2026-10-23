@@ -57,6 +57,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--scenarios', nargs='+', choices=('standing', 'sprint', 'firing'),
                         default=['standing', 'sprint', 'firing'])
+    parser.add_argument('--focus', action='store_true', help='Focus the engine window while profiling')
+    parser.add_argument('--unattended', action='store_true', help='Ignore window focus callbacks in this debug profiling process')
     args = parser.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -66,12 +68,13 @@ def main():
               'method': 'Defold native debug Metal / Remotery, High quality, 1280x720. '
                         'Main/Step elapsed scopes include driver waits and profiler overhead. '
                         'AI damage disabled to keep the player alive. Two repetitions in reversed order.'}
+    report['unattended'] = args.unattended
 
     def save():
         (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
 
     project = editor.open_project(ROOT, start_if_needed=False)
-    game = project.build_and_run(timeout=180, focus=False)
+    game = project.build_and_run(timeout=180, focus=args.focus)
     report['engine_binary_sha256'] = hashlib.sha256((ROOT / 'build/arm64-osx/dmengine').read_bytes()).hexdigest()
 
     def cmd(name, data=None):
@@ -106,8 +109,12 @@ def main():
             with gzip.open(out / (name + '-raw.json.gz'), 'wt') as stream:
                 json.dump(asdict(capture), stream)
         after = state()
+        # Preserve the receipts even when a window focus change invalidates a
+        # run, so paused/dead captures cannot be mistaken for live measurements.
+        (out / (name + '-state.json')).write_text(json.dumps(dict(before=before, after=after), indent=2) + '\n')
         for snapshot in (before, after):
             assert not snapshot['gameplay']['paused'] and snapshot['gameplay']['alive']
+            assert snapshot['gameplay'].get('profile_unattended', False) == args.unattended
             assert (snapshot['renderer']['output_width'], snapshot['renderer']['output_height']) == (1280, 720)
             quality = snapshot['ui']['quality']
             assert quality['mode'] == quality['active'] == 'high'
@@ -131,6 +138,8 @@ def main():
                              {'ticks': 360, 'aim': True, 'fire': True}, {'ticks': 360, 'reload': True}]),
     }
     try:
+        if args.unattended:
+            cmd('profiling.configure', {'unattended': True})
         engine.wait_until(lambda: cmd('world.snapshot')['ready'] and cmd('renderer.snapshot')['ready'], timeout=90)
         report['health'] = game.health()
         game.resize(1280, 720)

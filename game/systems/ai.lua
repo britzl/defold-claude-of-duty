@@ -200,8 +200,11 @@ function M.fixed_update(ctx,dt)
     if ai.enabled and ctx.player.enabled then grenades.squads(ctx,dt) end
     for _,id in ipairs(ai.order) do
         local e=ai.actors[id]
+        if profiler then profiler.scope_begin("ai.snapshot") end
         e.previous=V.copy(e.position);e.previous_yaw=e.yaw;e.previous_pose=sample(e,e.previous_pose)
+        if profiler then profiler.scope_end();profiler.scope_begin("ai.query_setup") end
         local query=service and service.api.query(service,e) or e.query
+        if profiler then profiler.scope_end() end
         if query then
             if not e.actor.alive then
                 if e.state~="dead" then
@@ -220,10 +223,13 @@ function M.fixed_update(ctx,dt)
                     tactics.release(ai,e);e.nav_job=nil;e.route=nil;e.route_goal=nil;e.think=0
                     e.target_point=nil
                 end
+                if profiler then profiler.scope_begin("ai.perception") end
                 suppression.tick(e,dt)
                 perception.tick(ctx,e,query,dt)
+                if profiler then profiler.scope_end();profiler.scope_begin("ai.weapon_state") end
                 grenades.tick(ctx,e,dt)
                 guns.tick(ctx,e,dt,muzzle(e))
+                if profiler then profiler.scope_end();profiler.scope_begin("ai.steering") end
                 e.cooldown=math.max(0,e.cooldown-dt);e.route_age=e.route_age+dt
                 e.think=e.think-dt
                 if e.think<=0 and not e.nav_job and not e.motion.mantle and not e.throw_target then
@@ -268,9 +274,10 @@ function M.fixed_update(ctx,dt)
                 if traversal.begin(e,waypoint,query) then
                     table.remove(e.route,1);waypoint=e.route[1]
                 end
+                if profiler then profiler.scope_end() end
                 if profiler then profiler.scope_begin("ai.movement") end
                 capsule.update(e.motion,intent,dt,query)
-                if profiler then profiler.scope_end() end
+                if profiler then profiler.scope_end();profiler.scope_begin("ai.locomotion_state") end
                 if e.motion.vault_aborted then
                     e.animation.vault_time=-1;e.route=nil;e.route_goal=nil;e.think=0
                     e.vault_failures=(e.vault_failures or 0)+1
@@ -291,15 +298,22 @@ function M.fixed_update(ctx,dt)
                 e.aim_yaw=wrap(angle(target.x-e.position.x,target.z-e.position.z)-e.yaw)
                 e.pitch=V.clamp(math.atan2(target.y-(e.position.y+1.4),math.max(.01,d)),-.5,.5)
                 e.recoil=math.max(0,e.recoil-dt*8)
+                if profiler then profiler.scope_end() end
             end
-            if e.actor.alive and ai.enabled and ctx.player.enabled then animation.step(e,dt,query) end
+            if e.actor.alive and ai.enabled and ctx.player.enabled then
+                if profiler then profiler.scope_begin("ai.animation_step") end
+                animation.step(e,dt,query)
+                if profiler then profiler.scope_end() end
+            end
             if profiler then profiler.scope_begin("ai.simulation_pose") end
             -- Simulation owns this scratch independently of interpolated
             -- presentation. Hit volumes copy the transforms they retain.
             e.simulation_pose=e.simulation_pose or {}
             if e.ragdoll then e.palette=e.ragdoll.palette
             elseif e.actor.alive then
+                if profiler then profiler.scope_begin("animation.sample") end
                 e.current_pose=sample(e,e.current_pose)
+                if profiler then profiler.scope_end() end
                 e.palette,e.joints=rig.pose(e.current_pose,e.simulation_pose)
             end
             if profiler then profiler.scope_end();profiler.scope_begin("ai.hitboxes") end
@@ -331,8 +345,11 @@ function M.present(ctx)
     for _,id in ipairs(ctx.ai.order) do
         local e=ctx.ai.actors[id]
         if profiler then profiler.scope_begin("soldiers.pose") end
+        if profiler then profiler.scope_begin("animation.sample") end
         e.current_pose=sample(e,e.current_pose)
+        if profiler then profiler.scope_end();profiler.scope_begin("animation.interpolate") end
         local state=animation.interpolate(e.previous_pose,e.current_pose,alpha,e.interpolated_pose)
+        if profiler then profiler.scope_end() end
         e.interpolated_pose=state
         local p={x=V.lerp(e.previous.x,e.position.x,alpha),y=V.lerp(e.previous.y,e.position.y,alpha),z=V.lerp(e.previous.z,e.position.z,alpha)}
         e.presentation_pose=e.presentation_pose or {}

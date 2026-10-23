@@ -87,7 +87,9 @@ end
 function M:ray(origin, dx, dy, dz)
     self.position.x, self.position.y, self.position.z = origin.x, origin.y, origin.z
     self.translation.x, self.translation.y, self.translation.z = dx, dy, dz
+    if profiler then profiler.scope_begin("capsule.ray") end
     local hit = bullet3d.world.cast_ray_closest(self.world, self.position, self.translation, self.filter)
+    if profiler then profiler.scope_end() end
     if not hit then return nil end
     local shape = self.surfaces[bullet3d.get_gameobject_id(hit.object)]
     return { x = hit.point.x, y = hit.point.y, z = hit.point.z,

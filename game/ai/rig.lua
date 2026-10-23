@@ -46,10 +46,18 @@ M.count=#M.bones
 
 -- A single evaluator owns skinning, hit volumes and ragdoll handoff frames.
 function M.pose(state,scratch)
+    if profiler then profiler.scope_begin("rig.layers") end
     scratch=scratch or {}
     local rotations,worlds,palette=scratch.rotations or {},scratch.worlds or {},scratch.palette or {}
     local angles=scratch.angles or {};scratch.angles=angles
     scratch.ik=scratch.ik or {}
+    -- Advancing animation clocks almost never repeat an exact limb solve.
+    -- Bypass memo bookkeeping until the clock settles; the solver still checks
+    -- every geometric input before reusing a solution on repeated samples.
+    local clock=state.time or 0
+    scratch.ik.reuse=scratch.pose_time==nil or scratch.pose_time==clock
+    if not scratch.ik.reuse then scratch.ik.solve_bones=nil;scratch.ik.solves=nil end
+    scratch.pose_time=clock
     for i=1,M.count do
         local a=angles[i] or {};angles[i]=a;a[1],a[2],a[3]=0,0,0
     end
@@ -106,6 +114,7 @@ function M.pose(state,scratch)
         end
     end
     local pelvis=(state.pelvis or 0)*live
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.forward_kinematics") end
     for i,bone in ipairs(M.bones) do
         local a=angles[i]
         local m=T.rotation(a[1],a[2],a[3],rotations[i]);rotations[i]=m
@@ -121,6 +130,7 @@ function M.pose(state,scratch)
             worlds[i]=worlds[i] or {};for k=1,12 do worlds[i][k]=m[k] end
         end
     end
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.pelvis_reach") end
     -- Lower the pelvis enough to reach planted ankles without stretching knees.
     local reach_drop=0
     if live>0 and vault<.001 then
@@ -141,6 +151,7 @@ function M.pose(state,scratch)
         for _,w in ipairs(worlds) do w[8]=w[8]+reach_drop end
     end
     scratch.reach_drop=reach_drop
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.leg_ik") end
     -- Correct feet after the additive layers, before solving the carried weapon.
     for _,side in ipairs(sides) do
         local foot=state.feet and state.feet[side]
@@ -160,6 +171,7 @@ function M.pose(state,scratch)
             IK.orient(worlds,M.bones,M.index["Foot"..side],T.between({x=0,y=1,z=0},V.normalize({x=normal.x*k,y=ny,z=normal.z*k})),scratch.ik)
         end
     end
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.weapon_frame") end
     -- A rigid weapon frame follows the chest. Both hands solve to its sockets.
     local chest=worlds[M.index.Spine2]
     local gun=T.mul(chest,T.identity(-M.bones[M.index.Spine2].bind.x,-M.bones[M.index.Spine2].bind.y,-M.bones[M.index.Spine2].bind.z))
@@ -168,8 +180,10 @@ function M.pose(state,scratch)
     layer=T.mul(layer,T.identity(-pivot.x,-pivot.y,-pivot.z))
     gun=T.mul(gun,layer)
     local right=T.point(gun,M.grip_r)
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.right_arm_ik") end
     IK.solve(worlds,M.bones,M.index.UpperArmR,M.index.ForearmR,M.index.HandR,right,{x=.35,y=-1,z=.45},scratch.ik)
     IK.orient(worlds,M.bones,M.index.HandR,gun,scratch.ik)
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.support_target") end
     -- Use the solved hand frame so the support hand always follows the mesh.
     local hand=worlds[M.index.HandR]
     gun=T.mul(hand,T.identity(-M.grip_r.x,-M.grip_r.y,-M.grip_r.z))
@@ -208,8 +222,10 @@ function M.pose(state,scratch)
             y=V.lerp(support.y,V.lerp(from.y,to.y,w),weight),
             z=V.lerp(support.z,V.lerp(from.z,to.z,w),weight)}
     end
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.left_arm_ik") end
     IK.solve(worlds,M.bones,M.index.UpperArmL,M.index.ForearmL,M.index.HandL,support,{x=-.55,y=-1,z=.2},scratch.ik)
     IK.orient(worlds,M.bones,M.index.HandL,gun,scratch.ik)
+    if profiler then profiler.scope_end();profiler.scope_begin("rig.palette") end
     scratch.support_error=V.length({x=worlds[M.index.HandL][4]-support.x,y=worlds[M.index.HandL][8]-support.y,z=worlds[M.index.HandL][12]-support.z})
     scratch.support_target=support;scratch.weapon_frame=gun
     local scale=variants.get(state.variant).scale
@@ -223,6 +239,7 @@ function M.pose(state,scratch)
         palette[i]=out
     end
     scratch.rotations,scratch.worlds,scratch.palette=rotations,worlds,palette
+    if profiler then profiler.scope_end() end
     return palette,worlds
 end
 

@@ -127,6 +127,8 @@ local function snapshot(ctx)
         yaw = motion.yaw, pitch = motion.pitch, recovery_failed = motion.recovery_failed,
         mouse_locked = window.get_mouse_lock(),
         paused = ctx.paused,
+        profile_unattended = ctx.frame_profile_unattended == true,
+        profile_jit_enabled = jit and jit.status() or false,
         sliding = motion.sliding, tactical = motion.tactical, mantling = motion.mantle ~= false,
         lean = motion.lean, slide_cooldown = motion.slide_cooldown, tactical_cooldown = motion.tactical_cooldown,
         camera_x = ctx.presentation.camera.x, camera_y = ctx.presentation.camera.y, camera_z = ctx.presentation.camera.z,
@@ -138,6 +140,9 @@ local function snapshot(ctx)
 end
 
 local function window_event(self, event)
+    -- Explicit debug-only profiling runs must survive switching back to the
+    -- editor/chat. Normal game and release focus/pause behavior is unchanged.
+    if self.ctx.frame_profile_unattended then return end
     if event == window.WINDOW_EVENT_FOCUS_LOST then
         ui.focus(self, false)
     elseif event == window.WINDOW_EVENT_FOCUS_GAINED then
@@ -227,6 +232,7 @@ function init(self)
     self.position = vmath.vector3()
     self.camera_position = vmath.vector3()
     ui.init(self, restart_encounter)
+    self.ctx.frame_profile_unattended = false
     if sys.get_config_int("touch_validation.enabled",0)==1 then
         require("tests.touch_native").install(self,handle_input)
     end
@@ -513,6 +519,16 @@ function init(self)
             automation_bridge.describe("command", name, { description = description,
                 input_schema = { type = "object" }, output_schema = { type = "object" } })
         end
+        automation_bridge.command("profiling.configure", function(data)
+            assert(sys.get_engine_info().is_debug,"Unattended profiling requires a debug engine")
+            assert(type(data.unattended)=="boolean","unattended must be a boolean")
+            self.ctx.frame_profile_unattended=data.unattended
+            return snapshot(self.ctx)
+        end)
+        automation_bridge.describe("command","profiling.configure",{
+            description="Ignore OS window focus callbacks during an explicitly unattended debug profiling run.",
+            input_schema={type="object",properties={unattended={type="boolean"}},required={"unattended"}},
+            output_schema={type="object"}})
         automation_bridge.command("gameplay.snapshot", function()
             return snapshot(self.ctx)
         end)
@@ -662,7 +678,9 @@ function late_update(self, dt)
     local out = self.ctx.presentation
     if profiler then profiler.scope_begin("late.soldiers") end
     ai_system.present(self.ctx)
+    if profiler then profiler.scope_begin("soldiers.dynamics_present") end
     dynamics.present(self.ctx.services.dynamics,self.ctx.time.alpha,self.capture~=nil)
+    if profiler then profiler.scope_end() end
     if profiler then profiler.scope_end() end
 
     if profiler then profiler.scope_begin("late.view") end

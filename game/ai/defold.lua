@@ -98,7 +98,9 @@ function M.sync(a,e)
     local item=a.instances[e.id]
     if not item.query or item.disabled then return end
     item.query:sync(e.position,e.motion.height)
+    if profiler then profiler.scope_begin("soldiers.hit_volumes") end
     local volumes=rig.volumes(e.palette,e.position,e.yaw,e.id,e.variant,item.volume_scratch)
+    if profiler then profiler.scope_end();profiler.scope_begin("soldiers.hit_transforms") end
     for i,shape in ipairs(volumes) do
         local hit=item.hits[i]
         a.by_id[hit.id]=shape
@@ -106,6 +108,7 @@ function M.sync(a,e)
         local q=vmath.quat_matrix4(m)
         bullet3d.collision_object.set_world_transform(hit.object,vector(shape),q)
     end
+    if profiler then profiler.scope_end() end
 end
 function M.disable(a,e)
     local item=a.instances[e.id]
@@ -124,20 +127,24 @@ function M.present(a,e,palette,position,yaw)
         if not item.hidden then msg.post(item.url,"disable");msg.post(item.prepass,"disable");item.hidden=true end
         return
     end
+    if profiler then profiler.scope_begin("soldiers.world_transform") end
     go.set_position(vector(position),item.mesh)
     go.set_rotation(vmath.quat_rotation_y(yaw),item.mesh)
     local current_world=vmath.matrix4_rotation_y(yaw)
     current_world.m03,current_world.m13,current_world.m23=position.x,position.y,position.z
     go.set(item.prepass,PREVIOUS_WORLD,item.previous_world or current_world)
+    if profiler then profiler.scope_end();profiler.scope_begin("soldiers.palette_convert") end
     -- Recycle the palette from two frames ago. The previous frame must stay
     -- intact until its complete palette has been copied into the motion pass.
     local current=item.spare_bones or {}
     for i,t in ipairs(palette) do
         current[i]=matrix(t,current[i])
     end
+    if profiler then profiler.scope_end();profiler.scope_begin("soldiers.palette_submit") end
     go.set(item.url,BONE_PALETTE,current)
     go.set(item.prepass,BONE_PALETTE,current)
     go.set(item.prepass,PREVIOUS_BONES,item.previous_bones or current)
+    if profiler then profiler.scope_end() end
     item.spare_bones,item.previous_bones=item.previous_bones,current
     item.previous_world=current_world
     a.uploads=a.uploads+1

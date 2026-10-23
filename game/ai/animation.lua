@@ -50,6 +50,34 @@ end
 local function advance(a,key,duration,dt)
     if a[key]>=0 then a[key]=a[key]+dt;if a[key]>duration then a[key]=-1 end end
 end
+local function ground_ray(foot,query,x,y,z,length,planted)
+    -- Only adapters restricted to versioned static geometry can retain a hit.
+    -- Consume the proof on every call: swings, misses and pending world edits
+    -- must not leave an old contact available when the foot plants again.
+    local cached=foot.ground;foot.ground=nil
+    local revision
+    if planted and query and query.clearance_revision then revision=query:clearance_revision() end
+    if revision~=nil and cached and cached.query==query
+        and cached.ray==query.ray and cached.revision_fn==query.clearance_revision
+        and cached.revision==revision and cached.x==x and cached.z==z and cached.length==length
+        -- The original ray proved this vertical span clear above the hit.
+        -- Lowering its origin is safe while it still contains that first hit;
+        -- raising it needs a fresh query for the newly exposed space.
+        and y<=cached.y and y>=cached.hit.y and y-length<=cached.hit.y then
+        foot.ground=cached
+        if profiler then profiler.scope_begin("animation.ground_reuse");profiler.scope_end() end
+        return cached.hit
+    end
+    local hit=query and query.ray and query:ray({x=x,y=y,z=z},0,-length,0)
+    -- Copy the hit because query adapters may return a mutable scratch object.
+    if hit and revision~=nil and query:clearance_revision()==revision then
+        cached=cached or {}
+        cached.query,cached.ray,cached.revision_fn,cached.revision=query,query.ray,query.clearance_revision,revision
+        cached.x,cached.y,cached.z,cached.length=x,y,z,length
+        cached.hit=clone(hit,cached.hit);foot.ground=cached
+    end
+    return hit
+end
 function M.step(e,dt,query)
     local a=e.animation
     if not e.actor.alive then
@@ -99,8 +127,12 @@ function M.step(e,dt,query)
         if math.abs(local_point.x)>.40*scale or math.abs(local_point.z)>.66*scale then
             target=rest;foot.takeoff=V.copy(rest);foot.yaw=e.yaw
         end
-        local ground=query and query.ray and query:ray({x=target.x,y=e.position.y+.62*scale,z=target.z},0,-1.1*scale,0)
+        if profiler then profiler.scope_begin("animation.ground_ray") end
+        local ground=ground_ray(foot,query,target.x,e.position.y+.62*scale,target.z,1.1*scale,
+            not swing and a.vault_time<0)
+        if profiler then profiler.scope_end() end
         local supported=ground and ground.ny>=.707 and math.abs(ground.y-e.position.y)<.46*scale
+        if not supported then foot.ground=nil end
         local normal={x=0,y=1,z=0}
         if supported then
             target.y=ground.y+.088*scale
