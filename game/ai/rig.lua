@@ -45,7 +45,7 @@ end
 M.count=#M.bones
 
 -- A single evaluator owns skinning, hit volumes and ragdoll handoff frames.
-function M.pose(state,scratch)
+function M.pose_lua(state,scratch)
     if profiler then profiler.scope_begin("rig.layers") end
     scratch=scratch or {}
     local rotations,worlds,palette=scratch.rotations or {},scratch.worlds or {},scratch.palette or {}
@@ -241,6 +241,29 @@ function M.pose(state,scratch)
     scratch.rotations,scratch.worlds,scratch.palette=rotations,worlds,palette
     if profiler then profiler.scope_end() end
     return palette,worlds
+end
+
+-- Keep the Lua evaluator available as an independent parity oracle and for
+-- plain-Lua tests. The native extension owns fixed arrays per pose scratch;
+-- only compact inputs and reusable output tables cross the boundary.
+local backend_override
+local native_config={magazine=variants.magazine}
+for _,name in ipairs(variants.order) do
+    native_config[name]={scale=variants.get(name).scale,support=variants.support(name)}
+end
+function M.backend()
+    return backend_override or (soldierpose and "native" or "lua")
+end
+function M.set_backend(name)
+    assert(name=="lua" or name=="native","Unknown pose backend")
+    assert(name~="native" or soldierpose,"Native pose extension is unavailable")
+    backend_override=name
+end
+function M.pose(state,scratch)
+    if M.backend()=="lua" then return M.pose_lua(state,scratch) end
+    scratch=scratch or {}
+    if not scratch.native_pose then scratch.native_pose=soldierpose.new(M.bones,M.grip_r,native_config) end
+    return soldierpose.evaluate(scratch.native_pose,state,scratch)
 end
 
 -- Physics frames use +Y down each joint, +Z approximately actor-forward. The

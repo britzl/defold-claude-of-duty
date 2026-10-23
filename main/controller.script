@@ -17,6 +17,7 @@ local weapon_driver = require "game.weapons.driver"
 local firing_range = require "game.weapons.range"
 local ai_system = require "game.systems.ai"
 local soldier_adapter = require "game.ai.defold"
+local soldier_rig = require "game.ai.rig"
 local renderer_settings = require "game.render.settings"
 local capture_controller = require "game.render.capture_controller"
 local capture_shots = require "game.render.capture"
@@ -129,6 +130,7 @@ local function snapshot(ctx)
         paused = ctx.paused,
         profile_unattended = ctx.frame_profile_unattended == true,
         profile_jit_enabled = jit and jit.status() or false,
+        pose_backend = soldier_rig.backend(),
         sliding = motion.sliding, tactical = motion.tactical, mantling = motion.mantle ~= false,
         lean = motion.lean, slide_cooldown = motion.slide_cooldown, tactical_cooldown = motion.tactical_cooldown,
         camera_x = ctx.presentation.camera.x, camera_y = ctx.presentation.camera.y, camera_z = ctx.presentation.camera.z,
@@ -151,6 +153,7 @@ local function window_event(self, event)
 end
 
 function init(self)
+    soldier_rig.set_backend(sys.get_config_string("soldier_pose.backend","native"))
     assert(sys.get_config_int("engine.fixed_update_frequency") == config.fixed_frequency,
         "game.project and game.config must agree on the fixed update frequency")
     assert(math.abs(sys.get_config_number("physics.gravity_y") - config.gravity) < 0.00001,
@@ -178,6 +181,7 @@ function init(self)
     if profiler then profiler.scope_end() end
     if sys.get_config_int("world_mesh.verify",0)==1 then require("tests.native_mesh_test").run() end
     if sys.get_config_int("audio_synthesis.verify",0)==1 then require("tests.native_audio_test").run() end
+    if sys.get_config_int("soldier_pose.verify",0)==1 then require("tests.native_pose_test").run() end
     if sys.get_config_int("mesh_validation.enabled",0)==1 then self.mesh_validation=require("tests.mesh_browser").new() end
     if sys.get_config_int("audio_content_validation.enabled",0)==1 then self.audio_content_validation=require("tests.audio_content_scenario").new() end
     if sys.get_config_int("sustained.enabled",0)==1 then self.sustained=require("tests.sustained_scenario").new() end
@@ -523,11 +527,12 @@ function init(self)
             assert(sys.get_engine_info().is_debug,"Unattended profiling requires a debug engine")
             assert(type(data.unattended)=="boolean","unattended must be a boolean")
             self.ctx.frame_profile_unattended=data.unattended
+            if data.pose_backend then soldier_rig.set_backend(data.pose_backend) end
             return snapshot(self.ctx)
         end)
         automation_bridge.describe("command","profiling.configure",{
-            description="Ignore OS window focus callbacks during an explicitly unattended debug profiling run.",
-            input_schema={type="object",properties={unattended={type="boolean"}},required={"unattended"}},
+            description="Configure unattended debug profiling and select Lua/native pose evaluation for matched captures.",
+            input_schema={type="object",properties={unattended={type="boolean"},pose_backend={type="string",enum={"lua","native"}}},required={"unattended"}},
             output_schema={type="object"}})
         automation_bridge.command("gameplay.snapshot", function()
             return snapshot(self.ctx)

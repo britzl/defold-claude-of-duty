@@ -1,5 +1,7 @@
 [soldier_validation]
 enabled = 1
+[soldier_pose]
+verify = 1
 [display]
 width = 960
 height = 640

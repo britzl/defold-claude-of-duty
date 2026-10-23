@@ -30,6 +30,8 @@ try {
     const text=message.text();
     if(report.console.length<200) report.console.push(text);
     if(text.includes('ERROR:') || /GL_INVALID_|GL_OUT_OF_MEMORY|WebGL:.*error/i.test(text)) report.errors.push(text);
+    const parity=text.match(/NATIVE_POSE_TEST PASS (.*)/);
+    if(parity) report.pose_parity=JSON.parse(parity[1]);
     const match=text.match(/SOLDIER (START|CHECK|SHOT|PASS) (.*)/);
     if(!match) {console.log(text);return;}
     const data=JSON.parse(match[2]);console.log(match[1],JSON.stringify(data));
@@ -50,6 +52,7 @@ try {
   if(!complete) throw new Error('Soldier fixture timed out');
   await pending;
   if(report.checks.length!==11 || report.shots.length!==15) throw new Error('Incomplete soldier matrix');
+  if((report.pose_parity?.poses??0)<2399) throw new Error('Missing native pose parity coverage');
   if(report.errors.length) throw new Error(report.errors.join('\n'));
   report.webgl=await page.evaluate(()=>{
     const gl=document.querySelector('canvas').getContext('webgl2'), debug=gl.getExtension('WEBGL_debug_renderer_info');

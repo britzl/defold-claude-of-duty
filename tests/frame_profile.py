@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def source_hashes():
     paths = [ROOT / 'game.project']
-    for directory in ('game', 'main', 'render', 'world', 'weapons', 'soldiers'):
+    for directory in ('game', 'main', 'render', 'world', 'weapons', 'soldiers', 'soldierpose'):
         paths.extend(p for p in (ROOT / directory).rglob('*') if p.is_file())
     return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
 
@@ -59,6 +59,8 @@ def main():
                         default=['standing', 'sprint', 'firing'])
     parser.add_argument('--focus', action='store_true', help='Focus the engine window while profiling')
     parser.add_argument('--unattended', action='store_true', help='Ignore window focus callbacks in this debug profiling process')
+    parser.add_argument('--pose-backends', nargs='+', choices=('lua', 'native'),
+                        help='Compare pose backends in the same engine; reverse backend order on repetition two')
     args = parser.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -69,6 +71,7 @@ def main():
                         'Main/Step elapsed scopes include driver waits and profiler overhead. '
                         'AI damage disabled to keep the player alive. Two repetitions in reversed order.'}
     report['unattended'] = args.unattended
+    report['pose_backends'] = args.pose_backends
 
     def save():
         (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -91,7 +94,7 @@ def main():
         cmd('ui.configure', {'kind': 'quality', 'key': 'mode', 'value': 'high'})
         game.wait_frames(180, timeout=30)
 
-    def record(name, driver=None, segments=None):
+    def record(name, driver=None, segments=None, pose_backend=None):
         before = state()
         power_before = subprocess.check_output(['pmset', '-g', 'batt'], text=True)
         print('START', name, flush=True)
@@ -115,6 +118,8 @@ def main():
         for snapshot in (before, after):
             assert not snapshot['gameplay']['paused'] and snapshot['gameplay']['alive']
             assert snapshot['gameplay'].get('profile_unattended', False) == args.unattended
+            if pose_backend:
+                assert snapshot['gameplay']['pose_backend'] == pose_backend
             assert (snapshot['renderer']['output_width'], snapshot['renderer']['output_height']) == (1280, 720)
             quality = snapshot['ui']['quality']
             assert quality['mode'] == quality['active'] == 'high'
@@ -149,8 +154,15 @@ def main():
         game.wait_frames(30, timeout=30)
         for repetition, names in enumerate((args.scenarios, list(reversed(args.scenarios))), 1):
             for name in names:
-                reset()
-                record(name + '-' + str(repetition), *scenarios[name])
+                backends = args.pose_backends or [None]
+                if repetition == 2:
+                    backends = list(reversed(backends))
+                for backend in backends:
+                    if backend:
+                        cmd('profiling.configure', {'unattended': args.unattended, 'pose_backend': backend})
+                    reset()
+                    prefix = backend + '-' if backend else ''
+                    record(prefix + name + '-' + str(repetition), *scenarios[name], pose_backend=backend)
         assert source_hashes() == report['sources'], 'Production sources changed during profiling'
         report['complete'] = True
     finally:

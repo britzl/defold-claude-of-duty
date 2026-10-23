@@ -15,13 +15,20 @@ def main():
     output = root / "build/soldier-native-validation"
     output.mkdir(parents=True, exist_ok=True)
     project = editor.open_project(root, start_if_needed=False)
-    result = project.compile(timeout=120)
-    assert result.success, result
+    # compile() refreshes the engine archive but does not unpack dmengine.
+    # Build/run once so the flagged process below uses the current extension.
+    bootstrap = project.build_and_run(timeout=300, focus=False)
+    try:
+        bootstrap.close_engine()
+    finally:
+        bootstrap.close()
     report = {"checks": [], "shots": [], "errors": []}
     report["sources"] = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                          for p in [*sorted((root / "game/ai").glob("*.lua")),
                                    root / "game/systems/ai.lua", root / "main/controller.script",
-                                   root / "tests/soldier_scenario.lua"]}
+                                   root / "tests/soldier_scenario.lua", root / "tests/native_pose_test.lua",
+                                   *sorted((root / "soldierpose").rglob("*.cpp")),
+                                   *sorted((root / "soldierpose").rglob("*.h")), root / "soldierpose/ext.manifest"]}
     with socket.socket() as reserved:
         reserved.bind(("127.0.0.1", 0)); profiler_port = reserved.getsockname()[1]
     log_path = output / "engine.log"
@@ -29,6 +36,7 @@ def main():
         process = subprocess.Popen([
             str(root / "build/arm64-osx/dmengine"), str(root / "build/default/game.projectc"),
             "--config=display.high_dpi=0", "--config=soldier_validation.enabled=1",
+            "--config=soldier_pose.verify=1",
             f"--config=profiler.remotery_port={profiler_port}",
         ], cwd=root, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, "DM_SERVICE_PORT": "dynamic"})
         game = None
@@ -46,6 +54,10 @@ def main():
                 for line in lines[seen:]:
                     if "ERROR:" in line:
                         report["errors"].append(line)
+                    parity = re.search(r"NATIVE_POSE_TEST PASS (.*)", line)
+                    if parity:
+                        report["pose_parity"] = json.loads(parity[1])
+                        print("POSE PARITY", report["pose_parity"], flush=True)
                     match = re.search(r"SOLDIER (START|CHECK|SHOT|PASS) (.*)", line)
                     if match:
                         kind, data = match[1], json.loads(match[2])
@@ -66,6 +78,7 @@ def main():
                 return report.get("result")
             engine.wait_until(completed, timeout=300)
             assert len(report["checks"]) == 11 and len(report["shots"]) == 15, report
+            assert report.get("pose_parity", {}).get("poses", 0) >= 2399, report
         finally:
             if game:
                 game.close_engine()

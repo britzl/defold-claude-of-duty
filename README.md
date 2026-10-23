@@ -733,6 +733,95 @@ covers the new guards. Matched traces, source hashes, the comparison driver,
 comparison, and `final-native-validation` for native checks. The earlier `after`
 and `matched-after` captures predate the final guards and are diagnostic only.
 
+### Native full-pose evaluation (2026-10-23)
+
+`soldierpose/src/pose.cpp` now evaluates the complete 25-bone pose in C++:
+additive layers, forward kinematics, pelvis reach, both legs and sole orientation,
+weapon frame, both arms, reload/vault/throw support targets, variant scale and
+inverse-bind palettes. `game/ai/rig.lua` keeps its public `pose(state, scratch)`
+API, dispatches to native by default in Defold, and retains `pose_lua` as an
+independent reference. Animation clocks/interpolation, ground queries, hit-volume
+construction and palette submission remain in their existing callers.
+
+Each scratch owns a **6,848-byte** userdata with fixed native arrays. The rig
+layout and variant socket tuning are copied from Lua once. Each evaluation reads
+compact inputs and fills the caller's reusable world/palette tables in one native
+call. Simulation and presentation retain separate contexts and output buffers.
+Exact input matches reuse the entire previous pose, including all IK results;
+in-place changes to foot targets invalidate it. No native heap allocation occurs
+inside pose evaluation. Double precision, disabled FP contraction and matching
+operation order preserve the reference arithmetic.
+
+Matched native debug Metal captures used one Defold 1.14.0 (`a81dbb0`) process,
+LuaJIT enabled, High quality at 1280×720 and six actors. Both implementations ran
+twice per workload with backend/workload order reversed: **9,415 complete frames**.
+The M3 Pro was on battery throughout (100–98%); these are matched measurements,
+not a comparison with earlier AC-powered profiles. Values are weighted means in
+**ms per rendered frame across all actors**, including simulation and presentation.
+
+| Work | Firing/reloading Lua → C++ | Sprinting Lua → C++ |
+| --- | ---: | ---: |
+| Full pose evaluation, including native input/output | 0.956 → 0.092 (**−90.4%**) | 0.820 → 0.086 (**−89.5%**) |
+| Complete AI / soldier block | 3.335 → 2.391 (**−28.3%**) | 2.841 → 1.979 (**−30.4%**) |
+| Whole Main/Step | 9.144 → 8.833 | 8.618 → 8.382 |
+
+Normalized per pose, evaluation fell from **76.0 → 7.42 µs** while firing and
+**67.2 → 7.17 µs** while sprinting. The firing native scope contains **0.018 ms**
+input parsing, **0.021 ms** pose math and **0.048 ms** output copying, plus about
+**0.005 ms** remaining binding/profiling overhead. These are children of the
+0.092 ms total and must not be added again. Whole-pose cache hits were zero in
+these moving workloads: the gain comes from executing the evaluator, not frozen
+poses. Foot queries remained near 0.243 ms and palette submission near 0.282 ms;
+capsule movement is now the largest AI component at about 0.90 ms while firing.
+
+Frame pacing absorbs part of the CPU saving. These debug elapsed scopes include
+instrumentation and waits, with more fine-grained scopes in the Lua reference;
+they do not establish a release FPS or GPU-time gain. Browser performance has
+not been measured for this port. Browser correctness was checked in release
+WebAssembly/WebGL2 on Chrome/ANGLE Metal.
+
+Validation compares **2,399 poses and 1,810,283 scalar values** across all three
+variants, 14 clip/layer cases, mixed transitions, interpolated one-shots, foot
+targets, hitboxes, ragdoll frames and weapon sockets. The maximum native error is
+**3.37×10⁻¹⁴**; WebAssembly comparisons are exact, against a 1e-7 tolerance.
+Tests also cover exact-pose reuse, nested target mutation, independent contexts,
+buffer identity, closed handles, malformed inputs and GC ownership. Nine existing
+host Lua suites pass with each backend. Native and browser fixtures each pass
+all **11 checks and 15 captures**, including stairs, planted feet, damage,
+pause/resume and resets. No engine errors occurred in the final validations or
+profiles; the pre-existing native 256-contact-cap warning remains.
+
+Run the native fixture with an open editor:
+
+```sh
+PYTHONPATH=automation-bridge-python python3 tests/soldier_smoke.py
+PYTHONPATH=automation-bridge-python python3 tests/frame_profile.py \
+  --output build/native-pose-profile-new --scenarios firing sprint \
+  --unattended --pose-backends lua native
+```
+
+`soldier_pose.backend=lua` selects the reference at engine startup, and
+`soldier_pose.verify=1` runs the shared parity suite. The debug bridge accepts
+`profiling.configure` with `unattended` and optional `pose_backend` (`lua` or
+`native`); snapshots report the selected backend. Build the browser fixture with
+`tests/soldier_browser.project`, then run `tools/validate_soldier_browser.mjs`.
+The core can also be tested without Defold using host Lua 5.4 (macOS example):
+
+```sh
+mkdir -p build/native-pose-host
+clang++ -std=c++11 -O2 -Wall -Wextra -Werror -fno-fast-math -ffp-contract=off \
+  -DSOLDIERPOSE_STANDALONE -I/opt/homebrew/include/lua -bundle -undefined dynamic_lookup \
+  soldierpose/src/pose.cpp soldierpose/src/soldierpose.cpp \
+  -o build/native-pose-host/soldierpose.so
+lua -e 'package.cpath="build/native-pose-host/?.so;"..package.cpath; soldierpose=require "soldierpose"; require("tests.native_pose_test").run()'
+```
+
+Evidence is under `build/native-pose-2026-10-23`: `summary.json` and `analyze.py`,
+the eight raw captures and source/binary hashes in `profile`, `native` and
+`browser` fixture reports/captures, `host/validation.log`, and WebAssembly build
+options/bundle hashes. The Lua reference and C++ port must be updated together
+when adding or changing pose layers; the shared parity suite guards drift.
+
 ### Capsule query reuse (2026-10-22)
 
 The controller now reuses positive ground support within a fixed tick when the
